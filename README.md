@@ -5,6 +5,9 @@
 
 The [GoReleaser](https://github.com/goreleaser/goreleaser) integration for [go-semantic-release](https://github.com/go-semantic-release/semantic-release).
 
+## Usage
+Use this plugin by enabling it via `--hooks goreleaser`.
+
 ## Licence
 
 The [MIT License (MIT)](http://opensource.org/licenses/MIT)
