@@ -45,6 +45,9 @@ On fields that support templating, these fields are always available:
 | `.PrefixedSummary`     | the git summary prefixed with the monorepo config tag prefix (if any)                                  |
 | `.TagSubject`          | the annotated tag message subject, or the message subject of the commit it points out[^6]              |
 | `.TagContents`         | the annotated tag message, or the message of the commit it points out[^7]                              |
+| `.TagBody`             | the annotated tag message's body, or the message's body of the commit it points out[^7]                |
+| `.Runtime.Goos`        | equivalent to `runtime.GOOS`                                                                           |
+| `.Runtime.Goarch`      | equivalent to `runtime.GOARCH`                                                                         |
 
 [^1]: The `v` prefix is stripped and it might be changed in `snapshot` and `nightly` builds.
 [^2]: Assuming `Tag` is a valid a SemVer, otherwise empty/zeroed.
@@ -88,17 +91,19 @@ On the nFPM name template field, you can use those extra fields as well:
 
 On all fields, you have these available functions:
 
-| Usage                   | Description                                                                                                                    |
-|-------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| `replace "v1.2" "v" ""` | replaces all matches. See [ReplaceAll](https://golang.org/pkg/strings/#ReplaceAll)                                             |
-| `time "01/02/2006"`     | current UTC time in the specified format (this is not deterministic, a new time for every call)                                |
-| `tolower "V1.2"`        | makes input string lowercase. See [ToLower](https://golang.org/pkg/strings/#ToLower)                                           |
-| `toupper "v1.2"`        | makes input string uppercase. See [ToUpper](https://golang.org/pkg/strings/#ToUpper)                                           |
-| `trim " v1.2  "`        | removes all leading and trailing white space. See [TrimSpace](https://golang.org/pkg/strings/#TrimSpace)                       |
-| `trimprefix "v1.2" "v"` | removes provided leading prefix string, if present. See [TrimPrefix](https://golang.org/pkg/strings/#TrimPrefix)               |
-| `trimsuffix "1.2v" "v"` | removes provided trailing suffix string, if present. See [TrimSuffix](https://pkg.go.dev/strings#TrimSuffix)                   |
-| `dir .Path`             | returns all but the last element of path, typically the path's directory. See [Dir](https://golang.org/pkg/path/filepath/#Dir) |
-| `abs .ArtifactPath`     | returns an absolute representation of path. See [Abs](https://golang.org/pkg/path/filepath/#Abs)                               |
+| Usage                          | Description                                                                                                                    |
+|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| `replace "v1.2" "v" ""`        | replaces all matches. See [ReplaceAll](https://golang.org/pkg/strings/#ReplaceAll)                                             |
+| `time "01/02/2006"`            | current UTC time in the specified format (this is not deterministic, a new time for every call)                                |
+| `tolower "V1.2"`               | makes input string lowercase. See [ToLower](https://golang.org/pkg/strings/#ToLower)                                           |
+| `toupper "v1.2"`               | makes input string uppercase. See [ToUpper](https://golang.org/pkg/strings/#ToUpper)                                           |
+| `trim " v1.2  "`               | removes all leading and trailing white space. See [TrimSpace](https://golang.org/pkg/strings/#TrimSpace)                       |
+| `trimprefix "v1.2" "v"`        | removes provided leading prefix string, if present. See [TrimPrefix](https://golang.org/pkg/strings/#TrimPrefix)               |
+| `trimsuffix "1.2v" "v"`        | removes provided trailing suffix string, if present. See [TrimSuffix](https://pkg.go.dev/strings#TrimSuffix)                   |
+| `dir .Path`                    | returns all but the last element of path, typically the path's directory. See [Dir](https://golang.org/pkg/path/filepath/#Dir) |
+| `abs .ArtifactPath`            | returns an absolute representation of path. See [Abs](https://golang.org/pkg/path/filepath/#Abs)                               |
+| `filter "text" "regex"`        | keeps only the lines matching the given regex, analogous to `grep -E`                                                          |
+| `reverseFilter "text" "regex"` | keeps only the lines **not** matching the given regex, analogous to `grep -vE`                                                 |
 
 With all those fields, you may be able to compose the name of your artifacts
 pretty much the way you want:

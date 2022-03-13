@@ -185,6 +185,7 @@ func TestRun(t *testing.T) {
 					},
 					Post: []config.Hook{
 						{Cmd: "touch " + post},
+						{Cmd: `sh -c 'echo "{{ .Name }} {{ .Os }} {{ .Arch }} {{ .Arm }} {{ .Target }} {{ .Ext }}" > {{ .Path }}.post'`, Output: true},
 					},
 				},
 			},
@@ -268,20 +269,25 @@ func TestRun(t *testing.T) {
 		require.NoError(t, Pipe{}.Run(ctx5))
 		require.FileExists(t, pre)
 		require.FileExists(t, post)
+		post := filepath.Join(dist, "foo_darwin_all/foo.post")
+		require.FileExists(t, post)
+		bts, err := os.ReadFile(post)
+		require.NoError(t, err)
+		require.Equal(t, "foo darwin all  darwin_all \n", string(bts))
 	})
 
 	t.Run("failing pre-hook", func(t *testing.T) {
 		ctx := ctx5
 		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{Cmd: "exit 1"}}
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "echo post"}}
-		require.EqualError(t, Pipe{}.Run(ctx), `pre hook failed: "": exec: "exit": executable file not found in $PATH`)
+		require.EqualError(t, Pipe{}.Run(ctx), "pre hook failed: failed to run 'exit 1': exec: \"exit\": executable file not found in $PATH")
 	})
 
 	t.Run("failing post-hook", func(t *testing.T) {
 		ctx := ctx5
 		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{Cmd: "echo pre"}}
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "exit 1"}}
-		require.EqualError(t, Pipe{}.Run(ctx), `post hook failed: "": exec: "exit": executable file not found in $PATH`)
+		require.EqualError(t, Pipe{}.Run(ctx), "post hook failed: failed to run 'exit 1': exec: \"exit\": executable file not found in $PATH")
 	})
 
 	t.Run("hook with env tmpl", func(t *testing.T) {

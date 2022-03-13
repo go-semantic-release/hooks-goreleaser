@@ -317,6 +317,34 @@
 					"main": {
 						"type": "string"
 					},
+					"binary": {
+						"type": "string"
+					},
+					"hooks": {
+						"$schema": "http://json-schema.org/draft-04/schema#",
+						"$ref": "#/definitions/BuildHookConfig"
+					},
+					"env": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"builder": {
+						"type": "string"
+					},
+					"mod_timestamp": {
+						"type": "string"
+					},
+					"skip": {
+						"type": "boolean"
+					},
+					"gobinary": {
+						"type": "string"
+					},
+					"no_unique_dist_dir": {
+						"type": "boolean"
+					},
 					"ldflags": {
 						"oneOf": [
 							{
@@ -356,22 +384,6 @@
 							}
 						]
 					},
-					"binary": {
-						"type": "string"
-					},
-					"hooks": {
-						"$schema": "http://json-schema.org/draft-04/schema#",
-						"$ref": "#/definitions/BuildHookConfig"
-					},
-					"env": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
-					},
-					"builder": {
-						"type": "string"
-					},
 					"asmflags": {
 						"oneOf": [
 							{
@@ -398,21 +410,99 @@
 							}
 						]
 					},
-					"mod_timestamp": {
-						"type": "string"
-					},
-					"skip": {
-						"type": "boolean"
-					},
-					"gobinary": {
-						"type": "string"
-					},
-					"no_unique_dist_dir": {
-						"type": "boolean"
+					"overrides": {
+						"items": {
+							"$schema": "http://json-schema.org/draft-04/schema#",
+							"$ref": "#/definitions/BuildDetailsOverride"
+						},
+						"type": "array"
 					},
 					"prebuilt": {
 						"$schema": "http://json-schema.org/draft-04/schema#",
 						"$ref": "#/definitions/PreBuiltOptions"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"BuildDetailsOverride": {
+				"properties": {
+					"goos": {
+						"type": "string"
+					},
+					"goarch": {
+						"type": "string"
+					},
+					"goarm": {
+						"type": "string"
+					},
+					"gomips": {
+						"type": "string"
+					},
+					"ldflags": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							}
+						]
+					},
+					"tags": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							}
+						]
+					},
+					"flags": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							}
+						]
+					},
+					"asmflags": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							}
+						]
+					},
+					"gcflags": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"items": {
+									"type": "string"
+								},
+								"type": "array"
+							}
+						]
 					}
 				},
 				"additionalProperties": false,
@@ -748,9 +838,6 @@
 							},
 							"info": {
 								"$schema": "http://json-schema.org/draft-04/schema#",
-								"required": [
-									"group"
-								],
 								"properties": {
 									"owner": {
 										"type": "string"
@@ -1412,6 +1499,12 @@
 					"signature": {
 						"$schema": "http://json-schema.org/draft-04/schema#",
 						"$ref": "#/definitions/NFPMDebSignature"
+					},
+					"lintian_overrides": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
 					}
 				},
 				"additionalProperties": false,
@@ -2332,31 +2425,136 @@
 			},
 			"SnapcraftAppMetadata": {
 				"required": [
-					"Plugs",
-					"Daemon",
-					"Args",
 					"command"
 				],
 				"properties": {
-					"Plugs": {
+					"command": {
+						"type": "string"
+					},
+					"args": {
+						"type": "string"
+					},
+					"adapter": {
+						"type": "string"
+					},
+					"after": {
 						"items": {
 							"type": "string"
 						},
 						"type": "array"
 					},
-					"Daemon": {
+					"aliases": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"autostart": {
 						"type": "string"
 					},
-					"Args": {
+					"before": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"bus_name": {
+						"type": "string"
+					},
+					"command_chain": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"common_id": {
 						"type": "string"
 					},
 					"completer": {
 						"type": "string"
 					},
-					"command": {
+					"daemon": {
+						"type": "string"
+					},
+					"desktop": {
+						"type": "string"
+					},
+					"environment": {
+						"patternProperties": {
+							".*": {
+								"additionalProperties": true
+							}
+						},
+						"type": "object"
+					},
+					"extensions": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"install_mode": {
+						"type": "string"
+					},
+					"passthrough": {
+						"patternProperties": {
+							".*": {
+								"additionalProperties": true
+							}
+						},
+						"type": "object"
+					},
+					"plugs": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"post_stop_command": {
+						"type": "string"
+					},
+					"refresh_mode": {
+						"type": "string"
+					},
+					"reload_command": {
 						"type": "string"
 					},
 					"restart_condition": {
+						"type": "string"
+					},
+					"restart_delay": {
+						"type": "string"
+					},
+					"slots": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"sockets": {
+						"patternProperties": {
+							".*": {
+								"additionalProperties": true
+							}
+						},
+						"type": "object"
+					},
+					"start_timeout": {
+						"type": "string"
+					},
+					"stop_command": {
+						"type": "string"
+					},
+					"stop_mode": {
+						"type": "string"
+					},
+					"stop_timeout": {
+						"type": "string"
+					},
+					"timer": {
+						"type": "string"
+					},
+					"watchdog_timeout": {
 						"type": "string"
 					}
 				},

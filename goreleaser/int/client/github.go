@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/apex/log"
-	"github.com/google/go-github/v41/github"
+	"github.com/google/go-github/v43/github"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"

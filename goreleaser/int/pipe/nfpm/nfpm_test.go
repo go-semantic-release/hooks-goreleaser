@@ -140,6 +140,10 @@ func TestRunPipe(t *testing.T) {
 							Source:      "./testdata/testfile-{{ .Arch }}.txt",
 							Destination: "/etc/nope3_{{ .ProjectName }}.conf",
 						},
+						{
+							Source:      "./testdata/folder",
+							Destination: "/etc/folder",
+						},
 					},
 					Replacements: map[string]string{
 						"linux": "Tux",
@@ -177,6 +181,7 @@ func TestRunPipe(t *testing.T) {
 			"./testdata/testfile.txt",
 			"./testdata/testfile.txt",
 			"/etc/nope.conf",
+			"./testdata/folder",
 			"./testdata/testfile-" + pkg.Goarch + ".txt",
 			binPath,
 		}, sources(pkg.ExtraOr(extraFiles, files.Contents{}).(files.Contents)))
@@ -187,10 +192,11 @@ func TestRunPipe(t *testing.T) {
 			"/etc/nope-rpm.conf",
 			"/etc/nope2.conf",
 			"/etc/nope3_mybin.conf",
+			"/etc/folder",
 			"/usr/bin/subdir/mybin",
 		}, destinations(pkg.ExtraOr(extraFiles, files.Contents{}).(files.Contents)))
 	}
-	require.Len(t, ctx.Config.NFPMs[0].Contents, 6, "should not modify the config file list")
+	require.Len(t, ctx.Config.NFPMs[0].Contents, 7, "should not modify the config file list")
 }
 
 func TestRunPipeConventionalNameTemplate(t *testing.T) {
@@ -331,6 +337,12 @@ func TestInvalidTemplate(t *testing.T) {
 		require.Contains(t, Pipe{}.Run(ctx).Error(), `template: tmpl:1:3: executing "tmpl" at <.NOPE_DESC>: map has no entry for key "NOPE_DESC"`)
 	})
 
+	t.Run("maintainer", func(t *testing.T) {
+		ctx := makeCtx()
+		ctx.Config.NFPMs[0].Maintainer = "{{ .NOPE_DESC }}"
+		require.Contains(t, Pipe{}.Run(ctx).Error(), `template: tmpl:1:3: executing "tmpl" at <.NOPE_DESC>: map has no entry for key "NOPE_DESC"`)
+	})
+
 	t.Run("homepage", func(t *testing.T) {
 		ctx := makeCtx()
 		ctx.Config.NFPMs[0].Homepage = "{{ .NOPE_HOMEPAGE }}"
@@ -357,8 +369,8 @@ func TestInvalidTemplate(t *testing.T) {
 
 	t.Run("bindir", func(t *testing.T) {
 		ctx := makeCtx()
-		ctx.Config.NFPMs[0].Bindir = "/usr/local/{{ .NOPE }}"
-		require.Contains(t, Pipe{}.Run(ctx).Error(), `template: tmpl:1:14: executing "tmpl" at <.NOPE>: map has no entry for key "NOPE"`)
+		ctx.Config.NFPMs[0].Bindir = "/usr/{{ .NOPE }}"
+		require.Contains(t, Pipe{}.Run(ctx).Error(), `template: tmpl:1:8: executing "tmpl" at <.NOPE>: map has no entry for key "NOPE"`)
 	})
 }
 
@@ -488,7 +500,7 @@ func TestInvalidConfig(t *testing.T) {
 			artifact.ExtraID: "default",
 		},
 	})
-	require.Contains(t, Pipe{}.Run(ctx).Error(), `invalid nfpm config: package name must be provided`)
+	require.Contains(t, Pipe{}.Run(ctx).Error(), `nfpm failed: package name must be provided`)
 }
 
 func TestDefault(t *testing.T) {
@@ -505,7 +517,7 @@ func TestDefault(t *testing.T) {
 		},
 	}
 	require.NoError(t, Pipe{}.Default(ctx))
-	require.Equal(t, "/usr/local/bin", ctx.Config.NFPMs[0].Bindir)
+	require.Equal(t, "/usr/bin", ctx.Config.NFPMs[0].Bindir)
 	require.Equal(t, []string{"foo", "bar"}, ctx.Config.NFPMs[0].Builds)
 	require.Equal(t, defaultNameTemplate, ctx.Config.NFPMs[0].FileNameTemplate)
 	require.Equal(t, ctx.Config.ProjectName, ctx.Config.NFPMs[0].PackageName)
@@ -592,6 +604,10 @@ func TestDebSpecificConfig(t *testing.T) {
 						Signature: config.NFPMDebSignature{
 							KeyFile: "./testdata/privkey.gpg",
 						},
+						Lintian: []string{
+							"statically-linked-binary",
+							"changelog-file-missing-in-native-package",
+						},
 					},
 				},
 			},
@@ -627,6 +643,10 @@ func TestDebSpecificConfig(t *testing.T) {
 			"NFPM_SOMEID_PASSPHRASE": "hunter2",
 		}
 		require.NoError(t, Pipe{}.Run(ctx))
+
+		bts, err := os.ReadFile(filepath.Join(dist, "deb/foo/.lintian"))
+		require.NoError(t, err)
+		require.Equal(t, "foo: statically-linked-binary\nfoo: changelog-file-missing-in-native-package", string(bts))
 	})
 
 	t.Run("packager specific passphrase set", func(t *testing.T) {
@@ -1148,6 +1168,7 @@ func TestBinDirTemplating(t *testing.T) {
 		Env: []string{
 			"PRO=pro",
 			"DESC=templates",
+			"MAINTAINER=me@me",
 		},
 		NFPMs: []config.NFPM{
 			{
@@ -1160,7 +1181,7 @@ func TestBinDirTemplating(t *testing.T) {
 				Priority:    "standard",
 				Description: "Some description with {{ .Env.DESC }}",
 				License:     "MIT",
-				Maintainer:  "me@me",
+				Maintainer:  "{{ .Env.MAINTAINER }}",
 				Vendor:      "asdf",
 				Homepage:    "https://goreleaser.com/{{ .Env.PRO }}",
 				NFPMOverridables: config.NFPMOverridables{

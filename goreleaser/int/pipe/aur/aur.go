@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	pkgBuildExtra     = "AURConfig"
+	aurExtra          = "AURConfig"
 	defaultSSHCommand = "ssh -i {{ .KeyPath }} -o StrictHostKeyChecking=accept-new -F /dev/null"
 	defaultCommitMsg  = "Update to {{ .Tag }}"
 )
@@ -78,8 +78,8 @@ func (Pipe) Run(ctx *context.Context) error {
 }
 
 func runAll(ctx *context.Context, cli client.Client) error {
-	for _, pkgbuild := range ctx.Config.AURs {
-		err := doRun(ctx, pkgbuild, cli)
+	for _, aur := range ctx.Config.AURs {
+		err := doRun(ctx, aur, cli)
 		if err != nil {
 			return err
 		}
@@ -87,12 +87,12 @@ func runAll(ctx *context.Context, cli client.Client) error {
 	return nil
 }
 
-func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
-	name, err := tmpl.New(ctx).Apply(pkgbuild.Name)
+func doRun(ctx *context.Context, aur config.AUR, cl client.Client) error {
+	name, err := tmpl.New(ctx).Apply(aur.Name)
 	if err != nil {
 		return err
 	}
-	pkgbuild.Name = name
+	aur.Name = name
 
 	filters := []artifact.Filter{
 		artifact.ByGoos("linux"),
@@ -113,8 +113,8 @@ func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
 			artifact.ByType(artifact.UploadableBinary),
 		),
 	}
-	if len(pkgbuild.IDs) > 0 {
-		filters = append(filters, artifact.ByIDs(pkgbuild.IDs...))
+	if len(aur.IDs) > 0 {
+		filters = append(filters, artifact.ByIDs(aur.IDs...))
 	}
 
 	archives := ctx.Artifacts.Filter(artifact.And(filters...)).List()
@@ -122,7 +122,7 @@ func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
 		return ErrNoArchivesFound
 	}
 
-	pkg, err := tmpl.New(ctx).Apply(pkgbuild.Package)
+	pkg, err := tmpl.New(ctx).Apply(aur.Package)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
 		}
 		log.Warnf("guessing package to be %q", pkg)
 	}
-	pkgbuild.Package = pkg
+	aur.Package = pkg
 
 	for _, info := range []struct {
 		name, tpl, ext string
@@ -149,7 +149,7 @@ func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
 	}{
 		{
 			name: "PKGBUILD",
-			tpl:  pkgBuildTemplate,
+			tpl:  aurTemplateData,
 			ext:  ".pkgbuild",
 			kind: artifact.PkgBuild,
 		},
@@ -160,12 +160,12 @@ func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
 			kind: artifact.SrcInfo,
 		},
 	} {
-		pkgContent, err := buildPkgFile(ctx, pkgbuild, cl, archives, info.tpl)
+		pkgContent, err := buildPkgFile(ctx, aur, cl, archives, info.tpl)
 		if err != nil {
 			return err
 		}
 
-		path := filepath.Join(ctx.Config.Dist, "aur", pkgbuild.Name+info.ext)
+		path := filepath.Join(ctx.Config.Dist, "aur", aur.Name+info.ext)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("failed to write %s: %w", info.kind, err)
 		}
@@ -179,8 +179,8 @@ func doRun(ctx *context.Context, pkgbuild config.AUR, cl client.Client) error {
 			Path: path,
 			Type: info.kind,
 			Extra: map[string]interface{}{
-				pkgBuildExtra:    pkgbuild,
-				artifact.ExtraID: pkgbuild.Name,
+				aurExtra:         aur,
+				artifact.ExtraID: aur.Name,
 			},
 		})
 	}
@@ -312,6 +312,7 @@ func dataFor(ctx *context.Context, cfg config.AUR, cl client.Client, artifacts [
 			DownloadURL: url,
 			SHA256:      sum,
 			Arch:        toPkgBuildArch(art.Goarch + art.Goarm),
+			Format:      art.ExtraOr(artifact.ExtraFormat, "").(string),
 		}
 		result.ReleasePackages = append(result.ReleasePackages, releasePackage)
 		result.Arches = append(result.Arches, releasePackage.Arch)
@@ -346,10 +347,10 @@ func (Pipe) Publish(ctx *context.Context) error {
 }
 
 func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
-	cfg := pkgs[0].Extra[pkgBuildExtra].(config.AUR)
+	cfg := pkgs[0].Extra[aurExtra].(config.AUR)
 
 	if strings.TrimSpace(cfg.SkipUpload) == "true" {
-		return pipe.Skip("pkgbuild.skip_upload is set")
+		return pipe.Skip("aur.skip_upload is set")
 	}
 
 	if strings.TrimSpace(cfg.SkipUpload) == "auto" && ctx.Semver.Prerelease != "" {
@@ -372,7 +373,7 @@ func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
 	}
 
 	if url == "" {
-		return pipe.Skip("pkgbuild.git_url is empty")
+		return pipe.Skip("aur.git_url is empty")
 	}
 
 	sshcmd, err := tmpl.New(ctx).WithExtraFields(tmpl.Fields{
@@ -442,27 +443,44 @@ func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
 
 func keyPath(key string) (string, error) {
 	if key == "" {
-		return "", pipe.Skip("pkgbuild.private_key is empty")
+		return "", pipe.Skip("aur.private_key is empty")
 	}
+
+	path := key
 	if _, err := ssh.ParsePrivateKey([]byte(key)); err == nil {
+		// if it can be parsed as a valid private key, we write it to a
+		// temp file and use that path on GIT_SSH_COMMAND.
 		f, err := os.CreateTemp("", "id_*")
 		if err != nil {
 			return "", fmt.Errorf("failed to store private key: %w", err)
 		}
 		defer f.Close()
-		if _, err := fmt.Fprint(f, key); err != nil {
+
+		// the key needs to EOF at an empty line, seems like github actions
+		// is somehow removing them.
+		if !strings.HasSuffix(key, "\n") {
+			key += "\n"
+		}
+
+		if _, err := f.Write([]byte(key)); err != nil {
 			return "", fmt.Errorf("failed to store private key: %w", err)
 		}
-		if err := os.Chmod(f.Name(), 0o400); err != nil {
+		if err := f.Close(); err != nil {
 			return "", fmt.Errorf("failed to store private key: %w", err)
 		}
-		return f.Name(), nil
+		path = f.Name()
 	}
 
-	if _, err := os.Stat(key); os.IsNotExist(err) {
-		return "", fmt.Errorf("key %q does not exist", key)
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("could not stat aur.private_key: %w", err)
 	}
-	return key, nil
+
+	// in any case, ensure the key has the correct permissions.
+	if err := os.Chmod(path, 0o600); err != nil {
+		return "", fmt.Errorf("failed to ensure aur.private_key permissions: %w", err)
+	}
+
+	return path, nil
 }
 
 func runGitCmds(cwd string, env []string, cmds [][]string) error {

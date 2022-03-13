@@ -297,21 +297,35 @@ type Build struct {
 	Ignore          []IgnoredBuild  `yaml:"ignore,omitempty"`
 	Dir             string          `yaml:"dir,omitempty"`
 	Main            string          `yaml:"main,omitempty"`
-	Ldflags         StringArray     `yaml:"ldflags,omitempty"`
-	Tags            FlagArray       `yaml:"tags,omitempty"`
-	Flags           FlagArray       `yaml:"flags,omitempty"`
 	Binary          string          `yaml:"binary,omitempty"`
 	Hooks           BuildHookConfig `yaml:"hooks,omitempty"`
 	Env             []string        `yaml:"env,omitempty"`
 	Builder         string          `yaml:"builder,omitempty"`
-	Asmflags        StringArray     `yaml:"asmflags,omitempty"`
-	Gcflags         StringArray     `yaml:"gcflags,omitempty"`
 	ModTimestamp    string          `yaml:"mod_timestamp,omitempty"`
 	Skip            bool            `yaml:"skip,omitempty"`
 	GoBinary        string          `yaml:"gobinary,omitempty"`
 	NoUniqueDistDir bool            `yaml:"no_unique_dist_dir,omitempty"`
 	UnproxiedMain   string          `yaml:"-"` // used by gomod.proxy
 	UnproxiedDir    string          `yaml:"-"` // used by gomod.proxy
+
+	BuildDetails          `yaml:",inline"`       // nolint: tagliatelle
+	BuildDetailsOverrides []BuildDetailsOverride `yaml:"overrides,omitempty"`
+}
+
+type BuildDetailsOverride struct {
+	Goos         string           `yaml:"goos,omitempty"`
+	Goarch       string           `yaml:"goarch,omitempty"`
+	Goarm        string           `yaml:"goarm,omitempty"`
+	Gomips       string           `yaml:"gomips,omitempty"`
+	BuildDetails `yaml:",inline"` // nolint: tagliatelle
+}
+
+type BuildDetails struct {
+	Ldflags  StringArray `yaml:"ldflags,omitempty"`
+	Tags     FlagArray   `yaml:"tags,omitempty"`
+	Flags    FlagArray   `yaml:"flags,omitempty"`
+	Asmflags StringArray `yaml:"asmflags,omitempty"`
+	Gcflags  StringArray `yaml:"gcflags,omitempty"`
 }
 
 type BuildHookConfig struct {
@@ -358,9 +372,10 @@ func (bhc Hooks) JSONSchemaType() *jsonschema.Type {
 }
 
 type Hook struct {
-	Dir string   `yaml:"dir,omitempty"`
-	Cmd string   `yaml:"cmd,omitempty"`
-	Env []string `yaml:"env,omitempty"`
+	Dir    string   `yaml:"dir,omitempty"`
+	Cmd    string   `yaml:"cmd,omitempty"`
+	Env    []string `yaml:"env,omitempty"`
+	Output bool     `yaml:"output,omitempty"`
 }
 
 // UnmarshalYAML is a custom unmarshaler that allows simplified declarations of commands as strings.
@@ -413,7 +428,7 @@ type File struct {
 // FileInfo is the file info of a file.
 type FileInfo struct {
 	Owner string      `yaml:"owner,omitempty"`
-	Group string      `yaml:"group"`
+	Group string      `yaml:"group,omitempty"`
 	Mode  os.FileMode `yaml:"mode,omitempty"`
 	MTime time.Time   `yaml:"mtime,omitempty"`
 }
@@ -600,6 +615,7 @@ type NFPMDeb struct {
 	Triggers  NFPMDebTriggers  `yaml:"triggers,omitempty"`
 	Breaks    []string         `yaml:"breaks,omitempty"`
 	Signature NFPMDebSignature `yaml:"signature,omitempty"`
+	Lintian   []string         `yaml:"lintian_overrides,omitempty"`
 }
 
 type NFPMAPKScripts struct {
@@ -672,12 +688,38 @@ type Sign struct {
 
 // SnapcraftAppMetadata for the binaries that will be in the snap package.
 type SnapcraftAppMetadata struct {
-	Plugs            []string
-	Daemon           string
-	Args             string
-	Completer        string `yaml:"completer,omitempty"`
-	Command          string `yaml:"command"`
-	RestartCondition string `yaml:"restart_condition,omitempty"`
+	Command string `yaml:"command"`
+	Args    string `yaml:"args,omitempty"`
+
+	Adapter          string                 `yaml:"adapter,omitempty"`
+	After            []string               `yaml:"after,omitempty"`
+	Aliases          []string               `yaml:"aliases,omitempty"`
+	Autostart        string                 `yaml:"autostart,omitempty"`
+	Before           []string               `yaml:"before,omitempty"`
+	BusName          string                 `yaml:"bus_name,omitempty"`
+	CommandChain     []string               `yaml:"command_chain,omitempty"`
+	CommonID         string                 `yaml:"common_id,omitempty"`
+	Completer        string                 `yaml:"completer,omitempty"`
+	Daemon           string                 `yaml:"daemon,omitempty"`
+	Desktop          string                 `yaml:"desktop,omitempty"`
+	Environment      map[string]interface{} `yaml:"environment,omitempty"`
+	Extensions       []string               `yaml:"extensions,omitempty"`
+	InstallMode      string                 `yaml:"install_mode,omitempty"`
+	Passthrough      map[string]interface{} `yaml:"passthrough,omitempty"`
+	Plugs            []string               `yaml:"plugs,omitempty"`
+	PostStopCommand  string                 `yaml:"post_stop_command,omitempty"`
+	RefreshMode      string                 `yaml:"refresh_mode,omitempty"`
+	ReloadCommand    string                 `yaml:"reload_command,omitempty"`
+	RestartCondition string                 `yaml:"restart_condition,omitempty"`
+	RestartDelay     string                 `yaml:"restart_delay,omitempty"`
+	Slots            []string               `yaml:"slots,omitempty"`
+	Sockets          map[string]interface{} `yaml:"sockets,omitempty"`
+	StartTimeout     string                 `yaml:"start_timeout,omitempty"`
+	StopCommand      string                 `yaml:"stop_command,omitempty"`
+	StopMode         string                 `yaml:"stop_mode,omitempty"`
+	StopTimeout      string                 `yaml:"stop_timeout,omitempty"`
+	Timer            string                 `yaml:"timer,omitempty"`
+	WatchdogTimeout  string                 `yaml:"watchdog_timeout,omitempty"`
 }
 
 type SnapcraftLayoutMetadata struct {

@@ -3,6 +3,7 @@ package tmpl
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"text/template"
 
@@ -19,7 +20,8 @@ func TestWithArtifact(t *testing.T) {
 	})
 	ctx.ModulePath = "github.com/goreleaser/goreleaser"
 	ctx.Env = map[string]string{
-		"FOO": "bar",
+		"FOO":       "bar",
+		"MULTILINE": "something with\nmultiple lines\nremove this\nto test things",
 	}
 	ctx.Version = "1.2.3"
 	ctx.Git.PreviousTag = "v1.2.2"
@@ -35,6 +37,7 @@ func TestWithArtifact(t *testing.T) {
 	ctx.Git.ShortCommit = "shortcommit"
 	ctx.Git.TagSubject = "awesome release"
 	ctx.Git.TagContents = "awesome release\n\nanother line"
+	ctx.Git.TagBody = "another line"
 	ctx.ReleaseNotes = "test release notes"
 	for expect, tmpl := range map[string]string{
 		"bar":                              "{{.Env.FOO}}",
@@ -62,6 +65,12 @@ func TestWithArtifact(t *testing.T) {
 		"v1.2.2":                           "{{ .PreviousTag }}",
 		"awesome release":                  "{{ .TagSubject }}",
 		"awesome release\n\nanother line":  "{{ .TagContents }}",
+		"another line":                     "{{ .TagBody }}",
+		"runtime: " + runtime.GOOS:         "runtime: {{ .Runtime.Goos }}",
+		"runtime: " + runtime.GOARCH:       "runtime: {{ .Runtime.Goarch }}",
+
+		"remove this": "{{ filter .Env.MULTILINE \".*remove.*\" }}",
+		"something with\nmultiple lines\nto test things": "{{ reverseFilter .Env.MULTILINE \".*remove.*\" }}",
 	} {
 		tmpl := tmpl
 		expect := expect

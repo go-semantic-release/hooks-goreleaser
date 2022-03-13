@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/keygen"
@@ -63,43 +64,48 @@ func createTemplateData() templateData {
 				Arch:        "x86_64",
 				DownloadURL: "https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_x86_64.tar.gz",
 				SHA256:      "1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c67",
+				Format:      "tar.gz",
 			},
 			{
 				Arch:        "armv6h",
 				DownloadURL: "https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_Arm6.tar.gz",
 				SHA256:      "1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c67",
+				Format:      "tar.gz",
 			},
 			{
 				Arch:        "aarch64",
 				DownloadURL: "https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_Arm64.tar.gz",
 				SHA256:      "1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c67",
+				Format:      "tar.gz",
 			},
 			{
 				Arch:        "i686",
 				DownloadURL: "https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_386.tar.gz",
 				SHA256:      "1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c67",
+				Format:      "tar.gz",
 			},
 			{
 				Arch:        "armv7h",
 				DownloadURL: "https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_arm7.tar.gz",
 				SHA256:      "1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c67",
+				Format:      "tar.gz",
 			},
 		},
 	}
 }
 
-func TestFullPkgBuild(t *testing.T) {
+func TestFullAur(t *testing.T) {
 	data := createTemplateData()
 	pkg, err := applyTemplate(context.New(config.Project{
 		ProjectName: "foo",
-	}), pkgBuildTemplate, data)
+	}), aurTemplateData, data)
 	require.NoError(t, err)
 
 	golden.RequireEqual(t, []byte(pkg))
 }
 
-func TestPkgBuildSimple(t *testing.T) {
-	pkg, err := applyTemplate(context.New(config.Project{}), pkgBuildTemplate, createTemplateData())
+func TestAurSimple(t *testing.T) {
+	pkg, err := applyTemplate(context.New(config.Project{}), aurTemplateData, createTemplateData())
 	require.NoError(t, err)
 	require.Contains(t, pkg, `# Maintainer: Ciclano <ciclano@example.com>`)
 	require.Contains(t, pkg, `# Maintainer: Cicrano <cicrano@example.com>`)
@@ -107,7 +113,7 @@ func TestPkgBuildSimple(t *testing.T) {
 	require.Contains(t, pkg, `# Contributor: Beltrano <beltrano@example.com>`)
 	require.Contains(t, pkg, `pkgname='test-bin'`)
 	require.Contains(t, pkg, `url='https://example.com'`)
-	require.Contains(t, pkg, `source_x86_64=('https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_x86_64.tar.gz')`)
+	require.Contains(t, pkg, `source_x86_64=("${pkgname}_${pkgver}_x86_64.tar.gz::https://github.com/caarlos0/test/releases/download/v0.1.3/test_Linux_x86_64.tar.gz")`)
 	require.Contains(t, pkg, `sha256sums_x86_64=('1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c67')`)
 	require.Contains(t, pkg, `pkgver=0.1.3`)
 }
@@ -193,13 +199,13 @@ func TestFullPipe(t *testing.T) {
 			prepare: func(ctx *context.Context) {
 				ctx.Config.AURs[0].PrivateKey = ""
 			},
-			expectedPublishError: `pkgbuild.private_key is empty`,
+			expectedPublishError: `aur.private_key is empty`,
 		},
 		"key-not-found": {
 			prepare: func(ctx *context.Context) {
 				ctx.Config.AURs[0].PrivateKey = "testdata/nope"
 			},
-			expectedPublishError: `key "testdata/nope" does not exist`,
+			expectedPublishError: `could not stat aur.private_key: stat testdata/nope: no such file or directory`,
 		},
 		"invalid-git-url-template": {
 			prepare: func(ctx *context.Context) {
@@ -211,7 +217,7 @@ func TestFullPipe(t *testing.T) {
 			prepare: func(ctx *context.Context) {
 				ctx.Config.AURs[0].GitURL = ""
 			},
-			expectedPublishError: `pkgbuild.git_url is empty`,
+			expectedPublishError: `aur.git_url is empty`,
 		},
 		"invalid-ssh-cmd-template": {
 			prepare: func(ctx *context.Context) {
@@ -338,7 +344,7 @@ func TestRunPipe(t *testing.T) {
 			AURs: []config.AUR{
 				{
 					License:     "MIT",
-					Description: "A run pipe test pkgbuild and FOO={{ .Env.FOO }}",
+					Description: "A run pipe test aur and FOO={{ .Env.FOO }}",
 					Homepage:    "https://github.com/goreleaser",
 					IDs:         []string{"foo"},
 					GitURL:      url,
@@ -710,7 +716,7 @@ func TestKeyPath(t *testing.T) {
 	})
 	t.Run("with invalid path", func(t *testing.T) {
 		result, err := keyPath("testdata/nope")
-		require.EqualError(t, err, `key "testdata/nope" does not exist`)
+		require.EqualError(t, err, `could not stat aur.private_key: stat testdata/nope: no such file or directory`)
 		require.Equal(t, "", result)
 	})
 	t.Run("with key", func(t *testing.T) {
@@ -731,8 +737,20 @@ func TestKeyPath(t *testing.T) {
 	})
 	t.Run("empty", func(t *testing.T) {
 		result, err := keyPath("")
-		require.EqualError(t, err, `pkgbuild.private_key is empty`)
+		require.EqualError(t, err, `aur.private_key is empty`)
 		require.Equal(t, "", result)
+	})
+	t.Run("with invalid EOF", func(t *testing.T) {
+		path := makeKey(t, keygen.Ed25519)
+		bts, err := os.ReadFile(path)
+		require.NoError(t, err)
+
+		result, err := keyPath(strings.TrimSpace(string(bts)))
+		require.NoError(t, err)
+
+		resultbts, err := os.ReadFile(result)
+		require.NoError(t, err)
+		require.Equal(t, string(bts), string(resultbts))
 	})
 }
 
