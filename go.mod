@@ -1,6 +1,6 @@
 module github.com/go-semantic-release/hooks-goreleaser
 
-go 1.17
+go 1.18
 
 require (
 	github.com/apex/log v1.9.0
