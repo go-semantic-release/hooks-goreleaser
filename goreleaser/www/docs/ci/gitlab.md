@@ -2,7 +2,7 @@
 
 Below are some example GitLab CI jobs that use GoReleaser to release a project.
 
-> If you are using private hosted or Enterprise version of Gitlab, please follow this [guide](/scm/gitlab/) before diving into the details.
+> If you are using private hosted or Enterprise version of GitLab, please follow this [guide](/scm/gitlab/) before diving into the details.
 
 ## Basic Releasing
 
@@ -12,6 +12,11 @@ In the repository's GitLab CI settings, add a `GITLAB_TOKEN` variable. The value
 be an API token with `api` scope for a user that has access to the project. This
 variable should be masked and optionally protected if the job will only run on
 protected branches and tags.
+
+!!! warning
+    If you use a project access token, make sure to set `use_package_registry`
+    to `true` as well, otherwise it might not work.
+
 See [Quick Start](https://goreleaser.com/quick-start/) for more information on
 GoReleaser's environment variables.
 

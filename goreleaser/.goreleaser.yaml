@@ -44,22 +44,26 @@ changelog:
   use: github
   filters:
     exclude:
-    - '^docs:'
     - '^test:'
     - '^chore'
+    - 'merge conflict'
     - Merge pull request
     - Merge remote-tracking branch
     - Merge branch
     - go mod tidy
   groups:
-    - title: 'New Features'
+    - title: 'New Features and updates'
       regexp: "^.*feat[(\\w)]*:+.*$"
       order: 0
     - title: 'Bug fixes'
       regexp: "^.*fix[(\\w)]*:+.*$"
       order: 10
+    - title: 'Documentation updates'
+      regexp: "^.*docs[(\\w)]*:+.*$"
+      order: 20
     - title: Other work
       order: 999
+
 
 dockers:
 - image_templates:
@@ -162,14 +166,6 @@ brews:
       zsh_completion.install "completions/goreleaser.zsh" => "_goreleaser"
       fish_completion.install "completions/goreleaser.fish"
       man1.install "manpages/goreleaser.1.gz"
-
-rigs:
-  - rig:
-      owner: goreleaser
-      name: fish-food
-    homepage:  https://goreleaser.com
-    description: Deliver Go binaries as fast and easily as possible
-    license: MIT
 
 aurs:
   - homepage:  https://goreleaser.com
@@ -313,8 +309,6 @@ release:
     - Follow us on [Twitter](https://twitter.com/goreleaser)
 
 announce:
-  skip: "{{gt .Patch 0}}"
-
   twitter:
     enabled: true
     message_template: 'GoReleaser {{ .Tag }} is out! Check it out: https://github.com/goreleaser/goreleaser/releases/tag/{{ .Tag }}'

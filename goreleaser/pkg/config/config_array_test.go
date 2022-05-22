@@ -3,8 +3,8 @@ package config
 import (
 	"testing"
 
+	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v2"
 )
 
 type Unmarshaled struct {

@@ -85,6 +85,9 @@
 					},
 					"private_key": {
 						"type": "string"
+					},
+					"goamd64": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -181,6 +184,9 @@
 						},
 						"type": "array"
 					},
+					"meta": {
+						"type": "boolean"
+					},
 					"allow_different_binary_count": {
 						"type": "boolean"
 					}
@@ -268,6 +274,12 @@
 						},
 						"type": "array"
 					},
+					"goamd64": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
 					"targets": {
 						"items": {
 							"type": "string"
@@ -312,7 +324,13 @@
 					"gobinary": {
 						"type": "string"
 					},
+					"command": {
+						"type": "string"
+					},
 					"no_unique_dist_dir": {
+						"type": "boolean"
+					},
+					"no_main_check": {
 						"type": "boolean"
 					},
 					"ldflags": {
@@ -403,6 +421,9 @@
 						"type": "string"
 					},
 					"gomips": {
+						"type": "string"
+					},
+					"goamd64": {
 						"type": "string"
 					},
 					"ldflags": {
@@ -682,6 +703,9 @@
 					"goarm": {
 						"type": "string"
 					},
+					"goamd64": {
+						"type": "string"
+					},
 					"dockerfile": {
 						"type": "string"
 					},
@@ -711,9 +735,6 @@
 							"type": "string"
 						},
 						"type": "array"
-					},
-					"use_buildx": {
-						"type": "boolean"
 					},
 					"use": {
 						"type": "string"
@@ -958,6 +979,9 @@
 					},
 					"gobinary": {
 						"type": "string"
+					},
+					"mod": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -1042,6 +1066,12 @@
 					},
 					"goarm": {
 						"type": "string"
+					},
+					"goamd64": {
+						"type": "string"
+					},
+					"service": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -1079,6 +1109,9 @@
 						"type": "string"
 					},
 					"gomips": {
+						"type": "string"
+					},
+					"goamd64": {
 						"type": "string"
 					}
 				},
@@ -1121,6 +1154,9 @@
 						"type": "string"
 					},
 					"goarm": {
+						"type": "string"
+					},
+					"goamd64": {
 						"type": "string"
 					},
 					"skip_upload": {
@@ -2095,6 +2131,9 @@
 							"type": "string"
 						},
 						"type": "array"
+					},
+					"goamd64": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -2167,6 +2206,44 @@
 					},
 					"icon_url": {
 						"type": "string"
+					},
+					"blocks": {
+						"items": {
+							"$schema": "http://json-schema.org/draft-04/schema#",
+							"$ref": "#/definitions/SlackBlock"
+						},
+						"type": "array"
+					},
+					"attachments": {
+						"items": {
+							"$schema": "http://json-schema.org/draft-04/schema#",
+							"$ref": "#/definitions/SlackAttachment"
+						},
+						"type": "array"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"SlackAttachment": {
+				"required": [
+					"Internal"
+				],
+				"properties": {
+					"Internal": {
+						"additionalProperties": true
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"SlackBlock": {
+				"required": [
+					"Internal"
+				],
+				"properties": {
+					"Internal": {
+						"additionalProperties": true
 					}
 				},
 				"additionalProperties": false,
@@ -2540,6 +2617,12 @@
 						"type": "string"
 					},
 					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"exts": {
 						"items": {
 							"type": "string"
 						},

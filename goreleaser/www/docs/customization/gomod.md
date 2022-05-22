@@ -25,9 +25,13 @@ gomod:
     - GOSUMDB=sum.golang.org
     - GOPRIVATE=example.com/blah
 
+  # Sets the `-mod` flag value.
+  # Defaults to empty.
+  mod: mod
+
   # Which Go binary to use.
   # Defaults to `go`.
-  gobinary: go1.15
+  gobinary: go1.17
 ```
 
 !!! tip

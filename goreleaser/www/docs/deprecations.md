@@ -36,6 +36,41 @@ Description.
 
 -->
 
+### nfpms.maintainer
+
+> since 2022-05-07 (v1.9.0)
+
+nFPM will soon make mandatory setting the maintainer field.
+
+=== "Before"
+    ```yaml
+    nfpms:
+    - maintainer: ''
+    ```
+
+=== "After"
+    ```yaml
+    nfpms:
+    - maintainer: 'Name <email>'
+    ```
+
+
+### rigs
+
+> since 2022-03-21 (v1.8.0)
+
+GoFish was deprecated by their authors, therefore, we're removing its
+support from GoReleaser too.
+
+### dockers.use: buildpacks
+
+> since 2022-03-16 (v1.7.0)
+
+This will be removed soon due to some issues:
+
+- The binary gets rebuild again during the buildpacks build;
+- There is no ARM support.
+
 ### variables
 
 > since 2022-01-20 (v1.4.0)
@@ -58,7 +93,7 @@ On [GoReleaser PRO](/pro/) custom variables should now be prefixed with `.Var`.
     some_template: 'lala-{{ .Var.foo }}'
     ```
 
-### nfpm.empty_folders
+### nfpms.empty_folders
 
 > since 2021-11-14  (v1.0.0)
 
@@ -80,14 +115,6 @@ nFPM empty folders is now deprecated in favor of a `dir` content type:
         type: dir
     ```
 
-### godownloader
-
-> since 2021-10-13 (all)
-
-GoDownloader, the install script generator, wasn't been updated for a long time and is now officially deprecated.
-The website and all install scripts will be taken out in 6 months.
-You can still use any of the other install methods.
-
 ### builds for windows/arm64
 
 > since 2021-08-16 (v0.175.0)
@@ -107,9 +134,22 @@ ignore:
 
 If you try to use new versions of GoReleaser with Go 1.16 or older, it will warn about it until this deprecation warning expires, after that your build will likely fail.
 
-### docker.use_buildx
+## Expired deprecation notices
 
-> since 2021-06-26 (v0.172.0)
+The following options were deprecated in the past and were already removed.
+
+### godownloader
+
+> since 2021-10-13 (all), removed 2022-05-18
+
+GoDownloader, the install script generator, wasn't been updated for a long time and is now officially deprecated.
+The website and all install scripts will be taken out in 6 months.
+You can still use any of the other install methods.
+
+
+### dockers.use_buildx
+
+> since 2021-06-26 (v0.172.0), removed 2022-03-16 (v1.7.0)
 
 `use_buildx` is deprecated in favor of the more generalist `use`, since now it also allow other options in the future:
 
@@ -131,7 +171,7 @@ Change this:
 
 ### builds for darwin/arm64
 
-> since 2021-02-17 (v0.157.0)
+> since 2021-02-17 (v0.157.0), removed 2022-03-16 (v1.7.0)
 
 Since Go 1.16, `darwin/arm64` is macOS on Apple Silicon instead of `iOS`.
 
@@ -147,10 +187,6 @@ ignore:
 ```
 
 If you try to use new versions of GoReleaser with Go 1.15 or older, it will warn about it until this deprecation warning expires, after that your build will likely fail.
-
-## Expired deprecation notices
-
-The following options were deprecated in the past and were already removed.
 
 ### Skipping SemVer Validations
 

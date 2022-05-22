@@ -19,10 +19,12 @@ import (
 )
 
 var (
-	it          = flag.Bool("it", false, "push images to docker hub")
-	debug       = flag.Bool("debug", false, "enable debug logs")
-	registry    = "localhost:5000/"
-	altRegistry = "localhost:5050/"
+	it              = flag.Bool("it", false, "push images to docker hub")
+	debug           = flag.Bool("debug", false, "enable debug logs")
+	registryPort    = "5050"
+	registry        = fmt.Sprintf("localhost:%s/", registryPort)
+	altRegistryPort = "5051"
+	altRegistry     = fmt.Sprintf("localhost:%s/", altRegistryPort)
 )
 
 func TestMain(m *testing.M) {
@@ -43,8 +45,8 @@ func start(t *testing.T) {
 	}
 	t.Log("starting registries")
 	for _, line := range []string{
-		"run -d -p 5000:5000 --name registry registry:2",
-		"run -d -p 5050:5000 --name alt_registry registry:2",
+		fmt.Sprintf("run -d -p %s:5000 --name registry registry:2", registryPort),
+		fmt.Sprintf("run -d -p %s:5000 --name alt_registry registry:2", altRegistryPort),
 	} {
 		if out, err := exec.Command("docker", strings.Fields(line)...).CombinedOutput(); err != nil {
 			t.Log("failed to start docker registry", string(out), err)
@@ -296,7 +298,7 @@ func TestRunPipe(t *testing.T) {
 			expect:              []string{registry + "goreleaser/test_multiarch_fail:latest-arm64v8"},
 			assertError:         shouldNotErr,
 			pubAssertError:      shouldNotErr,
-			manifestAssertError: shouldErr("failed to create localhost:5000/goreleaser/test_multiarch_fail:test"),
+			manifestAssertError: shouldErr("failed to create localhost:5050/goreleaser/test_multiarch_fail:test"),
 			assertImageLabels:   noLabels,
 		},
 		"multiarch manifest template error": {
@@ -519,7 +521,7 @@ func TestRunPipe(t *testing.T) {
 			},
 			expect:              []string{},
 			assertImageLabels:   noLabels,
-			assertError:         shouldErr(`failed to build localhost:5000/goreleaser/test_run_pipe_template_UPPERCASE:v1.0.0`),
+			assertError:         shouldErr(`failed to build localhost:5050/goreleaser/test_run_pipe_template_UPPERCASE:v1.0.0`),
 			pubAssertError:      shouldNotErr,
 			manifestAssertError: shouldNotErr,
 		},
@@ -681,7 +683,7 @@ func TestRunPipe(t *testing.T) {
 				registry + "goreleaser/one_img_error_with_skip_push:true",
 			},
 			assertImageLabels: noLabels,
-			assertError:       shouldErr("failed to build localhost:5000/goreleaser/one_img_error_with_skip_push:false"),
+			assertError:       shouldErr("failed to build localhost:5050/goreleaser/one_img_error_with_skip_push:false"),
 		},
 		"valid_no_latest": {
 			dockers: []config.Docker{
@@ -739,7 +741,7 @@ func TestRunPipe(t *testing.T) {
 				},
 			},
 			assertImageLabels: noLabels,
-			assertError:       shouldErr("failed to build localhost:5000/goreleaser/test_build_args:latest"),
+			assertError:       shouldErr("failed to build localhost:5050/goreleaser/test_build_args:latest"),
 		},
 		"bad_dockerfile": {
 			dockers: []config.Docker{
@@ -753,7 +755,7 @@ func TestRunPipe(t *testing.T) {
 				},
 			},
 			assertImageLabels: noLabels,
-			assertError:       shouldErr("failed to build localhost:5000/goreleaser/bad_dockerfile:latest"),
+			assertError:       shouldErr("failed to build localhost:5050/goreleaser/bad_dockerfile:latest"),
 		},
 		"tag_template_error": {
 			dockers: []config.Docker{
@@ -972,8 +974,8 @@ func TestRunPipe(t *testing.T) {
 
 	for name, docker := range table {
 		for imager := range imagers {
-			if imager == useBuildPacks { // buildpack tests are different
-				continue
+			if imager == useBuildPacks {
+				continue // deprecated
 			}
 			t.Run(name+" on "+imager, func(t *testing.T) {
 				folder := t.TempDir()
@@ -1086,92 +1088,6 @@ func TestRunPipe(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestRunPipeWhileUsingBuildpacks(t *testing.T) {
-	testlib.CheckPath(t, "pack")
-	type errChecker func(*testing.T, error)
-	shouldNotErr := func(t *testing.T, err error) {
-		t.Helper()
-		require.NoError(t, err)
-	}
-
-	table := map[string]struct {
-		dockers             []config.Docker
-		manifests           []config.DockerManifest
-		expect              []string
-		assertError         errChecker
-		pubAssertError      errChecker
-		manifestAssertError errChecker
-	}{
-		"golang": {
-			dockers: []config.Docker{
-				{
-					Use:            useBuildPacks,
-					ImageTemplates: []string{registry + "goreleaser/buildpacks:{{ .Tag }}"},
-				},
-			},
-			expect: []string{
-				registry + "goreleaser/buildpacks:v1.0.0",
-			},
-			assertError:         shouldNotErr,
-			pubAssertError:      shouldNotErr,
-			manifestAssertError: shouldNotErr,
-		},
-	}
-
-	killAndRm(t)
-	start(t)
-	defer killAndRm(t)
-
-	for name, docker := range table {
-		t.Run(name+" on "+useBuildPacks, func(t *testing.T) {
-			folder := t.TempDir()
-			wd := filepath.Join(folder, "wd")
-			dist := filepath.Join(wd, "dist")
-			require.NoError(t, os.Mkdir(wd, 0o755))
-			require.NoError(t, os.Mkdir(dist, 0o755))
-			require.NoError(t, os.Chdir(wd))
-			require.NoError(t, os.WriteFile(filepath.Join(wd, "go.mod"), []byte("module test-mod\n\ngo 1.17"), 0o600))
-			require.NoError(t, os.WriteFile(filepath.Join(wd, "main.go"), []byte("package main\n\nfunc main(){}"), 0o600))
-
-			ctx := context.New(config.Project{
-				ProjectName: "mybin",
-				Dist:        dist,
-				Dockers:     docker.dockers,
-			})
-
-			ctx.Parallelism = 1
-			ctx.Version = "1.0.0"
-			ctx.Git = context.GitInfo{
-				CurrentTag: "v1.0.0",
-				Commit:     "a1b2c3d4",
-			}
-			ctx.Semver = context.Semver{
-				Major: 1,
-				Minor: 0,
-				Patch: 0,
-			}
-
-			rmi := func(img string) error {
-				return exec.Command("docker", "rmi", "--force", img).Run()
-			}
-
-			err := Pipe{}.Run(ctx)
-			docker.assertError(t, err)
-			if err == nil {
-				docker.pubAssertError(t, Pipe{}.Publish(ctx))
-				docker.manifestAssertError(t, ManifestPipe{}.Publish(ctx))
-			}
-
-			// this might should not fail as the image should have been created when
-			// the step ran
-			for _, img := range docker.expect {
-				t.Log("removing docker image", img)
-				require.NoError(t, rmi(img), "could not delete image %s", img)
-			}
-		})
 	}
 }
 

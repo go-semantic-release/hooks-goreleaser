@@ -57,6 +57,7 @@ const (
 
 	// artifact-only keys.
 	osKey        = "Os"
+	amd64        = "Amd64"
 	arch         = "Arch"
 	arm          = "Arm"
 	mips         = "Mips"
@@ -115,8 +116,8 @@ func New(ctx *context.Context) *Template {
 func (t *Template) WithEnvS(envs []string) *Template {
 	result := map[string]string{}
 	for _, env := range envs {
-		parts := strings.SplitN(env, "=", 2)
-		result[parts[0]] = parts[1]
+		k, v, _ := strings.Cut(env, "=")
+		result[k] = v
 	}
 	return t.WithEnv(result)
 }
@@ -146,6 +147,7 @@ func (t *Template) WithArtifact(a *artifact.Artifact, replacements map[string]st
 	t.fields[arch] = replace(replacements, a.Goarch)
 	t.fields[arm] = replace(replacements, a.Goarm)
 	t.fields[mips] = replace(replacements, a.Gomips)
+	t.fields[amd64] = replace(replacements, a.Goamd64)
 	t.fields[binary] = bin.(string)
 	t.fields[artifactName] = a.Name
 	t.fields[artifactPath] = a.Path

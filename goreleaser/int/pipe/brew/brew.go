@@ -54,6 +54,9 @@ func (Pipe) Default(ctx *context.Context) error {
 		if brew.Goarm == "" {
 			brew.Goarm = "6"
 		}
+		if brew.Goamd64 == "" {
+			brew.Goamd64 = "v1"
+		}
 	}
 
 	return nil
@@ -150,14 +153,16 @@ func doRun(ctx *context.Context, brew config.Homebrew, cl client.Client) error {
 		return pipe.Skip("brew tap name is not set")
 	}
 
-	// TODO: properly cover this with tests
 	filters := []artifact.Filter{
 		artifact.Or(
 			artifact.ByGoos("darwin"),
 			artifact.ByGoos("linux"),
 		),
 		artifact.Or(
-			artifact.ByGoarch("amd64"),
+			artifact.And(
+				artifact.ByGoarch("amd64"),
+				artifact.ByGoamd64(brew.Goamd64),
+			),
 			artifact.ByGoarch("arm64"),
 			artifact.ByGoarch("all"),
 			artifact.And(
@@ -323,7 +328,8 @@ func dataFor(ctx *context.Context, cfg config.Homebrew, cl client.Client, artifa
 		Dependencies:  cfg.Dependencies,
 		Conflicts:     cfg.Conflicts,
 		Plist:         cfg.Plist,
-		PostInstall:   cfg.PostInstall,
+		Service:       split(cfg.Service),
+		PostInstall:   split(cfg.PostInstall),
 		Tests:         split(cfg.Test),
 		CustomRequire: cfg.CustomRequire,
 		CustomBlock:   split(cfg.CustomBlock),
@@ -402,7 +408,7 @@ func split(s string) []string {
 func formulaNameFor(name string) string {
 	name = strings.ReplaceAll(name, "-", " ")
 	name = strings.ReplaceAll(name, "_", " ")
-	name = strings.ReplaceAll(name, ".", "_")
+	name = strings.ReplaceAll(name, ".", "")
 	name = strings.ReplaceAll(name, "@", "AT")
-	return strings.ReplaceAll(strings.Title(name), " ", "")
+	return strings.ReplaceAll(strings.Title(name), " ", "") // nolint:staticcheck
 }

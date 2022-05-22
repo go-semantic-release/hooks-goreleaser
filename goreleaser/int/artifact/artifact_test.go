@@ -55,8 +55,24 @@ func TestFilter(t *testing.T) {
 			Goarch: "arm",
 		},
 		{
-			Name:   "bar",
-			Goarch: "amd64",
+			Name:    "bar",
+			Goarch:  "amd64",
+			Goamd64: "v1",
+		},
+		{
+			Name:    "bar",
+			Goarch:  "amd64",
+			Goamd64: "v2",
+		},
+		{
+			Name:    "bar",
+			Goarch:  "amd64",
+			Goamd64: "v3",
+		},
+		{
+			Name:    "bar",
+			Goarch:  "amd64",
+			Goamd64: "v4",
 		},
 		{
 			Name:  "foobar",
@@ -95,8 +111,13 @@ func TestFilter(t *testing.T) {
 	require.Len(t, artifacts.Filter(ByGoos("linux")).items, 1)
 	require.Len(t, artifacts.Filter(ByGoos("darwin")).items, 2)
 
-	require.Len(t, artifacts.Filter(ByGoarch("amd64")).items, 1)
+	require.Len(t, artifacts.Filter(ByGoarch("amd64")).items, 4)
 	require.Len(t, artifacts.Filter(ByGoarch("386")).items, 0)
+
+	require.Len(t, artifacts.Filter(ByGoamd64("v1")).items, 1)
+	require.Len(t, artifacts.Filter(ByGoamd64("v2")).items, 1)
+	require.Len(t, artifacts.Filter(ByGoamd64("v3")).items, 1)
+	require.Len(t, artifacts.Filter(ByGoamd64("v4")).items, 1)
 
 	require.Len(t, artifacts.Filter(ByGoarm("6")).items, 1)
 	require.Len(t, artifacts.Filter(ByGoarm("7")).items, 0)
@@ -104,10 +125,10 @@ func TestFilter(t *testing.T) {
 	require.Len(t, artifacts.Filter(ByType(Checksum)).items, 2)
 	require.Len(t, artifacts.Filter(ByType(Binary)).items, 0)
 
-	require.Len(t, artifacts.Filter(OnlyReplacingUnibins).items, 6)
+	require.Len(t, artifacts.Filter(OnlyReplacingUnibins).items, 9)
 	require.Len(t, artifacts.Filter(And(OnlyReplacingUnibins, ByGoos("darwin"))).items, 1)
 
-	require.Len(t, artifacts.Filter(nil).items, 7)
+	require.Len(t, artifacts.Filter(nil).items, 10)
 
 	require.Len(t, artifacts.Filter(
 		And(
@@ -237,14 +258,22 @@ func TestGroupByID(t *testing.T) {
 func TestGroupByPlatform(t *testing.T) {
 	data := []*Artifact{
 		{
-			Name:   "foo",
-			Goos:   "linux",
-			Goarch: "amd64",
+			Name:    "foo",
+			Goos:    "linux",
+			Goarch:  "amd64",
+			Goamd64: "v2",
 		},
 		{
-			Name:   "bar",
-			Goos:   "linux",
-			Goarch: "amd64",
+			Name:    "bar",
+			Goos:    "linux",
+			Goarch:  "amd64",
+			Goamd64: "v2",
+		},
+		{
+			Name:    "bar",
+			Goos:    "linux",
+			Goarch:  "amd64",
+			Goamd64: "v3",
 		},
 		{
 			Name:   "foobar",
@@ -275,7 +304,8 @@ func TestGroupByPlatform(t *testing.T) {
 	}
 
 	groups := artifacts.GroupByPlatform()
-	require.Len(t, groups["linuxamd64"], 2)
+	require.Len(t, groups["linuxamd64v2"], 2)
+	require.Len(t, groups["linuxamd64v3"], 1)
 	require.Len(t, groups["linuxarm6"], 1)
 	require.Len(t, groups["linuxmipssoftfloat"], 1)
 	require.Len(t, groups["linuxmipshardfloat"], 1)
@@ -378,6 +408,42 @@ func TestByIDs(t *testing.T) {
 	require.Len(t, artifacts.Filter(ByIDs("check")).items, 2)
 	require.Len(t, artifacts.Filter(ByIDs("foo")).items, 3)
 	require.Len(t, artifacts.Filter(ByIDs("foo", "bar")).items, 4)
+}
+
+func TestByExts(t *testing.T) {
+	data := []*Artifact{
+		{
+			Name: "foo",
+			Extra: map[string]interface{}{
+				ExtraExt: "deb",
+			},
+		},
+		{
+			Name: "bar",
+			Extra: map[string]interface{}{
+				ExtraExt: "deb",
+			},
+		},
+		{
+			Name: "foobar",
+			Extra: map[string]interface{}{
+				ExtraExt: "rpm",
+			},
+		},
+		{
+			Name:  "check",
+			Extra: map[string]interface{}{},
+		},
+	}
+	artifacts := New()
+	for _, a := range data {
+		artifacts.Add(a)
+	}
+
+	require.Len(t, artifacts.Filter(ByExt("deb")).items, 2)
+	require.Len(t, artifacts.Filter(ByExt("rpm")).items, 1)
+	require.Len(t, artifacts.Filter(ByExt("rpm", "deb")).items, 3)
+	require.Len(t, artifacts.Filter(ByExt("foo")).items, 0)
 }
 
 func TestByFormats(t *testing.T) {
@@ -849,4 +915,10 @@ func Test_ByBinaryLikeArtifacts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestArtifactStringer(t *testing.T) {
+	require.Equal(t, "foobar", Artifact{
+		Name: "foobar",
+	}.String())
 }

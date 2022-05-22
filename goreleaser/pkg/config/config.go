@@ -3,6 +3,8 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -11,8 +13,8 @@ import (
 	"github.com/alecthomas/jsonschema"
 
 	"github.com/apex/log"
+	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/goreleaser/nfpm/v2/files"
-	yaml "gopkg.in/yaml.v2"
 )
 
 // GitHubURLs holds the URLs to be used when using github enterprise.
@@ -41,16 +43,30 @@ type GiteaURLs struct {
 // Repo represents any kind of repo (github, gitlab, etc).
 // to upload releases into.
 type Repo struct {
-	Owner string `yaml:"owner,omitempty"`
-	Name  string `yaml:"name,omitempty"`
+	Owner  string `yaml:"owner,omitempty"`
+	Name   string `yaml:"name,omitempty"`
+	RawURL string `yaml:"-"`
 }
 
 // String of the repo, e.g. owner/name.
 func (r Repo) String() string {
-	if r.Owner == "" && r.Name == "" {
-		return ""
+	if r.isSCM() {
+		return r.Owner + "/" + r.Name
 	}
-	return r.Owner + "/" + r.Name
+	return r.Owner
+}
+
+// CheckSCM returns an error if the given url is not a valid scm url.
+func (r Repo) CheckSCM() error {
+	if r.isSCM() {
+		return nil
+	}
+	return fmt.Errorf("invalid scm url: %s", r.RawURL)
+}
+
+// isSCM returns true if the repo has both an owner and name.
+func (r Repo) isSCM() bool {
+	return r.Owner != "" && r.Name != ""
 }
 
 // RepoRef represents any kind of repo which may differ
@@ -128,6 +144,7 @@ type AUR struct {
 	GitURL                string       `yaml:"git_url,omitempty"`
 	GitSSHCommand         string       `yaml:"git_ssh_command,omitempty"`
 	PrivateKey            string       `yaml:"private_key,omitempty"`
+	Goamd64               string       `yaml:"goamd64,omitempty"`
 }
 
 // GoFish contains the gofish section.
@@ -143,7 +160,7 @@ type GoFish struct {
 	URLTemplate           string       `yaml:"url_template,omitempty"`
 	IDs                   []string     `yaml:"ids,omitempty"`
 	Goarm                 string       `yaml:"goarm,omitempty"`
-}
+} // deprecated
 
 // Homebrew contains the brew section.
 type Homebrew struct {
@@ -169,6 +186,8 @@ type Homebrew struct {
 	CustomBlock           string               `yaml:"custom_block,omitempty"`
 	IDs                   []string             `yaml:"ids,omitempty"`
 	Goarm                 string               `yaml:"goarm,omitempty"`
+	Goamd64               string               `yaml:"goamd64,omitempty"`
+	Service               string               `yaml:"service,omitempty"`
 }
 
 // Krew contains the krew section.
@@ -184,6 +203,7 @@ type Krew struct {
 	Homepage              string       `yaml:"homepage,omitempty"`
 	URLTemplate           string       `yaml:"url_template,omitempty"`
 	Goarm                 string       `yaml:"goarm,omitempty"`
+	Goamd64               string       `yaml:"goamd64,omitempty"`
 	SkipUpload            string       `yaml:"skip_upload,omitempty"`
 }
 
@@ -202,6 +222,7 @@ type Scoop struct {
 	SkipUpload            string       `yaml:"skip_upload,omitempty"`
 	PreInstall            []string     `yaml:"pre_install,omitempty"`
 	PostInstall           []string     `yaml:"post_install,omitempty"`
+	Goamd64               string       `yaml:"goamd64,omitempty"`
 }
 
 // CommitAuthor is the author of a Git commit.
@@ -218,10 +239,11 @@ type BuildHooks struct { // renamed on pro
 
 // IgnoredBuild represents a build ignored by the user.
 type IgnoredBuild struct {
-	Goos   string `yaml:"goos,omitempty"`
-	Goarch string `yaml:"goarch,omitempty"`
-	Goarm  string `yaml:"goarm,omitempty"`
-	Gomips string `yaml:"gomips,omitempty"`
+	Goos    string `yaml:"goos,omitempty"`
+	Goarch  string `yaml:"goarch,omitempty"`
+	Goarm   string `yaml:"goarm,omitempty"`
+	Gomips  string `yaml:"gomips,omitempty"`
+	Goamd64 string `yaml:"goamd64,omitempty"`
 }
 
 // StringArray is a wrapper for an array of strings.
@@ -293,6 +315,7 @@ type Build struct {
 	Goarch          []string        `yaml:"goarch,omitempty"`
 	Goarm           []string        `yaml:"goarm,omitempty"`
 	Gomips          []string        `yaml:"gomips,omitempty"`
+	Goamd64         []string        `yaml:"goamd64,omitempty"`
 	Targets         []string        `yaml:"targets,omitempty"`
 	Ignore          []IgnoredBuild  `yaml:"ignore,omitempty"`
 	Dir             string          `yaml:"dir,omitempty"`
@@ -304,7 +327,9 @@ type Build struct {
 	ModTimestamp    string          `yaml:"mod_timestamp,omitempty"`
 	Skip            bool            `yaml:"skip,omitempty"`
 	GoBinary        string          `yaml:"gobinary,omitempty"`
+	Command         string          `yaml:"command,omitempty"`
 	NoUniqueDistDir bool            `yaml:"no_unique_dist_dir,omitempty"`
+	NoMainCheck     bool            `yaml:"no_main_check,omitempty"`
 	UnproxiedMain   string          `yaml:"-"` // used by gomod.proxy
 	UnproxiedDir    string          `yaml:"-"` // used by gomod.proxy
 
@@ -317,6 +342,7 @@ type BuildDetailsOverride struct {
 	Goarch       string           `yaml:"goarch,omitempty"`
 	Goarm        string           `yaml:"goarm,omitempty"`
 	Gomips       string           `yaml:"gomips,omitempty"`
+	Goamd64      string           `yaml:"goamd64,omitempty"`
 	BuildDetails `yaml:",inline"` // nolint: tagliatelle
 }
 
@@ -490,6 +516,7 @@ type Archive struct {
 	FormatOverrides           []FormatOverride  `yaml:"format_overrides,omitempty"`
 	WrapInDirectory           string            `yaml:"wrap_in_directory,omitempty"`
 	Files                     []File            `yaml:"files,omitempty"`
+	Meta                      bool              `yaml:"meta,omitempty"`
 	AllowDifferentBinaryCount bool              `yaml:"allow_different_binary_count,omitempty"`
 }
 
@@ -780,13 +807,13 @@ type Docker struct {
 	Goos               string   `yaml:"goos,omitempty"`
 	Goarch             string   `yaml:"goarch,omitempty"`
 	Goarm              string   `yaml:"goarm,omitempty"`
+	Goamd64            string   `yaml:"goamd64,omitempty"`
 	Dockerfile         string   `yaml:"dockerfile,omitempty"`
 	ImageTemplates     []string `yaml:"image_templates,omitempty"`
 	SkipPush           string   `yaml:"skip_push,omitempty"`
 	Files              []string `yaml:"extra_files,omitempty"`
 	BuildFlagTemplates []string `yaml:"build_flag_templates,omitempty"`
 	PushFlags          []string `yaml:"push_flags,omitempty"`
-	Buildx             bool     `yaml:"use_buildx,omitempty"` // deprecated: use Use instead
 	Use                string   `yaml:"use,omitempty"`
 }
 
@@ -852,6 +879,7 @@ type Blob struct {
 type Upload struct {
 	Name               string            `yaml:"name,omitempty"`
 	IDs                []string          `yaml:"ids,omitempty"`
+	Exts               []string          `yaml:"exts,omitempty"`
 	Target             string            `yaml:"target,omitempty"`
 	Username           string            `yaml:"username,omitempty"`
 	Mode               string            `yaml:"mode,omitempty"`
@@ -891,7 +919,7 @@ type Project struct {
 	Release         Release          `yaml:"release,omitempty"`
 	Milestones      []Milestone      `yaml:"milestones,omitempty"`
 	Brews           []Homebrew       `yaml:"brews,omitempty"`
-	Rigs            []GoFish         `yaml:"rigs,omitempty"`
+	Rigs            []GoFish         `yaml:"rigs,omitempty"` // deprecated
 	AURs            []AUR            `yaml:"aurs,omitempty"`
 	Krews           []Krew           `yaml:"krews,omitempty"`
 	Scoop           Scoop            `yaml:"scoop,omitempty"`
@@ -937,6 +965,7 @@ type GoMod struct {
 	Proxy    bool     `yaml:"proxy,omitempty"`
 	Env      []string `yaml:"env,omitempty"`
 	GoBinary string   `yaml:"gobinary,omitempty"`
+	Mod      string   `yaml:"mod,omitempty"`
 }
 
 type Announce struct {
@@ -977,12 +1006,14 @@ type Reddit struct {
 }
 
 type Slack struct {
-	Enabled         bool   `yaml:"enabled,omitempty"`
-	MessageTemplate string `yaml:"message_template,omitempty"`
-	Channel         string `yaml:"channel,omitempty"`
-	Username        string `yaml:"username,omitempty"`
-	IconEmoji       string `yaml:"icon_emoji,omitempty"`
-	IconURL         string `yaml:"icon_url,omitempty"`
+	Enabled         bool              `yaml:"enabled,omitempty"`
+	MessageTemplate string            `yaml:"message_template,omitempty"`
+	Channel         string            `yaml:"channel,omitempty"`
+	Username        string            `yaml:"username,omitempty"`
+	IconEmoji       string            `yaml:"icon_emoji,omitempty"`
+	IconURL         string            `yaml:"icon_url,omitempty"`
+	Blocks          []SlackBlock      `yaml:"blocks,omitempty"`
+	Attachments     []SlackAttachment `yaml:"attachments,omitempty"`
 }
 
 type Discord struct {
@@ -1055,4 +1086,48 @@ func LoadReader(fd io.Reader) (config Project, err error) {
 	err = yaml.UnmarshalStrict(data, &config)
 	log.WithField("config", config).Debug("loaded config file")
 	return config, err
+}
+
+// SlackBlock represents the untyped structure of a rich slack message layout.
+type SlackBlock struct {
+	Internal interface{}
+}
+
+// UnmarshalYAML is a custom unmarshaler that unmarshals a YAML slack block as untyped interface{}.
+func (a *SlackBlock) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var yamlv2 interface{}
+	if err := unmarshal(&yamlv2); err != nil {
+		return err
+	}
+
+	a.Internal = yamlv2
+
+	return nil
+}
+
+// MarshalJSON marshals a slack block as JSON.
+func (a SlackBlock) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.Internal)
+}
+
+// SlackAttachment represents the untyped structure of a slack message attachment.
+type SlackAttachment struct {
+	Internal interface{}
+}
+
+// UnmarshalYAML is a custom unmarshaler that unmarshals a YAML slack attachment as untyped interface{}.
+func (a *SlackAttachment) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var yamlv2 interface{}
+	if err := unmarshal(&yamlv2); err != nil {
+		return err
+	}
+
+	a.Internal = yamlv2
+
+	return nil
+}
+
+// MarshalJSON marshals a slack attachment as JSON.
+func (a SlackAttachment) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.Internal)
 }

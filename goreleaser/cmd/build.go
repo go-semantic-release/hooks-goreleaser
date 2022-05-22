@@ -18,11 +18,11 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipeline"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
-	"github.com/muesli/coral"
+	"github.com/spf13/cobra"
 )
 
 type buildCmd struct {
-	cmd  *coral.Command
+	cmd  *cobra.Command
 	opts buildOpts
 }
 
@@ -43,29 +43,22 @@ type buildOpts struct {
 func newBuildCmd() *buildCmd {
 	root := &buildCmd{}
 	// nolint: dupl
-	cmd := &coral.Command{
+	cmd := &cobra.Command{
 		Use:     "build",
 		Aliases: []string{"b"},
 		Short:   "Builds the current project",
-		Long: `The ` + "`goreleaser build`" + ` command is analogous to the
-` + "`go build`" + ` command, in the sense it only builds binaries.
+		Long: `The ` + "`goreleaser build`" + ` command is analogous to the ` + "`go build`" + ` command, in the sense it only builds binaries.
 
-Its itented usage is, for example, within Makefiles to avoid setting up
-ldflags and etc in several places. That way, the GoReleaser config becomes the
-source of truth for how the binaries should be built.
+Its intended usage is, for example, within Makefiles to avoid setting up ldflags and etc in several places. That way, the GoReleaser config becomes the source of truth for how the binaries should be built.
 
-It also allows you to generate a local build for your current machine only using
-the ` + "`--single-target`" + ` option, and specific build IDs using the
-` + "`--id`" + ` option in case you have more than one.
+It also allows you to generate a local build for your current machine only using the ` + "`--single-target`" + ` option, and specific build IDs using the ` + "`--id`" + ` option in case you have more than one.
 
-When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and
-` + "`GOARCH`" + ` environment variables are used to determine the target,
-defaulting to the current's machine target if not set.
+When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and ` + "`GOARCH`" + ` environment variables are used to determine the target, defaulting to the current machine target if not set.
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          coral.NoArgs,
-		RunE: func(cmd *coral.Command, args []string) error {
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			start := time.Now()
 
 			log.Infof(color.New(color.Bold).Sprint("building..."))
@@ -94,7 +87,7 @@ defaulting to the current's machine target if not set.
 	cmd.Flags().BoolVar(&root.opts.singleTarget, "single-target", false, "Builds only for current GOOS and GOARCH")
 	cmd.Flags().StringVar(&root.opts.id, "id", "", "Builds only the specified build id")
 	cmd.Flags().BoolVar(&root.opts.deprecated, "deprecated", false, "Force print the deprecation message - tests only")
-	cmd.Flags().StringVarP(&root.opts.output, "output", "o", "", "Copy the binary to the path after the build. Only taked into account when using --single-target and a single id (either with --id or if config only has one build)")
+	cmd.Flags().StringVarP(&root.opts.output, "output", "o", "", "Copy the binary to the path after the build. Only taken into account when using --single-target and a single id (either with --id or if config only has one build)")
 	_ = cmd.Flags().MarkHidden("deprecated")
 
 	root.cmd = cmd

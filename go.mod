@@ -6,10 +6,10 @@ require (
 	github.com/apex/log v1.9.0
 	github.com/fatih/color v1.13.0
 	github.com/go-semantic-release/semantic-release/v2 v2.20.0
-	github.com/goreleaser/goreleaser v1.6.3
+	github.com/goreleaser/goreleaser v1.9.1
 )
 
-replace github.com/goreleaser/goreleaser v1.6.3 => ./goreleaser
+replace github.com/goreleaser/goreleaser v1.9.1 => ./goreleaser
 
 require (
 	cloud.google.com/go v0.99.0 // indirect
@@ -56,7 +56,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.11.1 // indirect
 	github.com/aws/smithy-go v1.9.0 // indirect
 	github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb // indirect
-	github.com/caarlos0/env/v6 v6.9.1 // indirect
+	github.com/caarlos0/env/v6 v6.9.2 // indirect
 	github.com/caarlos0/go-reddit/v3 v3.0.1 // indirect
 	github.com/caarlos0/go-shellwords v1.0.12 // indirect
 	github.com/cavaliergopher/cpio v1.0.1 // indirect
@@ -81,16 +81,16 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/go-cmp v0.5.7 // indirect
-	github.com/google/go-github/v43 v43.0.0 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
+	github.com/google/go-github/v44 v44.1.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/google/rpmpack v0.0.0-20211125064518-d0ed9b1b61b9 // indirect
+	github.com/google/rpmpack v0.0.0-20220314092521-38642b5e571e // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/google/wire v0.5.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/goreleaser/chglog v0.1.2 // indirect
 	github.com/goreleaser/fileglob v1.3.0 // indirect
-	github.com/goreleaser/nfpm/v2 v2.14.0 // indirect
+	github.com/goreleaser/nfpm/v2 v2.15.1 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.1.0 // indirect
@@ -121,21 +121,21 @@ require (
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect
-	github.com/slack-go/slack v0.10.2 // indirect
+	github.com/slack-go/slack v0.10.3 // indirect
 	github.com/spf13/afero v1.8.0 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
-	github.com/spf13/cobra v1.3.0 // indirect
+	github.com/spf13/cobra v1.4.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.10.1 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
-	github.com/xanzy/go-gitlab v0.56.0 // indirect
+	github.com/xanzy/go-gitlab v0.65.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.1 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	gocloud.dev v0.24.0 // indirect
-	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838 // indirect
+	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect

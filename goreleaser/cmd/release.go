@@ -13,11 +13,11 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/git"
 	"github.com/goreleaser/goreleaser/int/pipeline"
 	"github.com/goreleaser/goreleaser/pkg/context"
-	"github.com/muesli/coral"
+	"github.com/spf13/cobra"
 )
 
 type releaseCmd struct {
-	cmd  *coral.Command
+	cmd  *cobra.Command
 	opts releaseOpts
 }
 
@@ -45,14 +45,14 @@ type releaseOpts struct {
 func newReleaseCmd() *releaseCmd {
 	root := &releaseCmd{}
 	// nolint: dupl
-	cmd := &coral.Command{
+	cmd := &cobra.Command{
 		Use:           "release",
 		Aliases:       []string{"r"},
 		Short:         "Releases the current project",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          coral.NoArgs,
-		RunE: func(cmd *coral.Command, args []string) error {
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			start := time.Now()
 
 			log.Infof(color.New(color.Bold).Sprint("releasing..."))
@@ -133,7 +133,7 @@ func setupReleaseContext(ctx *context.Context, options releaseOpts) *context.Con
 	ctx.ReleaseFooterFile = options.releaseFooterFile
 	ctx.ReleaseFooterTmpl = options.releaseFooterTmpl
 	ctx.Snapshot = options.snapshot
-	if options.autoSnapshot && git.CheckDirty() != nil {
+	if options.autoSnapshot && git.CheckDirty(ctx) != nil {
 		log.Info("git repo is dirty and --auto-snapshot is set, implying --snapshot")
 		ctx.Snapshot = true
 	}

@@ -20,11 +20,11 @@ nfpms:
 
     # You can change the file name of the package.
     #
-    # Default: `{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}`
+    # Default:`{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}`
     file_name_template: "{{ .ConventionalFileName }}"
 
     # Build IDs for the builds you want to create NFPM packages for.
-    # Defaults to all builds.
+    # Defaults empty, which means no filtering.
     builds:
       - foo
       - bar

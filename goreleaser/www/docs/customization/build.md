@@ -2,8 +2,8 @@
 
 Builds can be customized in multiple ways.
 You can specify for which `GOOS`, `GOARCH` and `GOARM` binaries are built
-(goreleaser will generate a matrix of all combinations), and you can change
-the name of the binary, flags, environment variables, hooks and etc.
+(GoReleaser will generate a matrix of all combinations), and you can change
+the name of the binary, flags, environment variables, hooks and more.
 
 Here is a commented `builds` section with all fields specified:
 
@@ -13,7 +13,7 @@ builds:
   # You can have multiple builds defined as a yaml list
   -
     # ID of the build.
-    # Defaults to the project name.
+    # Defaults to the binary name.
     id: "my-build"
 
     # Path to project's (sub)directory containing Go code.
@@ -91,6 +91,13 @@ builds:
       - 6
       - 7
 
+    # GOAMD64 to build when GOARCH is amd64.
+    # For more info refer to: https://golang.org/doc/install/source#environment
+    # Default is only v1.
+    goamd64:
+      - v2
+      - v3
+
     # GOMIPS and GOMIPS64 to build when GOARCH is mips, mips64, mipsle or mips64le.
     # For more info refer to: https://golang.org/doc/install/source#environment
     # Default is only hardfloat.
@@ -107,20 +114,37 @@ builds:
         goarch: arm
         goarm: 7
       - goarm: mips64
-        gomips: hardfloat
+      - gomips: hardfloat
+      - goamd64: v4
 
     # Optionally override the matrix generation and specify only the final list of targets.
-    # Format is `{goos}_{goarch}` with optionally a suffix with `_{goarm}` or `_{gomips}`.
-    # This overrides `goos`, `goarch`, `goarm`, `gomips` and `ignores`.
+    # Format is `{goos}_{goarch}` with optionally a suffix with `_{goarm}`, `_{goamd64}` or `_{gomips}`.
+    #
+    # Special values:
+    # - go_118_first_class: evaluates to the first-class targets of go1.18
+    # - go_first_class: evaluates to latest stable go first-class targets, currently same as 1.18.
+    #
+    # This overrides `goos`, `goarch`, `goarm`, `gomips`, `goamd64` and `ignores`.
     targets:
-      - linux_amd64
+      - go_first_class
+      - go_118_first_class
+      - linux_amd64_v1
       - darwin_arm64
       - linux_arm_6
 
-    # Set a specific go binary to use when building. It is safe to ignore
-    # this option in most cases.
+    # Set a specific go binary to use when building.
+    # It is safe to ignore this option in most cases.
+    #
     # Default is "go"
     gobinary: "go1.13.4"
+
+    # Sets the command to run to build.
+    # Can be useful if you want to build tests, for example,
+    # in which case you can set this to "test".
+    # It is safe to ignore this option in most cases.
+    #
+    # Default is "build".
+    command: test
 
     # Set the modified timestamp on the output binary, typically
     # you would do this to ensure a build was reproducible. Pass
@@ -150,6 +174,12 @@ builds:
     # Defaults to `false`.
     no_unique_dist_dir: true
 
+    # By default, GoReleaser will check if the main filepath has a main function.
+    # This can be used to skip that check, in case you're building tests, for example.
+    #
+    # Defaults to `false`.
+    no_main_check: true
+
     # Builder allows you to use a different build implementation.
     # This is a GoReleaser Pro feature.
     # Valid options are: `go` and `prebuilt`.
@@ -178,6 +208,13 @@ builds:
 
 !!! tip
     Learn more about the [name template engine](/customization/templates/).
+
+!!! info
+    First-class build targets are gathered by running:
+    ```sh
+    go tool dist list -json | jq -r '.[] | select(.FirstClass) | [.GOOS, .GOARCH] | @tsv'
+    ```
+    We also recommend reading the [official wiki about Go ports](https://github.com/golang/go/wiki/PortingPolicy#first-class-ports).
 
 Here is an example with multiple binaries:
 
@@ -327,7 +364,7 @@ This is useful in scenarios where two tags point to the same commit.
 
 ## Reproducible Builds
 
-To make your releases, checksums, and signatures reproducible, you will need to make some (if not all) of the following modifications to the build defaults in GoReleaser:
+To make your releases, checksums and signatures reproducible, you will need to make some (if not all) of the following modifications to the build defaults in GoReleaser:
 
 * Modify `ldflags`: by default `main.Date` is set to the time GoReleaser is run (`{{.Date}}`), you can set this to `{{.CommitDate}}` or just not pass the variable.
 * Modify `mod_timestamp`: by default this is empty string, set to `{{.CommitTimestamp}}` or a constant value instead.
@@ -357,13 +394,15 @@ builds:
   builder: prebuilt
 
   # When builder is `prebuilt` there are no defaults for goos, goarch,
-  # goarm, gomips and targets.
+  # goarm, gomips, goamd64 and targets, so you always have to specify them:
   goos:
-  - linux
-  - darwin
+    - linux
+    - darwin
   goarch:
-  - amd64
-  - arm64
+    - amd64
+    - arm64
+  goamd64:
+    - v1
 
   # prebuilt specific options
   prebuilt:
@@ -371,14 +410,14 @@ builds:
     # GoReleaser removes the `dist` folder before running, so you will likely
     # want to put the binaries elsewhere.
     # This field is required when using the `prebuilt` builder.
-    path: output/mybin_{{ .Os }}_{{ .Arch }}
+    path: output/mybin_{{ .Os }}_{{ .Arch }}_{{ with .Amd64 }}_{{ . }}{{ end }}/mybin
 ```
 
 This example config will import into your release pipeline the following binaries:
 
 - `output/mybin_linux_amd64`
 - `output/mybin_linux_arm64`
-- `output/mybin_darwin_amd64`
+- `output/mybin_darwin_amd64_v1`
 - `output/mybin_darwin_arm64`
 
 The other steps of the pipeline will act as if those were built by GoReleaser itself.
@@ -399,5 +438,8 @@ There is no difference in how the binaries are handled.
     GoReleaser will fail.
 
 !!! warning
-    When using the `prebuilt` binary, there are no defaults for `goos` et al,
-    so you need to either provide those or the final `targets` matrix.
+    When using the `prebuilt` binary, there are no defaults for `goos`,
+    `goarch`, `goarm`, `gomips` and `goamd64`.
+    You'll need to either provide them or the final `targets` matrix.
+
+If you'd like to see this in action, check [this example on GitHub](https://github.com/caarlos0/goreleaser-pro-prebuilt-example).

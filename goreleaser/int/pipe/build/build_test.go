@@ -276,6 +276,7 @@ func TestDefaultEmptyBuild(t *testing.T) {
 	require.Equal(t, []string{"amd64", "arm64", "386"}, build.Goarch)
 	require.Equal(t, []string{"6"}, build.Goarm)
 	require.Equal(t, []string{"hardfloat"}, build.Gomips)
+	require.Equal(t, []string{"v1"}, build.Goamd64)
 	require.Len(t, build.Ldflags, 1)
 	require.Equal(t, "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser", build.Ldflags[0])
 }
@@ -295,8 +296,10 @@ func TestDefaultBuildID(t *testing.T) {
 		},
 	}
 	require.EqualError(t, Pipe{}.Default(ctx), "found 2 builds with the ID 'foo', please fix your config")
-	build := ctx.Config.Builds[0]
-	require.Equal(t, ctx.Config.ProjectName, build.ID)
+	build1 := ctx.Config.Builds[0].ID
+	build2 := ctx.Config.Builds[1].ID
+	require.Equal(t, build1, build2)
+	require.Equal(t, "foo", build2)
 }
 
 func TestSeveralBuildsWithTheSameID(t *testing.T) {
@@ -561,11 +564,12 @@ func TestBuildOptionsForTarget(t *testing.T) {
 				},
 			},
 			expectedOpts: &api.Options{
-				Name:   "testbinary",
-				Path:   filepath.Join(tmpDir, "testid_linux_amd64", "testbinary"),
-				Target: "linux_amd64",
-				Goos:   "linux",
-				Goarch: "amd64",
+				Name:    "testbinary",
+				Path:    filepath.Join(tmpDir, "testid_linux_amd64_v1", "testbinary"),
+				Target:  "linux_amd64_v1",
+				Goos:    "linux",
+				Goarch:  "amd64",
+				Goamd64: "v1",
 			},
 		},
 		{
@@ -578,11 +582,12 @@ func TestBuildOptionsForTarget(t *testing.T) {
 				},
 			},
 			expectedOpts: &api.Options{
-				Name:   "testbinary_linux_amd64",
-				Path:   filepath.Join(tmpDir, "testid_linux_amd64", "testbinary_linux_amd64"),
-				Target: "linux_amd64",
-				Goos:   "linux",
-				Goarch: "amd64",
+				Name:    "testbinary_linux_amd64",
+				Path:    filepath.Join(tmpDir, "testid_linux_amd64_v1", "testbinary_linux_amd64"),
+				Target:  "linux_amd64_v1",
+				Goos:    "linux",
+				Goarch:  "amd64",
+				Goamd64: "v1",
 			},
 		},
 		{
@@ -596,11 +601,12 @@ func TestBuildOptionsForTarget(t *testing.T) {
 				NoUniqueDistDir: true,
 			},
 			expectedOpts: &api.Options{
-				Name:   "distpath/linux/amd64/testbinary_linux_amd64",
-				Path:   filepath.Join(tmpDir, "distpath", "linux", "amd64", "testbinary_linux_amd64"),
-				Target: "linux_amd64",
-				Goos:   "linux",
-				Goarch: "amd64",
+				Name:    "distpath/linux/amd64/testbinary_linux_amd64",
+				Path:    filepath.Join(tmpDir, "distpath", "linux", "amd64", "testbinary_linux_amd64"),
+				Target:  "linux_amd64_v1",
+				Goos:    "linux",
+				Goarch:  "amd64",
+				Goamd64: "v1",
 			},
 		},
 		{
@@ -637,6 +643,24 @@ func TestBuildOptionsForTarget(t *testing.T) {
 				Goos:   "linux",
 				Goarch: "mips",
 				Gomips: "softfloat",
+			},
+		},
+		{
+			name: "with goamd64",
+			build: config.Build{
+				ID:     "testid",
+				Binary: "testbinary",
+				Targets: []string{
+					"linux_amd64_v3",
+				},
+			},
+			expectedOpts: &api.Options{
+				Name:    "testbinary",
+				Path:    filepath.Join(tmpDir, "testid_linux_amd64_v3", "testbinary"),
+				Target:  "linux_amd64_v3",
+				Goos:    "linux",
+				Goarch:  "amd64",
+				Goamd64: "v3",
 			},
 		},
 	}

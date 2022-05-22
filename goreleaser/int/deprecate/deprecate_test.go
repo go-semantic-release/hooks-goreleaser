@@ -21,7 +21,7 @@ func TestNotice(t *testing.T) {
 
 	log.Info("first")
 	ctx := context.New(config.Project{})
-	Notice(ctx, "foo.bar.whatever")
+	Notice(ctx, "foo.bar.whatever: foobar")
 	log.Info("last")
 	require.True(t, ctx.Deprecated)
 
@@ -38,22 +38,6 @@ func TestNoticeCustom(t *testing.T) {
 	ctx := context.New(config.Project{})
 	NoticeCustom(ctx, "something-else", "some custom template with a url {{ .URL }}")
 	log.Info("last")
-	require.True(t, ctx.Deprecated)
-
-	golden.RequireEqualTxt(t, w.Bytes())
-}
-
-func TestWriter(t *testing.T) {
-	var w bytes.Buffer
-
-	color.NoColor = true
-	log.SetHandler(cli.New(&w))
-
-	log.Info("first")
-	ctx := context.New(config.Project{})
-	ww := NewWriter(ctx)
-	_, err := ww.Write([]byte("foo bar\n"))
-	require.NoError(t, err)
 	require.True(t, ctx.Deprecated)
 
 	golden.RequireEqualTxt(t, w.Bytes())

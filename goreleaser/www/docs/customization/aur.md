@@ -127,11 +127,15 @@ aurs:
     # Defaults are shown below.
     commit_author:
       name: goreleaserbot
-      email: goreleaser@carlosbecker.com
+      email: bot@goreleaser.com
 
     # Commit message template.
     # Defaults to `Update to {{ .Tag }}`.
     commit_msg_template: "pkgbuild updates"
+
+    # If you build for multiple GOAMD64 versions, you may use this to choose which one to use.
+    # Defaults to `v1`.
+    goamd64: v2
 
     # The value to be passed to `GIT_SSH_COMMAND`.
     # This is mainly used to specify the SSH private key used to pull/push to

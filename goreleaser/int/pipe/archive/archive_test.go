@@ -9,11 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/archive"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -39,7 +37,7 @@ func TestRunPipe(t *testing.T) {
 		t.Run("Archive format "+format, func(t *testing.T) {
 			dist := filepath.Join(folder, format+"_dist")
 			require.NoError(t, os.Mkdir(dist, 0o755))
-			for _, arch := range []string{"darwinamd64", "darwinall", "linux386", "linuxarm7", "linuxmipssoftfloat"} {
+			for _, arch := range []string{"darwinamd64v1", "darwinall", "linux386", "linuxarm7", "linuxmipssoftfloat", "linuxamd64v3"} {
 				createFakeBinary(t, dist, arch, "bin/mybin")
 			}
 			createFakeBinary(t, dist, "windowsamd64", "bin/mybin.exe")
@@ -88,11 +86,12 @@ func TestRunPipe(t *testing.T) {
 				},
 			}
 			darwinBuild := &artifact.Artifact{
-				Goos:   "darwin",
-				Goarch: "amd64",
-				Name:   "bin/mybin",
-				Path:   filepath.Join(dist, "darwinamd64", "bin", "mybin"),
-				Type:   artifact.Binary,
+				Goos:    "darwin",
+				Goarch:  "amd64",
+				Goamd64: "v1",
+				Name:    "bin/mybin",
+				Path:    filepath.Join(dist, "darwinamd64v1", "bin", "mybin"),
+				Type:    artifact.Binary,
 				Extra: map[string]interface{}{
 					artifact.ExtraBinary: "bin/mybin",
 					artifact.ExtraID:     "default",
@@ -134,14 +133,27 @@ func TestRunPipe(t *testing.T) {
 				},
 			}
 			windowsBuild := &artifact.Artifact{
-				Goos:   "windows",
-				Goarch: "amd64",
-				Name:   "bin/mybin.exe",
-				Path:   filepath.Join(dist, "windowsamd64", "bin", "mybin.exe"),
-				Type:   artifact.Binary,
+				Goos:    "windows",
+				Goarch:  "amd64",
+				Goamd64: "v1",
+				Name:    "bin/mybin.exe",
+				Path:    filepath.Join(dist, "windowsamd64", "bin", "mybin.exe"),
+				Type:    artifact.Binary,
 				Extra: map[string]interface{}{
 					artifact.ExtraBinary: "mybin",
 					artifact.ExtraExt:    ".exe",
+					artifact.ExtraID:     "default",
+				},
+			}
+			linuxAmd64Build := &artifact.Artifact{
+				Goos:    "linux",
+				Goarch:  "amd64",
+				Goamd64: "v3",
+				Name:    "bin/mybin",
+				Path:    filepath.Join(dist, "linuxamd64v3", "bin", "mybin"),
+				Type:    artifact.Binary,
+				Extra: map[string]interface{}{
+					artifact.ExtraBinary: "mybin",
 					artifact.ExtraID:     "default",
 				},
 			}
@@ -151,6 +163,7 @@ func TestRunPipe(t *testing.T) {
 			ctx.Artifacts.Add(linuxArmBuild)
 			ctx.Artifacts.Add(linuxMipsBuild)
 			ctx.Artifacts.Add(windowsBuild)
+			ctx.Artifacts.Add(linuxAmd64Build)
 			ctx.Version = "0.0.1"
 			ctx.Git.CurrentTag = "v0.0.1"
 			ctx.Config.Archives[0].Format = format
@@ -165,7 +178,7 @@ func TestRunPipe(t *testing.T) {
 				require.Equal(t, []string{expectBin}, arch.ExtraOr(artifact.ExtraBinaries, []string{}).([]string))
 				require.Equal(t, "", arch.ExtraOr(artifact.ExtraBinary, "").(string))
 			}
-			require.Len(t, archives, 6)
+			require.Len(t, archives, 7)
 			// TODO: should verify the artifact fields here too
 
 			if format == "tar.gz" {
@@ -176,6 +189,7 @@ func TestRunPipe(t *testing.T) {
 					"foobar_0.0.1_linux_386.tar.gz":            "linux",
 					"foobar_0.0.1_linux_armv7.tar.gz":          "linux",
 					"foobar_0.0.1_linux_mips_softfloat.tar.gz": "linux",
+					"foobar_0.0.1_linux_amd64v3.tar.gz":        "linux",
 				} {
 					require.Equal(
 						t,
@@ -281,10 +295,23 @@ func TestRunPipeNoBinaries(t *testing.T) {
 	ctx := context.New(config.Project{
 		Dist:        dist,
 		ProjectName: "foobar",
-		Archives:    []config.Archive{{}},
+		Archives: []config.Archive{{
+			Builds: []string{"not-default"},
+		}},
 	})
 	ctx.Version = "0.0.1"
 	ctx.Git.CurrentTag = "v0.0.1"
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Goos:   "linux",
+		Goarch: "amd64",
+		Name:   "bin/mybin",
+		Path:   filepath.Join(dist, "linuxamd64", "bin", "mybin"),
+		Type:   artifact.Binary,
+		Extra: map[string]interface{}{
+			artifact.ExtraBinary: "bin/mybin",
+			artifact.ExtraID:     "default",
+		},
+	})
 	require.NoError(t, Pipe{}.Run(ctx))
 }
 
@@ -872,8 +899,9 @@ func TestDuplicateFilesInsideArchive(t *testing.T) {
 	ff, err := os.CreateTemp(folder, "")
 	require.NoError(t, err)
 	require.NoError(t, ff.Close())
-
-	a := NewEnhancedArchive(archive.New(f), "")
+	a, err := archive.New(f, "tar.gz")
+	require.NoError(t, err)
+	a = NewEnhancedArchive(a, "")
 	t.Cleanup(func() {
 		require.NoError(t, a.Close())
 	})
@@ -921,128 +949,6 @@ func TestSeveralArchivesWithTheSameID(t *testing.T) {
 		},
 	}
 	require.EqualError(t, Pipe{}.Default(ctx), "found 2 archives with the ID 'a', please fix your config")
-}
-
-func TestFindFiles(t *testing.T) {
-	now := time.Now().Truncate(time.Second)
-	tmpl := tmpl.New(context.New(config.Project{}))
-
-	t.Run("single file", func(t *testing.T) {
-		result, err := findFiles(tmpl, []config.File{
-			{
-				Source:      "./testdata/**/d.txt",
-				Destination: "var/foobar/d.txt",
-			},
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, []config.File{
-			{
-				Source:      "testdata/a/b/c/d.txt",
-				Destination: "var/foobar/d.txt/testdata/a/b/c/d.txt",
-			},
-		}, result)
-	})
-
-	t.Run("match multiple files within tree without destination", func(t *testing.T) {
-		result, err := findFiles(tmpl, []config.File{{Source: "./testdata/a"}})
-
-		require.NoError(t, err)
-		require.Equal(t, []config.File{
-			{Source: "testdata/a/a.txt", Destination: "testdata/a/a.txt"},
-			{Source: "testdata/a/b/a.txt", Destination: "testdata/a/b/a.txt"},
-			{Source: "testdata/a/b/c/d.txt", Destination: "testdata/a/b/c/d.txt"},
-		}, result)
-	})
-
-	t.Run("match multiple files within tree specific destination", func(t *testing.T) {
-		result, err := findFiles(tmpl, []config.File{
-			{
-				Source:      "./testdata/a",
-				Destination: "usr/local/test",
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, []config.File{
-			{
-				Source:      "testdata/a/a.txt",
-				Destination: "usr/local/test/testdata/a/a.txt",
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-			{
-				Source:      "testdata/a/b/a.txt",
-				Destination: "usr/local/test/testdata/a/b/a.txt",
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-			{
-				Source:      "testdata/a/b/c/d.txt",
-				Destination: "usr/local/test/testdata/a/b/c/d.txt",
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-		}, result)
-	})
-
-	t.Run("match multiple files within tree specific destination stripping parents", func(t *testing.T) {
-		result, err := findFiles(tmpl, []config.File{
-			{
-				Source:      "./testdata/a",
-				Destination: "usr/local/test",
-				StripParent: true,
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, []config.File{
-			{
-				Source:      "testdata/a/a.txt",
-				Destination: "usr/local/test/a.txt",
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-			{
-				Source:      "testdata/a/b/c/d.txt",
-				Destination: "usr/local/test/d.txt",
-				Info: config.FileInfo{
-					Owner: "carlos",
-					Group: "users",
-					Mode:  0o755,
-					MTime: now,
-				},
-			},
-		}, result)
-	})
 }
 
 func TestArchive_globbing(t *testing.T) {
@@ -1126,4 +1032,19 @@ func TestArchive_globbing(t *testing.T) {
 			"var/yada/d.txt",
 		})
 	})
+}
+
+func TestInvalidFormat(t *testing.T) {
+	ctx := context.New(config.Project{
+		Dist: t.TempDir(),
+		Archives: []config.Archive{
+			{
+				ID:           "foo",
+				NameTemplate: "foo",
+				Meta:         true,
+				Format:       "7z",
+			},
+		},
+	})
+	require.EqualError(t, Pipe{}.Run(ctx), "invalid archive format: 7z")
 }
