@@ -358,7 +358,7 @@ func TestRunPipe_TargetTemplateError(t *testing.T) {
 				Name: "production",
 				Mode: "binary",
 				// This template is not correct and should fail
-				Target:   "http://storage.company.com/example-repo-local/{{ .ProjectName /{{ .Version }}/",
+				Target:   "http://storage.company.com/example-repo-local/{{.Name}",
 				Username: "deployuser",
 			},
 		},
@@ -378,7 +378,7 @@ func TestRunPipe_TargetTemplateError(t *testing.T) {
 	})
 
 	require.NoError(t, Pipe{}.Default(ctx))
-	require.EqualError(t, Pipe{}.Publish(ctx), `artifactory: error while building the target url: template: tmpl:1: unexpected "/" in operand`)
+	testlib.RequireTemplateError(t, Pipe{}.Publish(ctx))
 }
 
 func TestRunPipe_BadCredentials(t *testing.T) {
@@ -461,11 +461,7 @@ func TestRunPipe_UnparsableErrorResponse(t *testing.T) {
 		requireHeader(t, r, "Authorization", "Basic ZGVwbG95dXNlcjpkZXBsb3l1c2VyLXNlY3JldA==")
 
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `...{
-			"errors" : [ {
-			 ...
-			} ]
-		  }`)
+		fmt.Fprint(w, `<body><h1>error</h1></body>`)
 	})
 
 	ctx := context.New(config.Project{
@@ -495,7 +491,7 @@ func TestRunPipe_UnparsableErrorResponse(t *testing.T) {
 	})
 
 	require.NoError(t, Pipe{}.Default(ctx))
-	require.EqualError(t, Pipe{}.Publish(ctx), `artifactory: upload failed: invalid character '.' looking for beginning of value`)
+	require.EqualError(t, Pipe{}.Publish(ctx), `artifactory: upload failed: unexpected error: invalid character '<' looking for beginning of value: <body><h1>error</h1></body>`)
 }
 
 func TestRunPipe_FileNotFound(t *testing.T) {

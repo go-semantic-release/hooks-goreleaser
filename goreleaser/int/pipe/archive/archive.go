@@ -6,14 +6,16 @@ package archive
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/archivefiles"
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -31,7 +33,7 @@ const (
 // ErrArchiveDifferentBinaryCount happens when an archive uses several builds which have different goos/goarch/etc sets,
 // causing the archives for some platforms to have more binaries than others.
 // GoReleaser breaks in these cases as it will only cause confusion to other users.
-var ErrArchiveDifferentBinaryCount = errors.New("archive has different count of built binaries for each platform, which may cause your users confusion. Please make sure all builds used have the same set of goos/goarch/etc or split it into multiple archives")
+var ErrArchiveDifferentBinaryCount = errors.New("archive has different count of binaries for each platform, which may cause your users confusion.\nLearn more at https://goreleaser.com/errors/multiple-binaries-archive\n") // nolint:revive
 
 // nolint: gochecknoglobals
 var lock sync.Mutex
@@ -57,6 +59,9 @@ func (Pipe) Default(ctx *context.Context) error {
 		if archive.ID == "" {
 			archive.ID = "default"
 		}
+		if !archive.RLCP && archive.Format != "binary" && len(archive.Files) > 0 {
+			deprecate.NoticeCustom(ctx, "archives.rlcp", "`{{ .Property }}` will be the default soon, check {{ .URL }} for more info")
+		}
 		if len(archive.Files) == 0 {
 			archive.Files = []config.File{
 				{Source: "license*"},
@@ -72,6 +77,9 @@ func (Pipe) Default(ctx *context.Context) error {
 			if archive.Format == "binary" {
 				archive.NameTemplate = defaultBinaryNameTemplate
 			}
+		}
+		if len(archive.Replacements) != 0 {
+			deprecate.Notice(ctx, "archives.replacements")
 		}
 		ids.Inc(archive.ID)
 	}
@@ -90,22 +98,31 @@ func (Pipe) Run(ctx *context.Context) error {
 		filter := []artifact.Filter{artifact.Or(
 			artifact.ByType(artifact.Binary),
 			artifact.ByType(artifact.UniversalBinary),
+			artifact.ByType(artifact.Header),
+			artifact.ByType(artifact.CArchive),
+			artifact.ByType(artifact.CShared),
 		)}
 		if len(archive.Builds) > 0 {
 			filter = append(filter, artifact.ByIDs(archive.Builds...))
 		}
 		artifacts := ctx.Artifacts.Filter(artifact.And(filter...)).GroupByPlatform()
-		if err := checkArtifacts(artifacts); err != nil && !archive.AllowDifferentBinaryCount {
+		if err := checkArtifacts(artifacts); err != nil && archive.Format != "binary" && !archive.AllowDifferentBinaryCount {
 			return fmt.Errorf("invalid archive: %d: %w", i, ErrArchiveDifferentBinaryCount)
 		}
 		for group, artifacts := range artifacts {
 			log.Debugf("group %s has %d binaries", group, len(artifacts))
 			artifacts := artifacts
-			g.Go(func() error {
-				if packageFormat(archive, artifacts[0].Goos) == "binary" {
+			if packageFormat(archive, artifacts[0].Goos) == "binary" {
+				g.Go(func() error {
 					return skip(ctx, archive, artifacts)
+				})
+				continue
+			}
+			g.Go(func() error {
+				if err := create(ctx, archive, artifacts); err != nil {
+					return err
 				}
-				return create(ctx, archive, artifacts)
+				return nil
 			})
 		}
 	}
@@ -128,7 +145,8 @@ func createMeta(ctx *context.Context, arch config.Archive) error {
 }
 
 func create(ctx *context.Context, arch config.Archive, binaries []*artifact.Artifact) error {
-	template := tmpl.New(ctx).WithArtifact(binaries[0], arch.Replacements)
+	// nolint:staticcheck
+	template := tmpl.New(ctx).WithArtifactReplacements(binaries[0], arch.Replacements)
 	format := packageFormat(arch, binaries[0].Goos)
 	return doCreate(ctx, arch, binaries, format, template)
 }
@@ -144,7 +162,7 @@ func doCreate(ctx *context.Context, arch config.Archive, binaries []*artifact.Ar
 		lock.Unlock()
 		return err
 	}
-	if _, err = os.Stat(archivePath); !os.IsNotExist(err) {
+	if _, err = os.Stat(archivePath); !errors.Is(err, fs.ErrNotExist) {
 		lock.Unlock()
 		return fmt.Errorf("archive named %s already exists. Check your archive name template", archivePath)
 	}
@@ -170,7 +188,7 @@ func doCreate(ctx *context.Context, arch config.Archive, binaries []*artifact.Ar
 	a = NewEnhancedArchive(a, wrap)
 	defer a.Close()
 
-	files, err := archivefiles.Eval(template, arch.Files)
+	files, err := archivefiles.Eval(template, arch.RLCP, arch.Files)
 	if err != nil {
 		return fmt.Errorf("failed to find files to archive: %w", err)
 	}
@@ -184,11 +202,16 @@ func doCreate(ctx *context.Context, arch config.Archive, binaries []*artifact.Ar
 	}
 	bins := []string{}
 	for _, binary := range binaries {
+		dst := binary.Name
+		if arch.StripParentBinaryFolder {
+			dst = filepath.Base(dst)
+		}
 		if err := a.Add(config.File{
 			Source:      binary.Path,
-			Destination: binary.Name,
+			Destination: dst,
+			Info:        arch.BuildsInfo,
 		}); err != nil {
-			return fmt.Errorf("failed to add: '%s' -> '%s': %w", binary.Path, binary.Name, err)
+			return fmt.Errorf("failed to add: '%s' -> '%s': %w", binary.Path, dst, err)
 		}
 		bins = append(bins, binary.Name)
 	}
@@ -230,13 +253,14 @@ func wrapFolder(a config.Archive) string {
 
 func skip(ctx *context.Context, archive config.Archive, binaries []*artifact.Artifact) error {
 	for _, binary := range binaries {
+		// nolint:staticcheck
 		name, err := tmpl.New(ctx).
-			WithArtifact(binary, archive.Replacements).
+			WithArtifactReplacements(binary, archive.Replacements).
 			Apply(archive.NameTemplate)
 		if err != nil {
 			return err
 		}
-		finalName := name + binary.ExtraOr(artifact.ExtraExt, "").(string)
+		finalName := name + artifact.ExtraOr(*binary, artifact.ExtraExt, "")
 		log.WithField("binary", binary.Name).
 			WithField("name", finalName).
 			Info("skip archiving")

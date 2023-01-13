@@ -69,6 +69,9 @@ func TestWithArtifact(t *testing.T) {
 		"another line":                     "{{ .TagBody }}",
 		"runtime: " + runtime.GOOS:         "runtime: {{ .Runtime.Goos }}",
 		"runtime: " + runtime.GOARCH:       "runtime: {{ .Runtime.Goarch }}",
+		"artifact name: not-this-binary":   "artifact name: {{ .ArtifactName }}",
+		"artifact ext: .exe":               "artifact ext: {{ .ArtifactExt }}",
+		"artifact path: /tmp/foo.exe":      "artifact path: {{ .ArtifactPath }}",
 
 		"remove this": "{{ filter .Env.MULTILINE \".*remove.*\" }}",
 		"something with\nmultiple lines\nto test things": "{{ reverseFilter .Env.MULTILINE \".*remove.*\" }}",
@@ -77,9 +80,10 @@ func TestWithArtifact(t *testing.T) {
 		expect := expect
 		t.Run(expect, func(t *testing.T) {
 			t.Parallel()
-			result, err := New(ctx).WithArtifact(
+			result, err := New(ctx).WithArtifactReplacements(
 				&artifact.Artifact{
 					Name:    "not-this-binary",
+					Path:    "/tmp/foo.exe",
 					Goarch:  "amd64",
 					Goos:    "linux",
 					Goarm:   "6",
@@ -87,6 +91,7 @@ func TestWithArtifact(t *testing.T) {
 					Goamd64: "v3",
 					Extra: map[string]interface{}{
 						artifact.ExtraBinary: "binary",
+						artifact.ExtraExt:    ".exe",
 					},
 				},
 				map[string]string{"linux": "Linux"},
@@ -98,7 +103,7 @@ func TestWithArtifact(t *testing.T) {
 
 	t.Run("artifact without binary name", func(t *testing.T) {
 		t.Parallel()
-		result, err := New(ctx).WithArtifact(
+		result, err := New(ctx).WithArtifactReplacements(
 			&artifact.Artifact{
 				Name:   "another-binary",
 				Goarch: "amd64",
@@ -154,12 +159,21 @@ func TestWithEnv(t *testing.T) {
 		"FOO": "BAR",
 	}
 	ctx.Git.CurrentTag = "v1.2.3"
-	out, err := New(ctx).WithEnvS([]string{
+	tpl := New(ctx).WithEnvS([]string{
 		"FOO=foo",
 		"BAR=bar",
-	}).Apply("{{ .Env.FOO }}-{{ .Env.BAR }}")
+		"NOVAL=",
+		"=NOKEY",
+		"=",
+		"NOTHING",
+	})
+	out, err := tpl.Apply("{{ .Env.FOO }}-{{ .Env.BAR }}")
 	require.NoError(t, err)
 	require.Equal(t, "foo-bar", out)
+
+	out, err = tpl.Apply(`{{ range $idx, $key := .Env }}{{ $idx }},{{ end }}`)
+	require.NoError(t, err)
+	require.Equal(t, "BAR,FOO,NOVAL,", out)
 }
 
 func TestFuncMap(t *testing.T) {
@@ -221,6 +235,11 @@ func TestFuncMap(t *testing.T) {
 			Template: `{{ trimsuffix .GitURL ".git" }}`,
 			Name:     "trimsuffix",
 			Expected: "https://github.com/foo/bar",
+		},
+		{
+			Template: `{{ title "file" }}`,
+			Name:     "title",
+			Expected: "File",
 		},
 		{
 			Template: `{{ .ReleaseURL }}`,

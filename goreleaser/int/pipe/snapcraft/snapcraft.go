@@ -11,8 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/gio"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/pipe"
@@ -122,6 +123,9 @@ func (Pipe) Default(ctx *context.Context) error {
 				snap.Builds = append(snap.Builds, b.ID)
 			}
 		}
+		if len(snap.Replacements) != 0 {
+			deprecate.Notice(ctx, "snapcrafts.replacements")
+		}
 		ids.Inc(snap.ID)
 	}
 	return ids.Validate()
@@ -201,20 +205,19 @@ func (Pipe) Publish(ctx *context.Context) error {
 		return pipe.ErrSkipPublishEnabled
 	}
 	snaps := ctx.Artifacts.Filter(artifact.ByType(artifact.PublishableSnapcraft)).List()
-	g := semerrgroup.New(ctx.Parallelism)
 	for _, snap := range snaps {
-		snap := snap
-		g.Go(func() error {
-			return push(ctx, snap)
-		})
+		if err := push(ctx, snap); err != nil {
+			return err
+		}
 	}
-	return g.Wait()
+	return nil
 }
 
 func create(ctx *context.Context, snap config.Snapcraft, arch string, binaries []*artifact.Artifact) error {
 	log := log.WithField("arch", arch)
+	// nolint:staticcheck
 	folder, err := tmpl.New(ctx).
-		WithArtifact(binaries[0], snap.Replacements).
+		WithArtifactReplacements(binaries[0], snap.Replacements).
 		Apply(snap.NameTemplate)
 	if err != nil {
 		return err
@@ -418,7 +421,7 @@ const (
 
 func push(ctx *context.Context, snap *artifact.Artifact) error {
 	log := log.WithField("snap", snap.Name)
-	releases := snap.Extra[releasesExtra].([]string)
+	releases := artifact.ExtraOr(*snap, releasesExtra, []string{})
 	/* #nosec */
 	cmd := exec.CommandContext(ctx, "snapcraft", "upload", "--release="+strings.Join(releases, ","), snap.Path)
 	log.WithField("args", cmd.Args).Info("pushing snap")

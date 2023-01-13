@@ -12,13 +12,13 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/build"
 	"github.com/goreleaser/goreleaser/int/pipe/changelog"
 	"github.com/goreleaser/goreleaser/int/pipe/checksums"
+	"github.com/goreleaser/goreleaser/int/pipe/chocolatey"
 	"github.com/goreleaser/goreleaser/int/pipe/defaults"
 	"github.com/goreleaser/goreleaser/int/pipe/dist"
 	"github.com/goreleaser/goreleaser/int/pipe/docker"
 	"github.com/goreleaser/goreleaser/int/pipe/effectiveconfig"
 	"github.com/goreleaser/goreleaser/int/pipe/env"
 	"github.com/goreleaser/goreleaser/int/pipe/git"
-	"github.com/goreleaser/goreleaser/int/pipe/gofish"
 	"github.com/goreleaser/goreleaser/int/pipe/gomod"
 	"github.com/goreleaser/goreleaser/int/pipe/krew"
 	"github.com/goreleaser/goreleaser/int/pipe/metadata"
@@ -47,20 +47,32 @@ type Piper interface {
 // BuildPipeline contains all build-related pipe implementations in order.
 // nolint:gochecknoglobals
 var BuildPipeline = []Piper{
-	env.Pipe{},             // load and validate environment variables
-	git.Pipe{},             // get and validate git repo state
-	semver.Pipe{},          // parse current tag to a semver
-	before.Pipe{},          // run global hooks before build
-	defaults.Pipe{},        // load default configs
-	snapshot.Pipe{},        // snapshot version handling
-	dist.Pipe{},            // ensure ./dist is clean
-	gomod.Pipe{},           // setup gomod-related stuff
-	prebuild.Pipe{},        // run prebuild stuff
-	gomod.ProxyPipe{},      // proxy gomod if needed
-	effectiveconfig.Pipe{}, // writes the actual config (with defaults et al set) to dist
-	changelog.Pipe{},       // builds the release changelog
-	build.Pipe{},           // build
-	universalbinary.Pipe{}, // universal binary handling
+	// load and validate environment variables
+	env.Pipe{},
+	// get and validate git repo state
+	git.Pipe{},
+	// parse current tag to a semver
+	semver.Pipe{},
+	// load default configs
+	defaults.Pipe{},
+	// run global hooks before build
+	before.Pipe{},
+	// snapshot version handling
+	snapshot.Pipe{},
+	// ensure ./dist is clean
+	dist.Pipe{},
+	// setup gomod-related stuff
+	gomod.Pipe{},
+	// run prebuild stuff
+	prebuild.Pipe{},
+	// proxy gomod if needed
+	gomod.ProxyPipe{},
+	// writes the actual config (with defaults et al set) to dist
+	effectiveconfig.Pipe{},
+	// build
+	build.Pipe{},
+	// universal binary handling
+	universalbinary.Pipe{},
 }
 
 // BuildCmdPipeline is the pipeline run by goreleaser build.
@@ -71,20 +83,38 @@ var BuildCmdPipeline = append(BuildPipeline, metadata.Pipe{})
 // nolint: gochecknoglobals
 var Pipeline = append(
 	BuildPipeline,
-	archive.Pipe{},       // archive in tar.gz, zip or binary (which does no archiving at all)
-	sourcearchive.Pipe{}, // archive the source code using git-archive
-	nfpm.Pipe{},          // archive via fpm (deb, rpm) using "native" go impl
-	snapcraft.Pipe{},     // archive via snapcraft (snap)
-	sbom.Pipe{},          // create SBOMs of artifacts
-	checksums.Pipe{},     // checksums of the files
-	sign.Pipe{},          // sign artifacts
-	aur.Pipe{},           // create arch linux aur pkgbuild
-	brew.Pipe{},          // create brew tap
-	gofish.Pipe{},        // create gofish rig
-	krew.Pipe{},          // krew plugins
-	scoop.Pipe{},         // create scoop buckets
-	docker.Pipe{},        // create and push docker images
-	metadata.Pipe{},      // creates a metadata.json and an artifacts.json files in the dist folder
-	publish.Pipe{},       // publishes artifacts
-	announce.Pipe{},      // announce releases
+	// builds the release changelog
+	changelog.Pipe{},
+	// archive in tar.gz, zip or binary (which does no archiving at all)
+	archive.Pipe{},
+	// archive the source code using git-archive
+	sourcearchive.Pipe{},
+	// archive via fpm (deb, rpm) using "native" go impl
+	nfpm.Pipe{},
+	// archive via snapcraft (snap)
+	snapcraft.Pipe{},
+	// create SBOMs of artifacts
+	sbom.Pipe{},
+	// checksums of the files
+	checksums.Pipe{},
+	// sign artifacts
+	sign.Pipe{},
+	// create arch linux aur pkgbuild
+	aur.Pipe{},
+	// create brew tap
+	brew.Pipe{},
+	// krew plugins
+	krew.Pipe{},
+	// create scoop buckets
+	scoop.Pipe{},
+	// create chocolatey pkg and publish
+	chocolatey.Pipe{},
+	// create and push docker images
+	docker.Pipe{},
+	// publishes artifacts
+	publish.Pipe{},
+	// creates a metadata.json and an artifacts.json files in the dist folder
+	metadata.Pipe{},
+	// announce releases
+	announce.Pipe{},
 )

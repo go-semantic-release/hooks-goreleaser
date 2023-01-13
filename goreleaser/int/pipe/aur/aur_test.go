@@ -33,6 +33,10 @@ func createTemplateData() templateData {
 		Rel:        "1",
 		Provides:   []string{"test"},
 		OptDepends: []string{"nfpm"},
+		Backup: []string{
+			"/etc/mypkg.conf",
+			"/var/share/mypkg",
+		},
 		Maintainers: []string{
 			"Ciclano <ciclano@example.com>",
 			"Cicrano <cicrano@example.com>",
@@ -465,13 +469,13 @@ func TestRunPipe(t *testing.T) {
 }
 
 func TestRunPipeNoBuilds(t *testing.T) {
-	ctx := &context.Context{
-		TokenType: context.TokenTypeGitHub,
-		Config: config.Project{
+	ctx := context.New(
+		config.Project{
 			ProjectName: "foo",
 			AURs:        []config.AUR{{}},
 		},
-	}
+	)
+	ctx.TokenType = context.TokenTypeGitHub
 	client := client.NewMock()
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, ErrNoArchivesFound, runAll(ctx, client))
@@ -590,13 +594,8 @@ func TestRunEmptyTokenType(t *testing.T) {
 		Dist:        folder,
 		ProjectName: "foo",
 		Release:     config.Release{},
-		Rigs: []config.GoFish{
-			{
-				Rig: config.RepoRef{
-					Owner: "test",
-					Name:  "test",
-				},
-			},
+		AURs: []config.AUR{
+			{},
 		},
 	})
 	ctx.Git = context.GitInfo{CurrentTag: "v1.0.1"}
@@ -612,7 +611,7 @@ func TestRunEmptyTokenType(t *testing.T) {
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:   "bin",
 		Path:   path,
-		Goos:   "darwin",
+		Goos:   "linux",
 		Goarch: "amd64",
 		Type:   artifact.UploadableArchive,
 		Extra: map[string]interface{}{

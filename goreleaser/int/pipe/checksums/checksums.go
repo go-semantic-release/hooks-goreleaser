@@ -11,12 +11,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/extrafiles"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
+)
+
+const (
+	artifactChecksumExtra = "Checksum"
 )
 
 var (
@@ -137,11 +141,17 @@ func refresh(ctx *context.Context, filepath string) error {
 	return err
 }
 
-func checksums(algorithm string, artifact *artifact.Artifact) (string, error) {
-	log.WithField("file", artifact.Name).Debug("checksumming")
-	sha, err := artifact.Checksum(algorithm)
+func checksums(algorithm string, a *artifact.Artifact) (string, error) {
+	log.WithField("file", a.Name).Debug("checksumming")
+	sha, err := a.Checksum(algorithm)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%v  %v\n", sha, artifact.Name), nil
+
+	if a.Extra == nil {
+		a.Extra = make(artifact.Extras)
+	}
+	a.Extra[artifactChecksumExtra] = fmt.Sprintf("%s:%s", algorithm, sha)
+
+	return fmt.Sprintf("%v  %v\n", sha, a.Name), nil
 }

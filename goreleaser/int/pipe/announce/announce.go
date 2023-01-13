@@ -4,12 +4,13 @@ package announce
 import (
 	"fmt"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
 	"github.com/goreleaser/goreleaser/int/middleware/logging"
 	"github.com/goreleaser/goreleaser/int/middleware/skip"
 	"github.com/goreleaser/goreleaser/int/pipe/discord"
 	"github.com/goreleaser/goreleaser/int/pipe/linkedin"
+	"github.com/goreleaser/goreleaser/int/pipe/mastodon"
 	"github.com/goreleaser/goreleaser/int/pipe/mattermost"
 	"github.com/goreleaser/goreleaser/int/pipe/reddit"
 	"github.com/goreleaser/goreleaser/int/pipe/slack"
@@ -33,6 +34,7 @@ var announcers = []Announcer{
 	// XXX: keep asc sorting
 	discord.Pipe{},
 	linkedin.Pipe{},
+	mastodon.Pipe{},
 	mattermost.Pipe{},
 	reddit.Pipe{},
 	slack.Pipe{},
@@ -66,17 +68,15 @@ func (Pipe) Skip(ctx *context.Context) bool {
 
 // Run the pipe.
 func (Pipe) Run(ctx *context.Context) error {
+	memo := errhandler.Memo{}
 	for _, announcer := range announcers {
-		if err := skip.Maybe(
+		_ = skip.Maybe(
 			announcer,
-			logging.Log(
-				announcer.String(),
-				errhandler.Handle(announcer.Announce),
-				logging.ExtraPadding,
-			),
-		)(ctx); err != nil {
-			return fmt.Errorf("%s: failed to announce release: %w", announcer.String(), err)
-		}
+			logging.PadLog(announcer.String(), memo.Wrap(announcer.Announce)),
+		)(ctx)
+	}
+	if memo.Error() != nil {
+		return fmt.Errorf("failed to announce release: %w", memo.Error())
 	}
 	return nil
 }

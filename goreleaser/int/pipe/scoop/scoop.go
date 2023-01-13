@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/commitauthor"
@@ -21,8 +21,10 @@ import (
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
-// ErrNoWindows when there is no build for windows (goos doesn't contain windows).
-var ErrNoWindows = errors.New("scoop requires a windows build and archive")
+// ErrNoWindows when there is no build for windows (goos doesn't contain
+// windows) or archive.format is binary.
+
+var ErrNoWindows = errors.New("scoop requires a windows archive\nLearn more at https://goreleaser.com/errors/scoop-archive\n") // nolint: revive
 
 const scoopConfigExtra = "ScoopConfig"
 
@@ -120,9 +122,12 @@ func doPublish(ctx *context.Context, cl client.Client) error {
 	}
 
 	manifest := manifests[0]
-	scoop := manifest.Extra[scoopConfigExtra].(config.Scoop)
 
-	var err error
+	scoop, err := artifact.Extra[config.Scoop](*manifest, scoopConfigExtra)
+	if err != nil {
+		return err
+	}
+
 	cl, err = client.NewIfToken(ctx, cl, scoop.Bucket.Token)
 	if err != nil {
 		return err
@@ -155,6 +160,12 @@ func doPublish(ctx *context.Context, cl client.Client) error {
 	if err != nil {
 		return err
 	}
+
+	ref, err := client.TemplateRef(tmpl.New(ctx).Apply, scoop.Bucket)
+	if err != nil {
+		return err
+	}
+	scoop.Bucket = ref
 
 	repo := client.RepoFromRef(scoop.Bucket)
 	return cl.CreateFile(
@@ -232,9 +243,7 @@ func dataFor(ctx *context.Context, cl client.Client, artifacts []*artifact.Artif
 			continue
 		}
 
-		url, err := tmpl.New(ctx).
-			WithArtifact(artifact, map[string]string{}).
-			Apply(ctx.Config.Scoop.URLTemplate)
+		url, err := tmpl.New(ctx).WithArtifact(artifact).Apply(ctx.Config.Scoop.URLTemplate)
 		if err != nil {
 			return manifest, err
 		}
@@ -251,9 +260,14 @@ func dataFor(ctx *context.Context, cl client.Client, artifacts []*artifact.Artif
 			"sum":              sum,
 		}).Debug("scoop url templating")
 
+		binaries, err := binaries(*artifact)
+		if err != nil {
+			return manifest, err
+		}
+
 		manifest.Architecture[arch] = Resource{
 			URL:  url,
-			Bin:  binaries(artifact),
+			Bin:  binaries,
 			Hash: sum,
 		}
 	}
@@ -261,12 +275,16 @@ func dataFor(ctx *context.Context, cl client.Client, artifacts []*artifact.Artif
 	return manifest, nil
 }
 
-func binaries(a *artifact.Artifact) []string {
+func binaries(a artifact.Artifact) ([]string, error) {
 	// nolint: prealloc
 	var bins []string
-	wrap := a.ExtraOr(artifact.ExtraWrappedIn, "").(string)
-	for _, b := range a.ExtraOr(artifact.ExtraBuilds, []*artifact.Artifact{}).([]*artifact.Artifact) {
+	wrap := artifact.ExtraOr(a, artifact.ExtraWrappedIn, "")
+	builds, err := artifact.Extra[[]artifact.Artifact](a, artifact.ExtraBuilds)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range builds {
 		bins = append(bins, filepath.Join(wrap, b.Name))
 	}
-	return bins
+	return bins, nil
 }

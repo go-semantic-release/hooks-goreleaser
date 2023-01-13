@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/semerrgroup"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	api "github.com/goreleaser/goreleaser/pkg/build"
@@ -72,8 +73,8 @@ func TestBuild(t *testing.T) {
 				Binary:  "testing.v{{.Version}}",
 				BuildDetails: config.BuildDetails{
 					Flags: []string{"-n"},
+					Env:   []string{"BLAH=1"},
 				},
-				Env: []string{"BLAH=1"},
 			},
 		},
 	}
@@ -120,6 +121,8 @@ func TestRunFullPipe(t *testing.T) {
 	folder := testlib.Mktmp(t)
 	pre := filepath.Join(folder, "pre")
 	post := filepath.Join(folder, "post")
+	preOS := filepath.Join(folder, "pre_linux")
+	postOS := filepath.Join(folder, "post_linux")
 	config := config.Project{
 		Builds: []config.Build{
 			{
@@ -129,13 +132,16 @@ func TestRunFullPipe(t *testing.T) {
 				BuildDetails: config.BuildDetails{
 					Flags:   []string{"-v"},
 					Ldflags: []string{"-X main.test=testing"},
+					Env:     []string{"THE_OS={{ .Os }}"},
 				},
 				Hooks: config.BuildHookConfig{
 					Pre: []config.Hook{
 						{Cmd: "touch " + pre},
+						{Cmd: "touch pre_{{ .Env.THE_OS}}"},
 					},
 					Post: []config.Hook{
 						{Cmd: "touch " + post},
+						{Cmd: "touch post_{{ .Env.THE_OS}}"},
 					},
 				},
 				Targets: []string{"linux_amd64"},
@@ -152,6 +158,8 @@ func TestRunFullPipe(t *testing.T) {
 	}})
 	require.FileExists(t, post)
 	require.FileExists(t, pre)
+	require.FileExists(t, postOS)
+	require.FileExists(t, preOS)
 	require.FileExists(t, filepath.Join(folder, "build1_linux_amd64", "testing"))
 }
 
@@ -245,8 +253,10 @@ func TestDefaultExpandEnv(t *testing.T) {
 		Config: config.Project{
 			Builds: []config.Build{
 				{
-					Env: []string{
-						"XFOO=bar_$XBAR",
+					BuildDetails: config.BuildDetails{
+						Env: []string{
+							"XFOO=bar_$XBAR",
+						},
 					},
 				},
 			},
@@ -272,7 +282,7 @@ func TestDefaultEmptyBuild(t *testing.T) {
 	require.Equal(t, ctx.Config.ProjectName, build.Binary)
 	require.Equal(t, ".", build.Dir)
 	require.Equal(t, ".", build.Main)
-	require.Equal(t, []string{"linux", "darwin"}, build.Goos)
+	require.Equal(t, []string{"linux", "darwin", "windows"}, build.Goos)
 	require.Equal(t, []string{"amd64", "arm64", "386"}, build.Goarch)
 	require.Equal(t, []string{"6"}, build.Goarm)
 	require.Equal(t, []string{"hardfloat"}, build.Gomips)
@@ -370,7 +380,7 @@ func TestDefaultPartialBuilds(t *testing.T) {
 		require.Equal(t, "foo", build.Binary)
 		require.Equal(t, ".", build.Main)
 		require.Equal(t, "baz", build.Dir)
-		require.Equal(t, []string{"linux", "darwin"}, build.Goos)
+		require.Equal(t, []string{"linux", "darwin", "windows"}, build.Goos)
 		require.Equal(t, []string{"386"}, build.Goarch)
 		require.Equal(t, []string{"6"}, build.Goarm)
 		require.Len(t, build.Ldflags, 1)
@@ -423,24 +433,47 @@ func TestSkipBuild(t *testing.T) {
 	require.Len(t, ctx.Artifacts.List(), 0)
 }
 
+func TestExtDarwin(t *testing.T) {
+	require.Equal(t, "", extFor("darwin_amd64", config.BuildDetails{}))
+	require.Equal(t, "", extFor("darwin_arm64", config.BuildDetails{}))
+	require.Equal(t, "", extFor("darwin_amd64", config.BuildDetails{}))
+	require.Equal(t, ".dylib", extFor("darwin_amd64", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".dylib", extFor("darwin_arm64", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".a", extFor("darwin_amd64", config.BuildDetails{Buildmode: "c-archive"}))
+	require.Equal(t, ".a", extFor("darwin_arm64", config.BuildDetails{Buildmode: "c-archive"}))
+}
+
+func TestExtLinux(t *testing.T) {
+	require.Equal(t, "", extFor("linux_amd64", config.BuildDetails{}))
+	require.Equal(t, "", extFor("linux_386", config.BuildDetails{}))
+	require.Equal(t, "", extFor("linux_amd64", config.BuildDetails{}))
+	require.Equal(t, ".so", extFor("linux_amd64", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".so", extFor("linux_386", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".a", extFor("linux_amd64", config.BuildDetails{Buildmode: "c-archive"}))
+	require.Equal(t, ".a", extFor("linux_386", config.BuildDetails{Buildmode: "c-archive"}))
+}
+
 func TestExtWindows(t *testing.T) {
-	require.Equal(t, ".exe", extFor("windows_amd64", config.FlagArray{}))
-	require.Equal(t, ".exe", extFor("windows_386", config.FlagArray{}))
-	require.Equal(t, ".exe", extFor("windows_amd64", config.FlagArray{"-tags=dev", "-v"}))
-	require.Equal(t, ".dll", extFor("windows_amd64", config.FlagArray{"-tags=dev", "-v", "-buildmode=c-shared"}))
-	require.Equal(t, ".dll", extFor("windows_386", config.FlagArray{"-buildmode=c-shared"}))
-	require.Equal(t, ".lib", extFor("windows_amd64", config.FlagArray{"-buildmode=c-archive"}))
-	require.Equal(t, ".lib", extFor("windows_386", config.FlagArray{"-tags=dev", "-v", "-buildmode=c-archive"}))
+	require.Equal(t, ".exe", extFor("windows_amd64", config.BuildDetails{}))
+	require.Equal(t, ".exe", extFor("windows_386", config.BuildDetails{}))
+	require.Equal(t, ".exe", extFor("windows_amd64", config.BuildDetails{}))
+	require.Equal(t, ".dll", extFor("windows_amd64", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".dll", extFor("windows_386", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".lib", extFor("windows_amd64", config.BuildDetails{Buildmode: "c-archive"}))
+	require.Equal(t, ".lib", extFor("windows_386", config.BuildDetails{Buildmode: "c-archive"}))
 }
 
 func TestExtWasm(t *testing.T) {
-	require.Equal(t, ".wasm", extFor("js_wasm", config.FlagArray{}))
+	require.Equal(t, ".wasm", extFor("js_wasm", config.BuildDetails{}))
 }
 
 func TestExtOthers(t *testing.T) {
-	require.Empty(t, "", extFor("linux_amd64", config.FlagArray{}))
-	require.Empty(t, "", extFor("linuxwin_386", config.FlagArray{}))
-	require.Empty(t, "", extFor("winasdasd_sad", config.FlagArray{}))
+	require.Equal(t, "", extFor("linux_amd64", config.BuildDetails{}))
+	require.Equal(t, "", extFor("linuxwin_386", config.BuildDetails{}))
+	require.Equal(t, "", extFor("winasdasd_sad", config.BuildDetails{}))
+	require.Equal(t, ".so", extFor("aix_amd64", config.BuildDetails{Buildmode: "c-shared"}))
+	require.Equal(t, ".a", extFor("android_386", config.BuildDetails{Buildmode: "c-archive"}))
+	require.Equal(t, ".so", extFor("winasdasd_sad", config.BuildDetails{Buildmode: "c-shared"}))
 }
 
 func TestTemplate(t *testing.T) {
@@ -487,8 +520,9 @@ func TestBuild_hooksKnowGoosGoarch(t *testing.T) {
 			build,
 		},
 	})
-	err := runPipeOnBuild(ctx, build)
-	require.NoError(t, err)
+	g := semerrgroup.New(ctx.Parallelism)
+	runPipeOnBuild(ctx, g, build)
+	require.NoError(t, g.Wait())
 	require.FileExists(t, filepath.Join(tmpDir, "pre-hook-amd64-linux"))
 	require.FileExists(t, filepath.Join(tmpDir, "post-hook-amd64-linux"))
 }
@@ -518,8 +552,9 @@ func TestPipeOnBuild_hooksRunPerTarget(t *testing.T) {
 			build,
 		},
 	})
-	err := runPipeOnBuild(ctx, build)
-	require.NoError(t, err)
+	g := semerrgroup.New(ctx.Parallelism)
+	runPipeOnBuild(ctx, g, build)
+	require.NoError(t, g.Wait())
 	require.FileExists(t, filepath.Join(tmpDir, "pre-hook-linux_amd64"))
 	require.FileExists(t, filepath.Join(tmpDir, "pre-hook-darwin_amd64"))
 	require.FileExists(t, filepath.Join(tmpDir, "pre-hook-windows_amd64"))
@@ -541,8 +576,9 @@ func TestPipeOnBuild_invalidBinaryTpl(t *testing.T) {
 			build,
 		},
 	})
-	err := runPipeOnBuild(ctx, build)
-	require.EqualError(t, err, `template: tmpl:1:11: executing "tmpl" at <.XYZ>: map has no entry for key "XYZ"`)
+	g := semerrgroup.New(ctx.Parallelism)
+	runPipeOnBuild(ctx, g, build)
+	require.EqualError(t, g.Wait(), `template: tmpl:1:11: executing "tmpl" at <.XYZ>: map has no entry for key "XYZ"`)
 }
 
 func TestBuildOptionsForTarget(t *testing.T) {

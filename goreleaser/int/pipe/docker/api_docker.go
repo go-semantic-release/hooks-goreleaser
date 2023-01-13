@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
@@ -13,7 +14,6 @@ func init() {
 	registerImager(useBuildx, dockerImager{
 		buildx: true,
 	})
-	registerImager(useBuildPacks, buildPackImager{})
 }
 
 type dockerManifester struct{}
@@ -31,24 +31,36 @@ func (m dockerManifester) Create(ctx *context.Context, manifest string, images, 
 	return nil
 }
 
-func (m dockerManifester) Push(ctx *context.Context, manifest string, flags []string) error {
+func (m dockerManifester) Push(ctx *context.Context, manifest string, flags []string) (string, error) {
 	args := []string{"manifest", "push", manifest}
 	args = append(args, flags...)
-	if err := runCommand(ctx, ".", "docker", args...); err != nil {
-		return fmt.Errorf("failed to push %s: %w", manifest, err)
+	bts, err := runCommandWithOutput(ctx, ".", "docker", args...)
+	if err != nil {
+		return "", fmt.Errorf("failed to push %s: %w", manifest, err)
 	}
-	return nil
+	digest := dockerDigestPattern.FindString(string(bts))
+	if digest == "" {
+		return "", fmt.Errorf("failed to find docker digest in docker push output: %s", string(bts))
+	}
+	return digest, nil
 }
 
 type dockerImager struct {
 	buildx bool
 }
 
-func (i dockerImager) Push(ctx *context.Context, image string, flags []string) error {
-	if err := runCommand(ctx, ".", "docker", "push", image); err != nil {
-		return fmt.Errorf("failed to push %s: %w", image, err)
+var dockerDigestPattern = regexp.MustCompile("sha256:[a-z0-9]{64}")
+
+func (i dockerImager) Push(ctx *context.Context, image string, flags []string) (string, error) {
+	bts, err := runCommandWithOutput(ctx, ".", "docker", "push", image)
+	if err != nil {
+		return "", fmt.Errorf("failed to push %s: %w", image, err)
 	}
-	return nil
+	digest := dockerDigestPattern.FindString(string(bts))
+	if digest == "" {
+		return "", fmt.Errorf("failed to find docker digest in docker push output: %s", string(bts))
+	}
+	return digest, nil
 }
 
 func (i dockerImager) Build(ctx *context.Context, root string, images, flags []string) error {
@@ -61,7 +73,7 @@ func (i dockerImager) Build(ctx *context.Context, root string, images, flags []s
 func (i dockerImager) buildCommand(images, flags []string) []string {
 	base := []string{"build", "."}
 	if i.buildx {
-		base = []string{"buildx", "build", ".", "--load"}
+		base = []string{"buildx", "--builder", "default", "build", ".", "--load"}
 	}
 	for _, image := range images {
 		base = append(base, "-t", image)

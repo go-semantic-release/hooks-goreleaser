@@ -3,8 +3,8 @@ package telegram
 import (
 	"fmt"
 
-	"github.com/apex/log"
 	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/log"
 	api "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -31,24 +31,25 @@ func (Pipe) Default(ctx *context.Context) error {
 func (Pipe) Announce(ctx *context.Context) error {
 	msg, err := tmpl.New(ctx).Apply(ctx.Config.Announce.Telegram.MessageTemplate)
 	if err != nil {
-		return fmt.Errorf("announce: failed to announce to telegram: %w", err)
+		return fmt.Errorf("telegram: %w", err)
 	}
 
 	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
-		return fmt.Errorf("announce: failed to announce to telegram: %w", err)
+		return fmt.Errorf("telegram: %w", err)
 	}
 
 	log.Infof("posting: '%s'", msg)
 	bot, err := api.NewBotAPI(cfg.ConsumerToken)
 	if err != nil {
-		return fmt.Errorf("announce: failed to announce to telegram: %w", err)
+		return fmt.Errorf("telegram: %w", err)
 	}
 
 	tm := api.NewMessage(ctx.Config.Announce.Telegram.ChatID, msg)
+	tm.ParseMode = "MarkdownV2"
 	_, err = bot.Send(tm)
 	if err != nil {
-		return fmt.Errorf("announce: failed to announce to telegram: %w", err)
+		return fmt.Errorf("telegram: %w", err)
 	}
 	log.Debug("message sent")
 	return nil

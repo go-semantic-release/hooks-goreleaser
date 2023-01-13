@@ -3,8 +3,8 @@ package twitter
 import (
 	"fmt"
 
-	"github.com/apex/log"
 	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/log"
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/dghubble/oauth1"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -35,12 +35,12 @@ func (Pipe) Default(ctx *context.Context) error {
 func (Pipe) Announce(ctx *context.Context) error {
 	msg, err := tmpl.New(ctx).Apply(ctx.Config.Announce.Twitter.MessageTemplate)
 	if err != nil {
-		return fmt.Errorf("announce: failed to announce to twitter: %w", err)
+		return fmt.Errorf("twitter: %w", err)
 	}
 
 	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
-		return fmt.Errorf("announce: failed to announce to twitter: %w", err)
+		return fmt.Errorf("twitter: %w", err)
 	}
 
 	log.Infof("posting: '%s'", msg)
@@ -48,7 +48,7 @@ func (Pipe) Announce(ctx *context.Context) error {
 	token := oauth1.NewToken(cfg.AccessToken, cfg.AccessSecret)
 	client := twitter.NewClient(config.Client(oauth1.NoContext, token))
 	if _, _, err := client.Statuses.Update(msg, nil); err != nil {
-		return fmt.Errorf("announce: failed to announce to twitter: %w", err)
+		return fmt.Errorf("twitter: %w", err)
 	}
 	return nil
 }

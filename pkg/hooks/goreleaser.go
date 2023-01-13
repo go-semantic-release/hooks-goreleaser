@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/go-semantic-release/semantic-release/v2/pkg/hooks"
 	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
 	"github.com/goreleaser/goreleaser/int/middleware/logging"
@@ -94,7 +94,7 @@ func (gr *GoReleaser) Success(shConfig *hooks.SuccessHookConfig) error {
 			log.Info("skipping git pipe")
 			continue
 		}
-		err := skip.Maybe(pipe, logging.Log(pipe.String(), errhandler.Handle(pipe.Run), 0))(ctx)
+		err := skip.Maybe(pipe, logging.Log(pipe.String(), errhandler.Handle(pipe.Run)))(ctx)
 		if err != nil {
 			return err
 		}

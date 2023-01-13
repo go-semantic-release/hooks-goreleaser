@@ -66,7 +66,7 @@ func TestSetupPipeline(t *testing.T) {
 			pipeline.BuildCmdPipeline,
 			setupPipeline(context.New(config.Project{}), buildOpts{
 				singleTarget: true,
-				id:           "foo",
+				ids:          []string{"foo"},
 			}),
 		)
 	})
@@ -77,7 +77,7 @@ func TestSetupPipeline(t *testing.T) {
 			append(pipeline.BuildCmdPipeline, withOutputPipe{"foobar"}),
 			setupPipeline(context.New(config.Project{}), buildOpts{
 				singleTarget: true,
-				id:           "foo",
+				ids:          []string{"foo"},
 				output:       ".",
 			}),
 		)
@@ -106,7 +106,7 @@ func TestSetupPipeline(t *testing.T) {
 				context.New(config.Project{}),
 				buildOpts{
 					singleTarget: true,
-					id:           "foo",
+					ids:          []string{"foo"},
 					output:       "foobar",
 				},
 			),
@@ -205,7 +205,39 @@ func TestBuildFlags(t *testing.T) {
 				},
 			})
 			require.NoError(t, setupBuildContext(ctx, buildOpts{
-				id: "foo",
+				ids: []string{"foo"},
+			}))
+		})
+
+		t.Run("match-multiple", func(t *testing.T) {
+			ctx := context.New(config.Project{
+				Builds: []config.Build{
+					{
+						ID: "default",
+					},
+					{
+						ID: "foo",
+					},
+				},
+			})
+			require.NoError(t, setupBuildContext(ctx, buildOpts{
+				ids: []string{"foo", "default"},
+			}))
+		})
+
+		t.Run("match-partial", func(t *testing.T) {
+			ctx := context.New(config.Project{
+				Builds: []config.Build{
+					{
+						ID: "default",
+					},
+					{
+						ID: "foo",
+					},
+				},
+			})
+			require.NoError(t, setupBuildContext(ctx, buildOpts{
+				ids: []string{"foo", "notdefault"},
 			}))
 		})
 
@@ -221,14 +253,14 @@ func TestBuildFlags(t *testing.T) {
 				},
 			})
 			require.EqualError(t, setupBuildContext(ctx, buildOpts{
-				id: "bar",
-			}), "no builds with id 'bar'")
+				ids: []string{"bar", "fooz"},
+			}), "no builds with ids bar, fooz")
 		})
 
 		t.Run("default config", func(t *testing.T) {
 			ctx := context.New(config.Project{})
 			require.NoError(t, setupBuildContext(ctx, buildOpts{
-				id: "aaa",
+				ids: []string{"aaa"},
 			}))
 		})
 
@@ -241,8 +273,54 @@ func TestBuildFlags(t *testing.T) {
 				},
 			})
 			require.NoError(t, setupBuildContext(ctx, buildOpts{
-				id: "not foo but doesnt matter",
+				ids: []string{"not foo but doesnt matter"},
 			}))
 		})
 	})
+}
+
+func TestBuildSingleTargetWithSpecificTargets(t *testing.T) {
+	ctx := context.New(config.Project{
+		ProjectName: "test",
+		Builds: []config.Build{
+			{
+				Targets: []string{
+					"linux_amd64_v1",
+					"darwin_arm64",
+					"darwin_amd64_v1",
+				},
+			},
+		},
+	})
+
+	t.Setenv("GOOS", "linux")
+	t.Setenv("GOARCH", "amd64")
+	setupBuildSingleTarget(ctx)
+	require.Equal(t, config.Build{
+		Goos:   []string{"linux"},
+		Goarch: []string{"amd64"},
+	}, ctx.Config.Builds[0])
+}
+
+func TestBuildSingleTargetRemoveOtherOptions(t *testing.T) {
+	ctx := context.New(config.Project{
+		ProjectName: "test",
+		Builds: []config.Build{
+			{
+				Goos:    []string{"linux", "darwin"},
+				Goarch:  []string{"amd64", "arm64"},
+				Goamd64: []string{"v1", "v2"},
+				Goarm:   []string{"6"},
+				Gomips:  []string{"anything"},
+			},
+		},
+	})
+
+	t.Setenv("GOOS", "linux")
+	t.Setenv("GOARCH", "amd64")
+	setupBuildSingleTarget(ctx)
+	require.Equal(t, config.Build{
+		Goos:   []string{"linux"},
+		Goarch: []string{"amd64"},
+	}, ctx.Config.Builds[0])
 }

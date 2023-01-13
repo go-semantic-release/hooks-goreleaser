@@ -17,6 +17,13 @@ protected branches and tags.
     If you use a project access token, make sure to set `use_package_registry`
     to `true` as well, otherwise it might not work.
 
+!!! warning
+    If you are using a [protected variable](https://docs.gitlab.com/ee/ci/variables/#protected-cicd-variables)
+    to store any of the values needed by goreleaser, ensure that you are protecting the tags as CI jobs in
+    Gitlab only may access protected variables if the job is run for protected refs
+    ([branches](https://docs.gitlab.com/ee/user/project/protected_branches.html),
+    [tags](https://docs.gitlab.com/ee/user/project/protected_tags.html)).
+
 See [Quick Start](https://goreleaser.com/quick-start/) for more information on
 GoReleaser's environment variables.
 
@@ -47,7 +54,7 @@ for more information.
 
 When tags are pushed to the repository,
 an available GitLab Runner with the Docker executor will pick up the release job.
-`goreleaser/goreleaser` will start in a container and the repository will be mounted inside.
+`goreleaser/goreleaser` will start in a container, and the repository will be mounted inside.
 Finally, the `script` section will run within the container starting in your project's directory.
 
 ## Releasing Archives and Pushing Images
@@ -102,6 +109,19 @@ using the GitLab image registry, you don't need to set these.
 Add a variable `GITLAB_TOKEN` if you are using [GitLab
 releases](https://docs.gitlab.com/ce/user/project/releases/). The value should
 be an API token with `api` scope for a user that has access to the project.
+
+Alternatively, you can provide the gitlab token in a file. GoReleaser will check
+`~/.config/goreleaser/gitlab_token` by default, but you can change that in the
+`.goreleaser.yaml` file:
+
+```yaml
+# .goreleaser.yaml
+env_files:
+  gitlab_token: ~/.path/to/my/gitlab_token
+```
+
+Note that the environment variable will be used if available, regardless of the
+`gitlab_token` file.
 
 The secret variables, `DOCKER_PASSWORD` and `GITLAB_TOKEN`, should be masked.
 Optionally, you might want to protect them if the job that uses them will only

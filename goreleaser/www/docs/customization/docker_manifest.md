@@ -1,23 +1,22 @@
 # Docker Manifests
 
-GoReleaser can also create and push Docker multi-platform images using the `docker manifest` tool.
+GoReleaser can also create and push Docker multi-platform images using the
+`docker manifest` tool.
 
-For it to work, it needs to be enabled in the [client's configuration](https://github.com/docker/cli/blob/master/experimental/README.md).
+For it to work, it needs to be enabled in the
+[client's configuration](https://github.com/docker/cli/blob/master/experimental/README.md).
 
 Please make sure `docker manifest` works before opening issues.
 
 Notice that if you have something in the `docker_manifests` section in your
-config file, GoReleaser will add the manifest's to the release notes
-instead of the Docker images names.
+config file, GoReleaser will add the manifest's to the release notes instead of
+the Docker images names.
 
 !!! warning
-    Please note that this is a beta feature, and it may change or be removed
-    at any time.
-
-!!! warning
-    Notice that the images used in the manifest **need to be pushed** for this to work.
-    This is a limitation of how `docker manifest create` works.
-    For more info, check [this issue](https://github.com/goreleaser/goreleaser/issues/2606).
+    Notice that the images used in the manifest **need to be pushed** for this
+    to work. This is a limitation of how `docker manifest create` works. For
+    more info, check
+    [this issue](https://github.com/goreleaser/goreleaser/issues/2606).
 
 ## Customization
 
@@ -29,7 +28,8 @@ options available:
 docker_manifests:
   # You can have multiple Docker manifests.
 -
-  # ID of the manifest, needed if you want to filter by it later on (e.g. on custom publishers).
+  # ID of the manifest, needed if you want to filter by it later on (e.g. on
+  # custom publishers).
   id: myimg
 
   # Name template for the manifest.
@@ -67,7 +67,8 @@ docker_manifests:
   #
   # Relevant notes:
   # 1. podman is a GoReleaser Pro feature and is only available on Linux;
-  # 2. if you set podman here, the respective docker configs need to use podman too.
+  # 2. if you set podman here, the respective docker configs need to use podman
+  #    too.
   #
   # Defaults to docker.
   use: docker
@@ -79,18 +80,18 @@ docker_manifests:
 ## How it works
 
 We basically build and push our images as usual, but we also add a new
-section to our config defining which images are part of which manifests.
+section to our configuration defining, which images are part of which manifests.
 
-GoReleaser will create and publish the manifest in its publish phase.
+GoReleaser will create and publish the manifest in its publishing phase.
 
 !!! warning
     Unfortunately, the manifest tool needs the images to be pushed to create
-    the manifest, that's why we both create and push it in the publish phase.
+    the manifest, that's why we both create and push it in the publishing phase.
 
 ## Example config
 
 In this example we will use Docker's `--platform` option to specify the target platform.
-This way we can use the same `Dockerfile` for both the `amd64` and the `arm64`
+This way we can use the same `Dockerfile` for both the `amd64`, and the `arm64`
 images (and possibly others):
 
 ```dockerfile
@@ -100,8 +101,8 @@ ENTRYPOINT ["/usr/bin/mybin"]
 COPY mybin /usr/bin/mybin
 ```
 
-Then, on our GoReleaser config file, we need to define both the `dockers` and
-the `docker_manifests` section:
+Then, on our GoReleaser configuration file, we need to define both the
+`dockers`, and the `docker_manifests` section:
 
 ```yaml
 # .goreleaser.yaml
@@ -146,7 +147,8 @@ and push everything to Docker Hub.
 !!! success "GoReleaser Pro"
     The podman backend is a [GoReleaser Pro feature](/pro/).
 
-You can use [`podman`](https://podman.io) instead of `docker` by setting `use` to `podman` on your config:
+You can use [`podman`](https://podman.io) instead of `docker` by setting `use`
+to `podman` on your configuration:
 
 ```yaml
 # .goreleaser.yaml
@@ -158,4 +160,5 @@ docker_manifests:
   use: podman
 ```
 
-Note that GoReleaser will not install Podman for you, nor change any of its configuration.
+Note that GoReleaser will not install Podman for you, nor change any of its
+configuration.

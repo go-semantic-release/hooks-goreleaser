@@ -82,7 +82,6 @@ func TestTarFile(t *testing.T) {
 		}
 		require.NoError(t, err)
 		paths = append(paths, next.Name)
-		t.Logf("%s: %v", next.Name, next.FileInfo().Mode())
 		if next.Name == "sub1/executable" {
 			ex := next.FileInfo().Mode() | 0o111
 			require.Equal(t, next.FileInfo().Mode().String(), ex.String())
@@ -115,10 +114,10 @@ func TestTarFileInfo(t *testing.T) {
 		Source:      "../testdata/foo.txt",
 		Destination: "nope.txt",
 		Info: config.FileInfo{
-			Mode:  0o755,
-			Owner: "carlos",
-			Group: "root",
-			MTime: now,
+			Mode:        0o755,
+			Owner:       "carlos",
+			Group:       "root",
+			ParsedMTime: now,
 		},
 	}))
 

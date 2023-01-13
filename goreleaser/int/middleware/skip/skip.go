@@ -4,7 +4,7 @@ package skip
 import (
 	"fmt"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/middleware"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/builders/buildtarget"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -53,7 +53,7 @@ func (*Builder) WithDefaults(build config.Build) (config.Build, error) {
 	}
 	if len(build.Targets) == 0 {
 		if len(build.Goos) == 0 {
-			build.Goos = []string{"linux", "darwin"}
+			build.Goos = []string{"linux", "darwin", "windows"}
 		}
 		if len(build.Goarch) == 0 {
 			build.Goarch = []string{"amd64", "arm64", "386"}
@@ -135,7 +135,7 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		return err
 	}
 
-	artifact := &artifact.Artifact{
+	a := &artifact.Artifact{
 		Type:    artifact.Binary,
 		Path:    options.Path,
 		Name:    options.Name,
@@ -151,7 +151,37 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		},
 	}
 
-	env := append(ctx.Env.Strings(), build.Env...)
+	if build.Buildmode == "c-archive" {
+		a.Type = artifact.CArchive
+		ctx.Artifacts.Add(getHeaderArtifactForLibrary(build, options))
+	}
+	if build.Buildmode == "c-shared" {
+		a.Type = artifact.CShared
+		ctx.Artifacts.Add(getHeaderArtifactForLibrary(build, options))
+	}
+
+	details, err := withOverrides(ctx, build, options)
+	if err != nil {
+		return err
+	}
+
+	env := []string{}
+	// used for unit testing only
+	testEnvs := []string{}
+	env = append(env, ctx.Env.Strings()...)
+	for _, e := range details.Env {
+		ee, err := tmpl.New(ctx).WithEnvS(env).WithArtifact(a).Apply(e)
+		if err != nil {
+			return err
+		}
+		log.Debugf("env %q evaluated to %q", e, ee)
+		if ee != "" {
+			env = append(env, ee)
+			if strings.HasPrefix(e, "TEST_") {
+				testEnvs = append(testEnvs, ee)
+			}
+		}
+	}
 	env = append(
 		env,
 		"GOOS="+options.Goos,
@@ -162,7 +192,11 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		"GOAMD64="+options.Goamd64,
 	)
 
-	cmd, err := buildGoBuildLine(ctx, build, options, artifact, env)
+	if len(testEnvs) > 0 {
+		a.Extra["testEnvs"] = testEnvs
+	}
+
+	cmd, err := buildGoBuildLine(ctx, build, details, options, a, env)
 	if err != nil {
 		return err
 	}
@@ -172,7 +206,7 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 	}
 
 	if build.ModTimestamp != "" {
-		modTimestamp, err := tmpl.New(ctx).WithEnvS(env).WithArtifact(artifact, map[string]string{}).Apply(build.ModTimestamp)
+		modTimestamp, err := tmpl.New(ctx).WithEnvS(env).WithArtifact(a).Apply(build.ModTimestamp)
 		if err != nil {
 			return err
 		}
@@ -187,7 +221,7 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		}
 	}
 
-	ctx.Artifacts.Add(artifact)
+	ctx.Artifacts.Add(a)
 	return nil
 }
 
@@ -201,29 +235,32 @@ func withOverrides(ctx *context.Context, build config.Build, options api.Options
 
 		if optsTarget == overrideTarget {
 			dets := config.BuildDetails{
-				Ldflags:  build.BuildDetails.Ldflags,
-				Tags:     build.BuildDetails.Tags,
-				Flags:    build.BuildDetails.Flags,
-				Asmflags: build.BuildDetails.Asmflags,
-				Gcflags:  build.BuildDetails.Gcflags,
+				Buildmode: build.BuildDetails.Buildmode,
+				Ldflags:   build.BuildDetails.Ldflags,
+				Tags:      build.BuildDetails.Tags,
+				Flags:     build.BuildDetails.Flags,
+				Asmflags:  build.BuildDetails.Asmflags,
+				Gcflags:   build.BuildDetails.Gcflags,
 			}
 			if err := mergo.Merge(&dets, o.BuildDetails, mergo.WithOverride); err != nil {
 				return build.BuildDetails, err
 			}
-			log.WithField("dets", dets).Info("will use")
+
+			dets.Env = context.ToEnv(append(build.Env, o.BuildDetails.Env...)).Strings()
+			log.WithField("details", dets).Infof("overridden build details for %s", optsTarget)
 			return dets, nil
 		}
 	}
+
 	return build.BuildDetails, nil
 }
 
-func buildGoBuildLine(ctx *context.Context, build config.Build, options api.Options, artifact *artifact.Artifact, env []string) ([]string, error) {
+func buildGoBuildLine(ctx *context.Context, build config.Build, details config.BuildDetails, options api.Options, artifact *artifact.Artifact, env []string) ([]string, error) {
 	cmd := []string{build.GoBinary, build.Command}
 
-	details, err := withOverrides(ctx, build, options)
-	if err != nil {
-		return cmd, err
-	}
+	// tags, ldflags, and buildmode, should only appear once, warning only to avoid a breaking change
+	validateUniqueFlags(details)
+
 	flags, err := processFlags(ctx, artifact, env, details.Flags, "")
 	if err != nil {
 		return cmd, err
@@ -262,8 +299,26 @@ func buildGoBuildLine(ctx *context.Context, build config.Build, options api.Opti
 		cmd = append(cmd, "-ldflags="+strings.Join(ldflags, " "))
 	}
 
+	if details.Buildmode != "" {
+		cmd = append(cmd, "-buildmode="+details.Buildmode)
+	}
+
 	cmd = append(cmd, "-o", options.Path, build.Main)
 	return cmd, nil
+}
+
+func validateUniqueFlags(details config.BuildDetails) {
+	for _, flag := range details.Flags {
+		if strings.HasPrefix(flag, "-tags") && len(details.Tags) > 0 {
+			log.WithField("flag", flag).WithField("tags", details.Tags).Warn("tags is defined twice")
+		}
+		if strings.HasPrefix(flag, "-ldflags") && len(details.Ldflags) > 0 {
+			log.WithField("flag", flag).WithField("ldflags", details.Ldflags).Warn("ldflags is defined twice")
+		}
+		if strings.HasPrefix(flag, "-buildmode") && details.Buildmode != "" {
+			log.WithField("flag", flag).WithField("buildmode", details.Buildmode).Warn("buildmode is defined twice")
+		}
+	}
 }
 
 func processFlags(ctx *context.Context, a *artifact.Artifact, env, flags []string, flagPrefix string) ([]string, error) {
@@ -279,7 +334,7 @@ func processFlags(ctx *context.Context, a *artifact.Artifact, env, flags []strin
 }
 
 func processFlag(ctx *context.Context, a *artifact.Artifact, env []string, rawFlag string) (string, error) {
-	return tmpl.New(ctx).WithEnvS(env).WithArtifact(a, map[string]string{}).Apply(rawFlag)
+	return tmpl.New(ctx).WithEnvS(env).WithArtifact(a).Apply(rawFlag)
 }
 
 func run(ctx *context.Context, command, env []string, dir string) error {
@@ -361,4 +416,27 @@ func hasMain(file *ast.File) bool {
 		}
 	}
 	return false
+}
+
+func getHeaderArtifactForLibrary(build config.Build, options api.Options) *artifact.Artifact {
+	fullPathWithoutExt := strings.TrimSuffix(options.Path, options.Ext)
+	basePath := filepath.Base(fullPathWithoutExt)
+	fullPath := fullPathWithoutExt + ".h"
+	headerName := basePath + ".h"
+
+	return &artifact.Artifact{
+		Type:    artifact.Header,
+		Path:    fullPath,
+		Name:    headerName,
+		Goos:    options.Goos,
+		Goarch:  options.Goarch,
+		Goamd64: options.Goamd64,
+		Goarm:   options.Goarm,
+		Gomips:  options.Gomips,
+		Extra: map[string]interface{}{
+			artifact.ExtraBinary: headerName,
+			artifact.ExtraExt:    ".h",
+			artifact.ExtraID:     build.ID,
+		},
+	}
 }

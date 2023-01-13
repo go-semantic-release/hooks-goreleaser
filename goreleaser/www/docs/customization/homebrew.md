@@ -1,11 +1,11 @@
 # Homebrew Taps
 
-After releasing to GitHub or GitLab, GoReleaser can generate and publish
+After releasing to GitHub, GitLab, or Gitea, GoReleaser can generate and publish
 a _homebrew-tap_ recipe into a repository that you have access to.
 
 The `brews` section specifies how the formula should be created.
 You can check the
-[Homebrew documentation](https://github.com/Homebrew/brew/blob/master/docs/How-to-Create-and-Maintain-a-Tap.md)
+[Homebrew documentation](https://github.com/Homebrew/brew/blob/master/docs/How-to-Create-and-Maintain-a-Tap.md),
 and the
 [formula cookbook](https://github.com/Homebrew/brew/blob/master/docs/Formula-Cookbook.md)
 for more details.
@@ -24,35 +24,44 @@ brews:
     - foo
     - bar
 
-    # GOARM to specify which 32-bit arm version to use if there are multiple versions
-    # from the build section. Brew formulas support only one 32-bit version.
+    # GOARM to specify which 32-bit arm version to use if there are multiple
+    # versions from the build section. Brew formulas support only one 32-bit
+    # version.
     # Default is 6 for all artifacts or each id if there a multiple versions.
     goarm: 6
 
-    # GOAMD64 to specify which amd64 version to use if there are multiple versions
-    # from the build section.
+    # GOAMD64 to specify which amd64 version to use if there are multiple
+    # versions from the build section.
     # Default is v1.
     goamd64: v3
 
-    # NOTE: make sure the url_template, the token and given repo (github or gitlab) owner and name are from the
-    # same kind. We will probably unify this in the next major version like it is done with scoop.
+    # NOTE: make sure the url_template, the token and given repo (github or
+    # gitlab) owner and name are from the same kind.
+    # We will probably unify this in the next major version like it is
+    # done with scoop.
 
     # GitHub/GitLab repository to push the formula to
     tap:
-      owner: repo-owner
+      # Repository owner template. (templateable)
+      owner: user
+
+      # Repository name. (templateable)
       name: homebrew-tap
 
-      # Optionally a branch can be provided.
+      # Optionally a branch can be provided. (templateable)
+      #
       # Defaults to the default repository branch.
       branch: main
 
-      # Optionally a token can be provided, if it differs from the token provided to GoReleaser
+      # Optionally a token can be provided, if it differs from the token
+      # provided to GoReleaser
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
-    # Template for the url which is determined by the given Token (github, gitlab or gitea)
+    # Template for the url which is determined by the given Token (github,
+    # gitlab or gitea)
     #
     # Default depends on the client.
-    url_template: "http://github.mycompany.com/foo/bar/releases/{{ .Tag }}/{{ .ArtifactName }}"
+    url_template: "https://github.mycompany.com/foo/bar/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
     # Allows you to set a custom download strategy. Note that you'll need
     # to implement the strategy and add it to your tap repository.
@@ -60,7 +69,8 @@ brews:
     # Default is empty.
     download_strategy: CurlDownloadStrategy
 
-    # Allows you to add a custom require_relative at the top of the formula template
+    # Allows you to add a custom require_relative at the top of the formula
+    # template.
     # Default is empty
     custom_require: custom_download_strategy
 
@@ -113,6 +123,14 @@ brews:
       - name: git
       - name: zsh
         type: optional
+      - name: fish
+        version: v1.2.3
+      # if providing both version and type, only the type will be taken into
+      # account.
+      - name: elvish
+        type: optional
+        version: v1.2.3
+
 
     # Packages that conflict with your package.
     conflicts:
@@ -123,24 +141,27 @@ brews:
     # Default is empty.
     plist: |
       <?xml version="1.0" encoding="UTF-8"?>
-      ...
+      # ...
 
     # Service block.
+    #
+    # Since: v1.7.
     service: |
       run: foo/bar
-      ...
+      # ...
 
     # So you can `brew test` your formula.
     # Default is empty.
     test: |
-      system "#{bin}/program --version"
-      ...
+      system "#{bin}/foo --version"
+      # ...
 
     # Custom install script for brew.
-    # Default is 'bin.install "program"'.
+    # Default is 'bin.install "the binary name"'.
     install: |
-      bin.install "program"
-      ...
+      bin.install "some_other_name"
+      bash_completion.install "completions/foo.bash" => "foo"
+      # ...
 
     # Custom post_install script for brew.
     # Could be used to do any additional work after the "install" script

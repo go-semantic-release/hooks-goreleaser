@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/extrafiles"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
@@ -35,20 +35,35 @@ func urlFor(ctx *context.Context, conf config.Blob) (string, error) {
 		return "", err
 	}
 
-	bucketURL := fmt.Sprintf("%s://%s", conf.Provider, bucket)
+	provider, err := tmpl.New(ctx).Apply(conf.Provider)
+	if err != nil {
+		return "", err
+	}
 
-	if conf.Provider != "s3" {
+	bucketURL := fmt.Sprintf("%s://%s", provider, bucket)
+	if provider != "s3" {
 		return bucketURL, nil
 	}
 
 	query := url.Values{}
-	if conf.Endpoint != "" {
-		query.Add("endpoint", conf.Endpoint)
+
+	endpoint, err := tmpl.New(ctx).Apply(conf.Endpoint)
+	if err != nil {
+		return "", err
+	}
+	if endpoint != "" {
+		query.Add("endpoint", endpoint)
 		query.Add("s3ForcePathStyle", "true")
 	}
-	if conf.Region != "" {
-		query.Add("region", conf.Region)
+
+	region, err := tmpl.New(ctx).Apply(conf.Region)
+	if err != nil {
+		return "", err
 	}
+	if region != "" {
+		query.Add("region", region)
+	}
+
 	if conf.DisableSSL {
 		query.Add("disableSSL", "true")
 	}
@@ -116,10 +131,7 @@ func doUpload(ctx *context.Context, conf config.Blob) error {
 		fullpath := fullpath
 		g.Go(func() error {
 			uploadFile := path.Join(folder, name)
-
-			err := uploadData(ctx, conf, up, fullpath, uploadFile, bucketURL)
-
-			return err
+			return uploadData(ctx, conf, up, fullpath, uploadFile, bucketURL)
 		})
 	}
 
@@ -132,11 +144,10 @@ func uploadData(ctx *context.Context, conf config.Blob, up uploader, dataFile, u
 		return err
 	}
 
-	err = up.Upload(ctx, uploadFile, data)
-	if err != nil {
+	if err := up.Upload(ctx, uploadFile, data); err != nil {
 		return handleError(err, bucketURL)
 	}
-	return err
+	return nil
 }
 
 // errorContains check if error contains specific string.
@@ -232,11 +243,9 @@ func (u *productionUploader) Upload(ctx *context.Context, filepath string, data 
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := w.Close(); err == nil {
-			err = cerr
-		}
-	}()
-	_, err = w.Write(data)
-	return err
+	defer func() { _ = w.Close() }()
+	if _, err = w.Write(data); err != nil {
+		return err
+	}
+	return w.Close()
 }

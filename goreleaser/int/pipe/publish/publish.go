@@ -11,9 +11,9 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/aur"
 	"github.com/goreleaser/goreleaser/int/pipe/blob"
 	"github.com/goreleaser/goreleaser/int/pipe/brew"
+	"github.com/goreleaser/goreleaser/int/pipe/chocolatey"
 	"github.com/goreleaser/goreleaser/int/pipe/custompublishers"
 	"github.com/goreleaser/goreleaser/int/pipe/docker"
-	"github.com/goreleaser/goreleaser/int/pipe/gofish"
 	"github.com/goreleaser/goreleaser/int/pipe/krew"
 	"github.com/goreleaser/goreleaser/int/pipe/milestone"
 	"github.com/goreleaser/goreleaser/int/pipe/release"
@@ -36,8 +36,8 @@ type Publisher interface {
 var publishers = []Publisher{
 	blob.Pipe{},
 	upload.Pipe{},
-	custompublishers.Pipe{},
 	artifactory.Pipe{},
+	custompublishers.Pipe{},
 	docker.Pipe{},
 	docker.ManifestPipe{},
 	sign.DockerPipe{},
@@ -47,9 +47,9 @@ var publishers = []Publisher{
 	// brew et al use the release URL, so, they should be last
 	brew.Pipe{},
 	aur.Pipe{},
-	gofish.Pipe{},
 	krew.Pipe{},
 	scoop.Pipe{},
+	chocolatey.Pipe{},
 	milestone.Pipe{},
 }
 
@@ -63,10 +63,9 @@ func (Pipe) Run(ctx *context.Context) error {
 	for _, publisher := range publishers {
 		if err := skip.Maybe(
 			publisher,
-			logging.Log(
+			logging.PadLog(
 				publisher.String(),
 				errhandler.Handle(publisher.Publish),
-				logging.ExtraPadding,
 			),
 		)(ctx); err != nil {
 			return fmt.Errorf("%s: failed to publish artifacts: %w", publisher.String(), err)

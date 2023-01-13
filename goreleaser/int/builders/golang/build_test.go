@@ -77,6 +77,9 @@ func TestWithDefaults(t *testing.T) {
 				"linux_arm64",
 				"darwin_amd64_v1",
 				"darwin_arm64",
+				"windows_amd64_v1",
+				"windows_arm64",
+				"windows_386",
 			},
 			goBinary: "go",
 		},
@@ -167,6 +170,9 @@ func TestWithDefaults(t *testing.T) {
 				"linux_arm64",
 				"darwin_amd64_v1",
 				"darwin_arm64",
+				"windows_amd64_v1",
+				"windows_arm64",
+				"windows_386",
 			},
 			goBinary: "go",
 		},
@@ -182,6 +188,9 @@ func TestWithDefaults(t *testing.T) {
 				"linux_arm64",
 				"darwin_amd64_v1",
 				"darwin_arm64",
+				"windows_amd64_v1",
+				"windows_arm64",
+				"windows_386",
 			},
 			goBinary: "go",
 		},
@@ -258,8 +267,9 @@ func TestDefaults(t *testing.T) {
 
 // createFakeGoBinaryWithVersion creates a temporary executable with the
 // given name, which will output a go version string with the given version.
-//  The temporary directory created by this function will be placed in the PATH
-// variable for the duration of (and cleaned up at the end of) the
+//
+// The temporary directory created by this function will be placed in the
+// PATH variable for the duration of (and cleaned up at the end of) the
 // current test run.
 func createFakeGoBinaryWithVersion(tb testing.TB, name, version string) {
 	tb.Helper()
@@ -340,7 +350,6 @@ func TestBuild(t *testing.T) {
 		Builds: []config.Build{
 			{
 				ID:     "foo",
-				Env:    []string{"GO111MODULE=off"},
 				Binary: "bin/foo-{{ .Version }}",
 				Targets: []string{
 					"linux_amd64",
@@ -354,6 +363,16 @@ func TestBuild(t *testing.T) {
 				GoBinary: "go",
 				Command:  "build",
 				BuildDetails: config.BuildDetails{
+					Env: []string{
+						"GO111MODULE=off",
+						`TEST_T={{- if eq .Os "windows" -}}
+						w
+						{{- else if eq .Os "darwin" -}}
+						d
+						{{- else if eq .Os "linux" -}}
+						l
+						{{- end -}}`,
+					},
 					Asmflags: []string{".=", "all="},
 					Gcflags:  []string{"all="},
 					Flags:    []string{"{{.Env.GO_FLAGS}}"},
@@ -416,6 +435,7 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    "",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T=l"},
 			},
 		},
 		{
@@ -429,6 +449,7 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    "",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T=l"},
 			},
 		},
 		{
@@ -442,6 +463,7 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    "",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T=l"},
 			},
 		},
 		{
@@ -454,6 +476,7 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    "",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T=d"},
 			},
 		},
 		{
@@ -467,6 +490,7 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    "",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T=l"},
 			},
 		},
 		{
@@ -479,6 +503,7 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    ".exe",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T=w"},
 			},
 		},
 		{
@@ -491,11 +516,12 @@ func TestBuild(t *testing.T) {
 				artifact.ExtraExt:    ".wasm",
 				artifact.ExtraBinary: "foo-v5.6.7",
 				artifact.ExtraID:     "foo",
+				"testEnvs":           []string{"TEST_T="},
 			},
 		},
 	})
 
-	modTimes := map[time.Time]bool{}
+	modTimes := map[int64]bool{}
 	for _, bin := range ctx.Artifacts.List() {
 		if bin.Type != artifact.Binary {
 			continue
@@ -505,13 +531,44 @@ func TestBuild(t *testing.T) {
 		require.NoError(t, err)
 
 		// make this a suitable map key, per docs: https://golang.org/pkg/time/#Time
-		modTime := fi.ModTime().UTC().Round(0)
+		modTime := fi.ModTime().UTC().Round(0).Unix()
 
 		if modTimes[modTime] {
 			t.Fatal("duplicate modified time found, times should be different by default")
 		}
 		modTimes[modTime] = true
 	}
+}
+
+func TestBuildInvalidEnv(t *testing.T) {
+	folder := testlib.Mktmp(t)
+	writeGoodMain(t, folder)
+	config := config.Project{
+		Builds: []config.Build{
+			{
+				ID:     "foo",
+				Dir:    ".",
+				Binary: "foo",
+				Targets: []string{
+					runtimeTarget,
+				},
+				GoBinary: "go",
+				BuildDetails: config.BuildDetails{
+					Env: []string{"GO111MODULE={{ .Nope }}"},
+				},
+			},
+		},
+	}
+	ctx := context.New(config)
+	ctx.Git.CurrentTag = "5.6.7"
+	build := ctx.Config.Builds[0]
+	err := Default.Build(ctx, build, api.Options{
+		Target: runtimeTarget,
+		Name:   build.Binary,
+		Path:   filepath.Join(folder, "dist", runtimeTarget, build.Binary),
+		Ext:    "",
+	})
+	testlib.RequireTemplateError(t, err)
 }
 
 func TestBuildCodeInSubdir(t *testing.T) {
@@ -524,7 +581,6 @@ func TestBuildCodeInSubdir(t *testing.T) {
 		Builds: []config.Build{
 			{
 				ID:     "foo",
-				Env:    []string{"GO111MODULE=off"},
 				Dir:    "bar",
 				Binary: "foo",
 				Targets: []string{
@@ -532,6 +588,9 @@ func TestBuildCodeInSubdir(t *testing.T) {
 				},
 				GoBinary: "go",
 				Command:  "build",
+				BuildDetails: config.BuildDetails{
+					Env: []string{"GO111MODULE=off"},
+				},
 			},
 		},
 	}
@@ -555,11 +614,13 @@ func TestBuildWithDotGoDir(t *testing.T) {
 		Builds: []config.Build{
 			{
 				ID:       "foo",
-				Env:      []string{"GO111MODULE=off"},
 				Binary:   "foo",
 				Targets:  []string{runtimeTarget},
 				GoBinary: "go",
 				Command:  "build",
+				BuildDetails: config.BuildDetails{
+					Env: []string{"GO111MODULE=off"},
+				},
 			},
 		},
 	}
@@ -622,7 +683,7 @@ func TestRunInvalidAsmflags(t *testing.T) {
 	err := Default.Build(ctx, ctx.Config.Builds[0], api.Options{
 		Target: runtimeTarget,
 	})
-	require.EqualError(t, err, `template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, err)
 }
 
 func TestRunInvalidGcflags(t *testing.T) {
@@ -646,7 +707,7 @@ func TestRunInvalidGcflags(t *testing.T) {
 	err := Default.Build(ctx, ctx.Config.Builds[0], api.Options{
 		Target: runtimeTarget,
 	})
-	require.EqualError(t, err, `template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, err)
 }
 
 func TestRunInvalidLdflags(t *testing.T) {
@@ -671,7 +732,7 @@ func TestRunInvalidLdflags(t *testing.T) {
 	err := Default.Build(ctx, ctx.Config.Builds[0], api.Options{
 		Target: runtimeTarget,
 	})
-	require.EqualError(t, err, `template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, err)
 }
 
 func TestRunInvalidFlags(t *testing.T) {
@@ -694,7 +755,7 @@ func TestRunInvalidFlags(t *testing.T) {
 	err := Default.Build(ctx, ctx.Config.Builds[0], api.Options{
 		Target: runtimeTarget,
 	})
-	require.EqualError(t, err, `template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, err)
 }
 
 func TestRunPipeWithoutMainFunc(t *testing.T) {
@@ -834,11 +895,13 @@ func TestRunPipeWithMainFuncNotInMainGoFile(t *testing.T) {
 	config := config.Project{
 		Builds: []config.Build{
 			{
-				Env:    []string{"GO111MODULE=off"},
 				Binary: "foo",
 				Hooks:  config.BuildHookConfig{},
 				Targets: []string{
 					runtimeTarget,
+				},
+				BuildDetails: config.BuildDetails{
+					Env: []string{"GO111MODULE=off"},
 				},
 				GoBinary: "go",
 				Command:  "build",
@@ -882,7 +945,7 @@ func TestLdFlagsFullTemplate(t *testing.T) {
 		Env:     map[string]string{"FOO": "123"},
 	}
 	artifact := &artifact.Artifact{Goarch: "amd64"}
-	flags, err := tmpl.New(ctx).WithArtifact(artifact, map[string]string{}).
+	flags, err := tmpl.New(ctx).WithArtifact(artifact).
 		Apply(`-s -w -X main.version={{.Version}} -X main.tag={{.Tag}} -X main.date={{.Date}} -X main.commit={{.Commit}} -X "main.foo={{.Env.FOO}}" -X main.time={{ time "20060102" }} -X main.arch={{.Arch}} -X main.commitDate={{.CommitDate}}`)
 	require.NoError(t, err)
 	require.Contains(t, flags, "-s -w")
@@ -897,15 +960,15 @@ func TestLdFlagsFullTemplate(t *testing.T) {
 }
 
 func TestInvalidTemplate(t *testing.T) {
-	for template, eerr := range map[string]string{
-		"{{ .Nope }":    `template: tmpl:1: unexpected "}" in operand`,
-		"{{.Env.NOPE}}": `template: tmpl:1:6: executing "tmpl" at <.Env.NOPE>: map has no entry for key "NOPE"`,
+	for _, template := range []string{
+		"{{ .Nope }",
+		"{{.Env.NOPE}}",
 	} {
 		t.Run(template, func(t *testing.T) {
 			ctx := context.New(config.Project{})
 			ctx.Git.CurrentTag = "3.4.1"
 			flags, err := tmpl.New(ctx).Apply(template)
-			require.EqualError(t, err, eerr)
+			testlib.RequireTemplateError(t, err)
 			require.Empty(t, flags)
 		})
 	}
@@ -960,10 +1023,8 @@ func TestProcessFlagsInvalid(t *testing.T) {
 		"{{.Version}",
 	}
 
-	expected := `template: tmpl:1: unexpected "}" in operand`
-
 	flags, err := processFlags(ctx, &artifact.Artifact{}, []string{}, source, "-testflag=")
-	require.EqualError(t, err, expected)
+	testlib.RequireTemplateError(t, err)
 	require.Nil(t, flags)
 }
 
@@ -978,7 +1039,6 @@ func TestBuildModTimestamp(t *testing.T) {
 		Builds: []config.Build{
 			{
 				ID:     "foo",
-				Env:    []string{"GO111MODULE=off"},
 				Binary: "bin/foo-{{ .Version }}",
 				Targets: []string{
 					"linux_amd64",
@@ -990,6 +1050,7 @@ func TestBuildModTimestamp(t *testing.T) {
 					"linux_mips64le_softfloat",
 				},
 				BuildDetails: config.BuildDetails{
+					Env:      []string{"GO111MODULE=off"},
 					Asmflags: []string{".=", "all="},
 					Gcflags:  []string{"all="},
 					Flags:    []string{"{{.Env.GO_FLAGS}}"},
@@ -1041,18 +1102,30 @@ func TestBuildModTimestamp(t *testing.T) {
 func TestBuildGoBuildLine(t *testing.T) {
 	requireEqualCmd := func(tb testing.TB, build config.Build, expected []string) {
 		tb.Helper()
-		config := config.Project{
+		cfg := config.Project{
 			Builds: []config.Build{build},
 		}
-		ctx := context.New(config)
+		ctx := context.New(cfg)
 		ctx.Version = "1.2.3"
 		ctx.Git.Commit = "aaa"
 
-		line, err := buildGoBuildLine(ctx, config.Builds[0], api.Options{
-			Path:   config.Builds[0].Binary,
+		options := api.Options{
+			Path:   cfg.Builds[0].Binary,
 			Goos:   "linux",
 			Goarch: "amd64",
-		}, &artifact.Artifact{}, []string{})
+		}
+
+		dets, err := withOverrides(ctx, build, options)
+		require.NoError(t, err)
+
+		line, err := buildGoBuildLine(
+			ctx,
+			build,
+			dets,
+			options,
+			&artifact.Artifact{},
+			[]string{},
+		)
 		require.NoError(t, err)
 		require.Equal(t, expected, line)
 	}
@@ -1175,6 +1248,7 @@ func TestOverrides(t *testing.T) {
 			config.Build{
 				BuildDetails: config.BuildDetails{
 					Ldflags: []string{"original"},
+					Env:     []string{"BAR=foo", "FOO=bar"},
 				},
 				BuildDetailsOverrides: []config.BuildDetailsOverride{
 					{
@@ -1182,6 +1256,7 @@ func TestOverrides(t *testing.T) {
 						Goarch: "amd64",
 						BuildDetails: config.BuildDetails{
 							Ldflags: []string{"overridden"},
+							Env:     []string{"FOO=overridden"},
 						},
 					},
 				},
@@ -1191,9 +1266,8 @@ func TestOverrides(t *testing.T) {
 			},
 		)
 		require.NoError(t, err)
-		require.Equal(t, dets, config.BuildDetails{
-			Ldflags: []string{"overridden"},
-		})
+		require.ElementsMatch(t, dets.Ldflags, []string{"overridden"})
+		require.ElementsMatch(t, dets.Env, []string{"BAR=foo", "FOO=overridden"})
 	})
 
 	t.Run("single sided", func(t *testing.T) {
@@ -1224,6 +1298,7 @@ func TestOverrides(t *testing.T) {
 			Gcflags:  []string{"gcflag1"},
 			Asmflags: []string{"asm1"},
 			Tags:     []string{"tag1"},
+			Env:      []string{},
 		})
 	})
 
@@ -1253,6 +1328,7 @@ func TestOverrides(t *testing.T) {
 		require.Equal(t, dets, config.BuildDetails{
 			Ldflags:  []string{"overridden"},
 			Asmflags: []string{"asm1"},
+			Env:      []string{},
 		})
 	})
 
@@ -1270,7 +1346,7 @@ func TestOverrides(t *testing.T) {
 				Goarch: runtime.GOARCH,
 			},
 		)
-		require.EqualError(t, err, `template: tmpl:1: unexpected "}" in operand`)
+		testlib.RequireTemplateError(t, err)
 	})
 
 	t.Run("with goarm", func(t *testing.T) {
@@ -1299,6 +1375,7 @@ func TestOverrides(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, dets, config.BuildDetails{
 			Ldflags: []string{"overridden"},
+			Env:     []string{},
 		})
 	})
 
@@ -1328,6 +1405,7 @@ func TestOverrides(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, dets, config.BuildDetails{
 			Ldflags: []string{"overridden"},
+			Env:     []string{},
 		})
 	})
 }

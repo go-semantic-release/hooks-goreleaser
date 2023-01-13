@@ -6,10 +6,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	homedir "github.com/mitchellh/go-homedir"
@@ -139,6 +140,7 @@ func checkErrors(ctx *context.Context, noTokens, noTokenErrs bool, gitlabTokenEr
 func loadEnv(env, path string) (string, error) {
 	val := os.Getenv(env)
 	if val != "" {
+		log.Infof("using token from %q", "$"+env)
 		return val, nil
 	}
 	path, err := homedir.Expand(path)
@@ -146,13 +148,14 @@ func loadEnv(env, path string) (string, error) {
 		return "", err
 	}
 	f, err := os.Open(path) // #nosec
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return "", nil
 	}
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
+	log.Infof("using token from %q", path)
 	bts, _, err := bufio.NewReader(f).ReadLine()
 	return string(bts), err
 }

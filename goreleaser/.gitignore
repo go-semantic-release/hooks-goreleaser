@@ -6,11 +6,11 @@ goreleaser
 debug.test
 snap.login
 site/
-www/docs/static/releases*.json
 .vercel
 completions/
 .vscode/
 .task/
 .idea/
 manpages
+output.json
 !/int/pipe/dist

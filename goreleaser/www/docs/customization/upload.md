@@ -20,7 +20,12 @@ uploads:
 Prerequisites:
 
 - An HTTP server accepting HTTP requests
-- A user + password with grants to upload an artifact using HTTP requests for basic authentication (only if the server requires it)
+- A user + password / client x509 certificate / API key with grants to upload an artifact
+
+!!! note
+    authentication is optional and may be provided if the server requires it
+    - user/pass is for Basic Authentication
+    - client x509 certificate is for mutual TLS authentication (aka "mTLS")
 
 ### Target
 
@@ -34,7 +39,8 @@ An example configuration for `goreleaser` in upload mode `binary` with the targe
   target: 'http://some.server/some/path/example-repo-local/{{ .ProjectName }}/{{ .Version }}/{{ .Os }}/{{ .Arch }}{{ if .Arm }}{{ .Arm }}{{ end }}'
 ```
 
-and will result in an HTTP PUT request sent to `http://some.server/some/path/example-repo-local/goreleaser/1.0.0/Darwin/x86_64/goreleaser`.
+and will result in an HTTP PUT request sent to
+`http://some.server/some/path/example-repo-local/goreleaser/1.0.0/Darwin/x86_64/goreleaser`.
 
 Supported variables:
 
@@ -89,10 +95,27 @@ The name will be transformed to uppercase.
 
 This field is optional and is used only for basic http authentication.
 
+### Client authorization with x509 certificate (mTLS / mutual TLS)
+
+If your artifactory server supports authorization with mTLS (client
+certificates), you can provide them by specifying the location of an x509
+certificate/key pair of pem-encode files.
+
+```yaml
+uploads:
+- name: production
+  client_x509_cert: path/to/client.cert.pem
+  client_x509_key: path/to/client.key.pem
+  target: 'http://some.server/some/path/example-repo-local/{{ .ProjectName }}/{{ .Version }}/{{ .Os }}/{{ .Arch }}{{ if .Arm }}{{ .Arm }}{{ end }}'
+```
+
+This will offer the client certificate during the TLS handshake, which your artifactory server may use to authenticate
+and authorize you to upload.
+
 ### Server authentication
 
-You can authenticate your TLS server adding a trusted X.509 certificate chain
-in your upload configuration.
+You can authenticate your TLS server adding a trusted X.509 certificate chain in
+your upload configuration.
 
 The trusted certificate chain will be used to validate the server certificates.
 
@@ -142,7 +165,9 @@ uploads:
     # This might be useful if you have multiple packages with different
     # extensions with the same ID, and need to upload each extension to
     # a different place (e.g. nFPM packages).
-    # Default is empty.
+    #
+    # Default: empty.
+    # Since: v1.7.
     exts:
     - deb
     - rpm
@@ -165,6 +190,11 @@ uploads:
 
     # An optional username that will be used for the deployment for basic authn
     username: deployuser
+
+    # Client certificate and key (when provided, added as client cert to TLS connections)
+    # Since: v1.11.
+    client_x509_cert: /path/to/client.cert.pem
+    client_x509_key: /path/to/client.key.pem
 
     # An optional header you can use to tell GoReleaser to pass the artifact's
     # SHA256 checksum within the upload request.
@@ -191,7 +221,8 @@ uploads:
       -----END CERTIFICATE-----
 ```
 
-These settings should allow you to push your artifacts into multiple HTTP servers.
+These settings should allow you to push your artifacts into multiple HTTP
+servers.
 
 !!! tip
     Learn more about the [name template engine](/customization/templates/).

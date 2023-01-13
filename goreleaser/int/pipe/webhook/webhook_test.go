@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -26,7 +25,7 @@ func TestNoEndpoint(t *testing.T) {
 			Webhook: config.Webhook{},
 		},
 	})
-	require.EqualError(t, Pipe{}.Announce(ctx), `announce: failed to announce to webhook: no endpoint url`)
+	require.EqualError(t, Pipe{}.Announce(ctx), `webhook: no endpoint url`)
 }
 
 func TestMalformedEndpoint(t *testing.T) {
@@ -37,7 +36,7 @@ func TestMalformedEndpoint(t *testing.T) {
 			},
 		},
 	})
-	require.EqualError(t, Pipe{}.Announce(ctx), `announce: failed to announce to webhook: Post "httxxx://example.com": unsupported protocol scheme "httxxx"`)
+	require.EqualError(t, Pipe{}.Announce(ctx), `webhook: Post "httxxx://example.com": unsupported protocol scheme "httxxx"`)
 }
 
 func TestAnnounceInvalidMessageTemplate(t *testing.T) {
@@ -49,7 +48,7 @@ func TestAnnounceInvalidMessageTemplate(t *testing.T) {
 			},
 		},
 	})
-	require.EqualError(t, Pipe{}.Announce(ctx), `announce: failed to announce to webhook: template: tmpl:1: unexpected "}" in operand`)
+	require.EqualError(t, Pipe{}.Announce(ctx), `webhook: template: tmpl:1: unexpected "}" in operand`)
 }
 
 type WebHookServerMockMessage struct {
@@ -180,8 +179,7 @@ func TestAnnounceBasicAuthWebhook(t *testing.T) {
 			},
 		},
 	})
-	os.Setenv("BASIC_AUTH_HEADER_VALUE", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass"))))
-	defer os.Unsetenv("BASIC_AUTH_HEADER_VALUE")
+	t.Setenv("BASIC_AUTH_HEADER_VALUE", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass"))))
 	require.NoError(t, Pipe{}.Announce(ctx))
 }
 

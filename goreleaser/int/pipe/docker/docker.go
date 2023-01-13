@@ -7,9 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/gio"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/pipe"
@@ -22,16 +21,15 @@ import (
 const (
 	dockerConfigExtra = "DockerConfig"
 
-	useBuildx     = "buildx"
-	useDocker     = "docker"
-	useBuildPacks = "buildpacks" // deprecated: should not be used anymore
+	useBuildx = "buildx"
+	useDocker = "docker"
 )
 
 // Pipe for docker.
 type Pipe struct{}
 
 func (Pipe) String() string                 { return "docker images" }
-func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.Dockers) == 0 }
+func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.Dockers) == 0 || ctx.SkipDocker }
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {
@@ -48,14 +46,14 @@ func (Pipe) Default(ctx *context.Context) error {
 		if docker.Goarch == "" {
 			docker.Goarch = "amd64"
 		}
+		if docker.Goarm == "" {
+			docker.Goarm = "6"
+		}
 		if docker.Goamd64 == "" {
 			docker.Goamd64 = "v1"
 		}
 		if docker.Dockerfile == "" {
 			docker.Dockerfile = "Dockerfile"
-		}
-		if docker.Use == useBuildPacks {
-			deprecate.Notice(ctx, "dockers.use: buildpacks")
 		}
 		if docker.Use == "" {
 			docker.Use = useDocker
@@ -88,22 +86,29 @@ func validateImager(use string) error {
 
 // Publish the docker images.
 func (Pipe) Publish(ctx *context.Context) error {
+	skips := pipe.SkipMemento{}
 	images := ctx.Artifacts.Filter(artifact.ByType(artifact.PublishableDockerImage)).List()
 	for _, image := range images {
 		if err := dockerPush(ctx, image); err != nil {
+			if pipe.IsSkip(err) {
+				skips.Remember(err)
+				continue
+			}
 			return err
 		}
 	}
-	return nil
+	return skips.Evaluate()
 }
 
 // Run the pipe.
 func (Pipe) Run(ctx *context.Context) error {
 	g := semerrgroup.NewSkipAware(semerrgroup.New(ctx.Parallelism))
-	for _, docker := range ctx.Config.Dockers {
+	for i, docker := range ctx.Config.Dockers {
+		i := i
 		docker := docker
 		g.Go(func() error {
-			log.WithField("docker", docker).Debug("looking for artifacts matching")
+			log := log.WithField("index", i)
+			log.Debug("looking for artifacts matching")
 			filters := []artifact.Filter{
 				artifact.ByGoos(docker.Goos),
 				artifact.ByGoarch(docker.Goarch),
@@ -137,6 +142,9 @@ func (Pipe) Run(ctx *context.Context) error {
 }
 
 func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.Artifact) error {
+	if len(artifacts) == 0 {
+		log.Warn("not binaries or packages found for the given platform - COPY/ADD may not work")
+	}
 	tmp, err := os.MkdirTemp(ctx.Config.Dist, "goreleaserdocker")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary dir: %w", err)
@@ -154,15 +162,14 @@ func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.A
 	log := log.WithField("image", images[0])
 	log.Debug("tempdir: " + tmp)
 
-	if docker.Use != useBuildPacks {
-		dockerfile, err := tmpl.New(ctx).Apply(docker.Dockerfile)
-		if err != nil {
-			return err
-		}
-		if err := gio.Copy(dockerfile, filepath.Join(tmp, "Dockerfile")); err != nil {
-			return fmt.Errorf("failed to copy dockerfile: %w", err)
-		}
+	dockerfile, err := tmpl.New(ctx).Apply(docker.Dockerfile)
+	if err != nil {
+		return err
 	}
+	if err := gio.Copy(dockerfile, filepath.Join(tmp, "Dockerfile")); err != nil {
+		return fmt.Errorf("failed to copy dockerfile: %w", err)
+	}
+
 	for _, file := range docker.Files {
 		if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(file)), 0o755); err != nil {
 			return fmt.Errorf("failed to copy extra file '%s': %w", file, err)
@@ -187,15 +194,6 @@ func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.A
 		return err
 	}
 
-	if strings.TrimSpace(docker.SkipPush) == "true" {
-		return pipe.Skip("docker.skip_push is set")
-	}
-	if ctx.SkipPublish {
-		return pipe.ErrSkipPublishEnabled
-	}
-	if strings.TrimSpace(docker.SkipPush) == "auto" && ctx.Semver.Prerelease != "" {
-		return pipe.Skip("prerelease detected with 'auto' push, skipping docker publish")
-	}
 	for _, img := range images {
 		ctx.Artifacts.Add(&artifact.Artifact{
 			Type:   artifact.PublishableDockerImage,
@@ -245,10 +243,24 @@ func processBuildFlagTemplates(ctx *context.Context, docker config.Docker) ([]st
 
 func dockerPush(ctx *context.Context, image *artifact.Artifact) error {
 	log.WithField("image", image.Name).Info("pushing")
-	docker := image.Extra[dockerConfigExtra].(config.Docker)
-	if err := imagers[docker.Use].Push(ctx, image.Name, docker.PushFlags); err != nil {
+
+	docker, err := artifact.Extra[config.Docker](*image, dockerConfigExtra)
+	if err != nil {
 		return err
 	}
+
+	if strings.TrimSpace(docker.SkipPush) == "true" {
+		return pipe.Skip("docker.skip_push is set: " + image.Name)
+	}
+	if strings.TrimSpace(docker.SkipPush) == "auto" && ctx.Semver.Prerelease != "" {
+		return pipe.Skip("prerelease detected with 'auto' push, skipping docker publish: " + image.Name)
+	}
+
+	digest, err := imagers[docker.Use].Push(ctx, image.Name, docker.PushFlags)
+	if err != nil {
+		return err
+	}
+
 	art := &artifact.Artifact{
 		Type:   artifact.DockerImage,
 		Name:   image.Name,
@@ -261,6 +273,8 @@ func dockerPush(ctx *context.Context, image *artifact.Artifact) error {
 	if docker.ID != "" {
 		art.Extra[artifact.ExtraID] = docker.ID
 	}
+	art.Extra[artifact.ExtraDigest] = digest
+
 	ctx.Artifacts.Add(art)
 	return nil
 }

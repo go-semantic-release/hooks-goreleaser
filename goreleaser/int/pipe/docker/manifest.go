@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/pipe"
@@ -15,12 +15,14 @@ import (
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
-// ManifestPipe is beta implementation of for the docker manifest feature,
+// ManifestPipe is an implementation for the docker manifest feature,
 // allowing to publish multi-arch docker images.
 type ManifestPipe struct{}
 
-func (ManifestPipe) String() string                 { return "docker manifests" }
-func (ManifestPipe) Skip(ctx *context.Context) bool { return len(ctx.Config.DockerManifests) == 0 }
+func (ManifestPipe) String() string { return "docker manifests" }
+func (ManifestPipe) Skip(ctx *context.Context) bool {
+	return len(ctx.Config.DockerManifests) == 0 || ctx.SkipDocker
+}
 
 // Default sets the pipe defaults.
 func (ManifestPipe) Default(ctx *context.Context) error {
@@ -79,10 +81,15 @@ func (ManifestPipe) Publish(ctx *context.Context) error {
 			if manifest.ID != "" {
 				art.Extra[artifact.ExtraID] = manifest.ID
 			}
-			ctx.Artifacts.Add(art)
 
 			log.WithField("manifest", name).Info("pushing")
-			return manifester.Push(ctx, name, manifest.PushFlags)
+			digest, err := manifester.Push(ctx, name, manifest.PushFlags)
+			if err != nil {
+				return err
+			}
+			art.Extra[artifact.ExtraDigest] = digest
+			ctx.Artifacts.Add(art)
+			return nil
 		})
 	}
 	return g.Wait()
@@ -114,16 +121,30 @@ func manifestName(ctx *context.Context, manifest config.DockerManifest) (string,
 }
 
 func manifestImages(ctx *context.Context, manifest config.DockerManifest) ([]string, error) {
+	artifacts := ctx.Artifacts.Filter(artifact.ByType(artifact.DockerImage)).List()
 	imgs := make([]string, 0, len(manifest.ImageTemplates))
 	for _, img := range manifest.ImageTemplates {
 		str, err := tmpl.New(ctx).Apply(img)
 		if err != nil {
 			return []string{}, err
 		}
-		imgs = append(imgs, str)
+		imgs = append(imgs, withDigest(manifest.Use, str, artifacts))
 	}
 	if strings.TrimSpace(strings.Join(manifest.ImageTemplates, "")) == "" {
 		return imgs, pipe.Skip("manifest has no images")
 	}
 	return imgs, nil
+}
+
+func withDigest(use, name string, images []*artifact.Artifact) string {
+	for _, art := range images {
+		if art.Name == name {
+			if digest := artifact.ExtraOr(*art, artifact.ExtraDigest, ""); digest != "" {
+				return name + "@" + digest
+			}
+			break
+		}
+	}
+	log.Warnf("did not find the digest for %s using %s, defaulting to insecure mode", name, use)
+	return name
 }

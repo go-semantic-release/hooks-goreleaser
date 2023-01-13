@@ -27,18 +27,40 @@ changelog:
   # Default is empty
   sort: asc
 
+  # Max commit hash length to use in the changelog.
+  #
+  # 0: use whatever the changelog implementation gives you
+  # -1: remove the commit hash from the changelog
+  # any other number: max length.
+  #
+  # Default: 0.
+  # Since: v1.11.2
+  abbrev: -1
+
+  # Paths to filter the commits for.
+  # Only works when `use: git`, otherwise ignored.
+  # Only on GoReleaser Pro.
+  #
+  # Default: monorepo.dir value, or empty if no monorepo.
+  # Since: v1.12.0-pro
+  paths:
+  - foo/
+  - bar/
+
   # Group commits messages by given regex and title.
   # Order value defines the order of the groups.
   # Proving no regex means all commits will be grouped under the default group.
   # Groups are disabled when using github-native, as it already groups things by itself.
+  # Matches are performed against strings of the form: "<abbrev-commit>[:] <title-commit>".
+  # Regex use RE2 syntax as defined here: https://github.com/google/re2/wiki/Syntax.
   #
   # Default is no groups.
   groups:
     - title: Features
-      regexp: "^.*feat[(\\w)]*:+.*$"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
       order: 0
     - title: 'Bug fixes'
-      regexp: "^.*fix[(\\w)]*:+.*$"
+      regexp: '^.*?bug(\([[:word:]]+\))??!?:.+$'
       order: 1
     - title: Others
       order: 999

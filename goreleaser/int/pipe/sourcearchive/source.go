@@ -2,12 +2,19 @@
 package sourcearchive
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
+	"github.com/goreleaser/goreleaser/int/archivefiles"
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/tmpl"
+	"github.com/goreleaser/goreleaser/pkg/archive"
+	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
@@ -31,20 +38,59 @@ func (Pipe) Run(ctx *context.Context) (err error) {
 	filename := name + "." + ctx.Config.Source.Format
 	path := filepath.Join(ctx.Config.Dist, filename)
 	log.WithField("file", filename).Info("creating source archive")
-	args := []string{
-		"archive",
-		"-o", path,
+
+	out, err := git.Run(ctx, "ls-files")
+	if err != nil {
+		return fmt.Errorf("could not list source files: %w", err)
 	}
-	if ctx.Config.Source.PrefixTemplate != "" {
-		prefix, err := tmpl.New(ctx).Apply(ctx.Config.Source.PrefixTemplate)
-		if err != nil {
-			return err
+
+	prefix, err := tmpl.New(ctx).Apply(ctx.Config.Source.PrefixTemplate)
+	if err != nil {
+		return err
+	}
+
+	af, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("could not create archive: %w", err)
+	}
+	defer af.Close() //nolint:errcheck
+
+	arch, err := archive.New(af, ctx.Config.Source.Format)
+	if err != nil {
+		return err
+	}
+
+	var ff []config.File
+	for _, f := range strings.Split(out, "\n") {
+		if strings.TrimSpace(f) == "" {
+			continue
 		}
-		args = append(args, "--prefix", prefix)
+		ff = append(ff, config.File{
+			Source: f,
+		})
 	}
-	args = append(args, ctx.Git.FullCommit)
-	out, err := git.Clean(git.Run(ctx, args...))
-	log.Debug(out)
+	files, err := archivefiles.Eval(
+		tmpl.New(ctx),
+		ctx.Config.Source.RLCP,
+		append(ff, ctx.Config.Source.Files...),
+	)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		f.Destination = filepath.Join(prefix, f.Destination)
+		if err := arch.Add(f); err != nil {
+			return fmt.Errorf("could not add %q to archive: %w", f.Source, err)
+		}
+	}
+
+	if err := arch.Close(); err != nil {
+		return fmt.Errorf("could not close archive file: %w", err)
+	}
+	if err := af.Close(); err != nil {
+		return fmt.Errorf("could not close archive file: %w", err)
+	}
+
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Type: artifact.UploadableSourceArchive,
 		Name: filename,
@@ -65,6 +111,10 @@ func (Pipe) Default(ctx *context.Context) error {
 
 	if archive.NameTemplate == "" {
 		archive.NameTemplate = "{{ .ProjectName }}-{{ .Version }}"
+	}
+
+	if archive.Enabled && !archive.RLCP {
+		deprecate.NoticeCustom(ctx, "source.rlcp", "`{{ .Property }}` will be the default soon, check {{ .URL }} for more info")
 	}
 	return nil
 }

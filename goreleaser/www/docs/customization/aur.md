@@ -1,6 +1,8 @@
 # Arch User Repositories
 
-After releasing to GitHub or GitLab, GoReleaser can generate and publish
+Since: v1.4.
+
+After releasing to GitHub, GitLab, or Gitea, GoReleaser can generate and publish
 a `PKGBUILD` to an _Arch User Repository_.
 
 !!! warning
@@ -54,18 +56,19 @@ aurs:
     # The SSH private key that should be used to commit to the Git repository.
     # This can either be a path or the key contents.
     #
-    # WARNING: do not expose your private key in the config file!
+    # WARNING: do not expose your private key in the configuration file!
     private_key: '{{ .Env.AUR_KEY }}'
 
     # The AUR Git URL for this package.
-    # Defaults to empty.
+    # Defaults to empty
+    # Publish is skipped if empty.
     git_url: 'ssh://aur@aur.archlinux.org/mypackage-bin.git'
 
     # Setting this will prevent goreleaser to actually try to commit the updated
     # formula - instead, the formula file will be stored on the dist folder only,
     # leaving the responsibility of publishing it to the user.
     #
-    # If set to auto, the release will not be uploaded to the homebrew tap
+    # If set to auto, the release will not be uploaded to the AUR repo
     # in case there is an indicator for prerelease in the tag e.g. v1.0.0-rc1.
     #
     # Default is false.
@@ -97,6 +100,14 @@ aurs:
     # Defaults to empty.
     optdepends:
       - 'wget: for downloading things'
+
+    # List of files that can contain user-made changes and should be preserved
+    # during package upgrades and removals.
+    #
+    # Default: empty.
+    # Since: v1.12
+    backup:
+      - /etc/foo.conf
 
     # Custom package instructions.
     #

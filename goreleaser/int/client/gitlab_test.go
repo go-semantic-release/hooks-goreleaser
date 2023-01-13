@@ -546,3 +546,59 @@ func TestCloseMileston(t *testing.T) {
 	err = client.CloseMilestone(ctx, repo, "never-will-exist")
 	require.Error(t, err)
 }
+
+func TestCheckUseJobToken(t *testing.T) {
+	tests := []struct {
+		useJobToken bool
+		token       string
+		ciToken     string
+		want        bool
+		desc        string
+		name        string
+	}{
+		{
+			useJobToken: true,
+			token:       "real-ci-token",
+			ciToken:     "real-ci-token",
+			desc:        "token and CI_JOB_TOKEN match so should return true",
+			want:        true,
+			name:        "UseJobToken-tokens-equal",
+		},
+		{
+			useJobToken: true,
+			token:       "some-random-token",
+			ciToken:     "real-ci-token",
+			desc:        "token and CI_JOB_TOKEN do NOT match so should return false",
+			want:        false,
+			name:        "UseJobToken-tokens-diff",
+		},
+		{
+			useJobToken: false,
+			token:       "real-ci-token",
+			ciToken:     "real-ci-token",
+			desc:        "token and CI_JOB_TOKEN match, however UseJobToken is set to false, so return false",
+			want:        false,
+			name:        "NoUseJobToken-tokens-equal",
+		},
+		{
+			useJobToken: false,
+			token:       "real-ci-token",
+			ciToken:     "real-ci-token",
+			desc:        "token and CI_JOB_TOKEN do not match, and UseJobToken is set to false, should return false",
+			want:        false,
+			name:        "NoUseJobToken-tokens-diff",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CI_JOB_TOKEN", tt.ciToken)
+			ctx := context.New(config.Project{
+				GitLabURLs: config.GitLabURLs{
+					UseJobToken: tt.useJobToken,
+				},
+			})
+			got := checkUseJobToken(*ctx, tt.token)
+			require.Equal(t, tt.want, got, tt.desc)
+		})
+	}
+}

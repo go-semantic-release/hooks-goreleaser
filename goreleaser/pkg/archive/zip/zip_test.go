@@ -2,6 +2,7 @@ package zip
 
 import (
 	"archive/zip"
+	"bytes"
 	"io"
 	"io/fs"
 	"os"
@@ -79,13 +80,19 @@ func TestZipFile(t *testing.T) {
 	paths := make([]string, len(r.File))
 	for i, zf := range r.File {
 		paths[i] = zf.Name
-		t.Logf("%s: %v", zf.Name, zf.Mode())
 		if zf.Name == "sub1/executable" {
 			ex := zf.Mode() | 0o111
 			require.Equal(t, zf.Mode().String(), ex.String())
 		}
 		if zf.Name == "link.txt" {
 			require.True(t, zf.FileInfo().Mode()&os.ModeSymlink != 0)
+			rc, err := zf.Open()
+			require.NoError(t, err)
+			var link bytes.Buffer
+			_, err = io.Copy(&link, rc)
+			require.NoError(t, err)
+			rc.Close()
+			require.Equal(t, link.String(), "regular.txt")
 		}
 	}
 	require.Equal(t, []string{
@@ -110,10 +117,10 @@ func TestZipFileInfo(t *testing.T) {
 		Source:      "../testdata/foo.txt",
 		Destination: "nope.txt",
 		Info: config.FileInfo{
-			Mode:  0o755,
-			Owner: "carlos",
-			Group: "root",
-			MTime: now,
+			Mode:        0o755,
+			Owner:       "carlos",
+			Group:       "root",
+			ParsedMTime: now,
 		},
 	}))
 

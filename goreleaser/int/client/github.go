@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/apex/log"
-	"github.com/google/go-github/v44/github"
+	"github.com/caarlos0/log"
+	"github.com/google/go-github/v48/github"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -65,8 +65,8 @@ func (c *githubClient) GenerateReleaseNotes(ctx *context.Context, repo Repo, pre
 
 func (c *githubClient) Changelog(ctx *context.Context, repo Repo, prev, current string) (string, error) {
 	var log []string
-
 	opts := &github.ListOptions{PerPage: 100}
+
 	for {
 		result, resp, err := c.client.Repositories.CompareCommits(ctx, repo.Owner, repo.Name, prev, current, opts)
 		if err != nil {
@@ -83,7 +83,6 @@ func (c *githubClient) Changelog(ctx *context.Context, repo Repo, prev, current 
 		if resp.NextPage == 0 {
 			break
 		}
-
 		opts.Page = resp.NextPage
 	}
 
@@ -201,10 +200,15 @@ func (c *githubClient) CreateFile(
 }
 
 func (c *githubClient) CreateRelease(ctx *context.Context, body string) (string, error) {
-	var release *github.RepositoryRelease
 	title, err := tmpl.New(ctx).Apply(ctx.Config.Release.NameTemplate)
 	if err != nil {
 		return "", err
+	}
+
+	if ctx.Config.Release.Draft && ctx.Config.Release.ReplaceExistingDraft {
+		if err := c.deleteExistingDraftRelease(ctx, title); err != nil {
+			return "", err
+		}
 	}
 
 	// Truncate the release notes if it's too long (github doesn't allow more than 125000 characters)
@@ -217,39 +221,73 @@ func (c *githubClient) CreateRelease(ctx *context.Context, body string) (string,
 		Draft:      github.Bool(ctx.Config.Release.Draft),
 		Prerelease: github.Bool(ctx.PreRelease),
 	}
+
 	if ctx.Config.Release.DiscussionCategoryName != "" {
 		data.DiscussionCategoryName = github.String(ctx.Config.Release.DiscussionCategoryName)
 	}
 
-	release, _, err = c.client.Repositories.GetReleaseByTag(
+	if target := ctx.Config.Release.TargetCommitish; target != "" {
+		target, err := tmpl.New(ctx).Apply(target)
+		if err != nil {
+			return "", err
+		}
+		if target != "" {
+			data.TargetCommitish = github.String(target)
+		}
+	}
+
+	release, err := c.createOrUpdateRelease(ctx, data, body)
+	if err != nil {
+		return "", fmt.Errorf("could not release: %w", err)
+	}
+
+	return strconv.FormatInt(release.GetID(), 10), nil
+}
+
+func (c *githubClient) createOrUpdateRelease(ctx *context.Context, data *github.RepositoryRelease, body string) (*github.RepositoryRelease, error) {
+	release, _, err := c.client.Repositories.GetReleaseByTag(
 		ctx,
 		ctx.Config.Release.GitHub.Owner,
 		ctx.Config.Release.GitHub.Name,
-		ctx.Git.CurrentTag,
+		data.GetTagName(),
 	)
 	if err != nil {
-		release, _, err = c.client.Repositories.CreateRelease(
+		release, resp, err := c.client.Repositories.CreateRelease(
 			ctx,
 			ctx.Config.Release.GitHub.Owner,
 			ctx.Config.Release.GitHub.Name,
 			data,
 		)
-	} else {
-		data.Body = github.String(getReleaseNotes(release.GetBody(), body, ctx.Config.Release.ReleaseNotesMode))
-		release, _, err = c.client.Repositories.EditRelease(
-			ctx,
-			ctx.Config.Release.GitHub.Owner,
-			ctx.Config.Release.GitHub.Name,
-			release.GetID(),
-			data,
-		)
-	}
-	if err != nil {
-		log.WithField("url", release.GetHTMLURL()).Info("release updated")
+		if err == nil {
+			log.WithFields(log.Fields{
+				"name":       data.GetName(),
+				"release-id": release.GetID(),
+				"request-id": resp.Header.Get("X-GitHub-Request-Id"),
+			}).Info("release created")
+		}
+		return release, err
 	}
 
-	githubReleaseID := strconv.FormatInt(release.GetID(), 10)
-	return githubReleaseID, err
+	data.Body = github.String(getReleaseNotes(release.GetBody(), body, ctx.Config.Release.ReleaseNotesMode))
+	return c.updateRelease(ctx, release.GetID(), data)
+}
+
+func (c *githubClient) updateRelease(ctx *context.Context, id int64, data *github.RepositoryRelease) (*github.RepositoryRelease, error) {
+	release, resp, err := c.client.Repositories.EditRelease(
+		ctx,
+		ctx.Config.Release.GitHub.Owner,
+		ctx.Config.Release.GitHub.Name,
+		id,
+		data,
+	)
+	if err == nil {
+		log.WithFields(log.Fields{
+			"name":       data.GetName(),
+			"release-id": release.GetID(),
+			"request-id": resp.Header.Get("X-GitHub-Request-Id"),
+		}).Info("release updated")
+	}
+	return release, err
 }
 
 func (c *githubClient) ReleaseURLTemplate(ctx *context.Context) (string, error) {
@@ -286,6 +324,17 @@ func (c *githubClient) Upload(
 		},
 		file,
 	)
+	if err != nil {
+		requestID := ""
+		if resp != nil {
+			requestID = resp.Header.Get("X-GitHub-Request-Id")
+		}
+		log.WithFields(log.Fields{
+			"name":       artifact.Name,
+			"release-id": releaseID,
+			"request-id": requestID,
+		}).Warn("upload failed")
+	}
 	if err == nil {
 		return nil
 	}
@@ -356,4 +405,44 @@ func overrideGitHubClientAPI(ctx *context.Context, client *github.Client) error 
 	client.UploadURL = upload
 
 	return nil
+}
+
+func (c *githubClient) deleteExistingDraftRelease(ctx *context.Context, name string) error {
+	opt := github.ListOptions{PerPage: 50}
+	for {
+		releases, resp, err := c.client.Repositories.ListReleases(
+			ctx,
+			ctx.Config.Release.GitHub.Owner,
+			ctx.Config.Release.GitHub.Name,
+			&opt,
+		)
+		if err != nil {
+			return fmt.Errorf("could not delete existing drafts: %w", err)
+		}
+		for _, r := range releases {
+			if r.GetDraft() && r.GetName() == name {
+				if _, err := c.client.Repositories.DeleteRelease(
+					ctx,
+					ctx.Config.Release.GitHub.Owner,
+					ctx.Config.Release.GitHub.Name,
+					r.GetID(),
+				); err != nil {
+					return fmt.Errorf("could not delete previous draft release: %w", err)
+				}
+
+				log.WithFields(log.Fields{
+					"commit": r.GetTargetCommitish(),
+					"tag":    r.GetTagName(),
+					"name":   r.GetName(),
+				}).Info("deleted previous draft release")
+
+				// in theory, there should be only 1 release matching, so we can just return
+				return nil
+			}
+		}
+		if resp.NextPage == 0 {
+			return nil
+		}
+		opt.Page = resp.NextPage
+	}
 }

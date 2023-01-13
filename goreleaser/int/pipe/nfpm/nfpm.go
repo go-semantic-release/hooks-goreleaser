@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/ids"
@@ -22,9 +22,10 @@ import (
 	"github.com/goreleaser/nfpm/v2/files"
 	"github.com/imdario/mergo"
 
-	_ "github.com/goreleaser/nfpm/v2/apk" // blank import to register the format
-	_ "github.com/goreleaser/nfpm/v2/deb" // blank import to register the format
-	_ "github.com/goreleaser/nfpm/v2/rpm" // blank import to register the format
+	_ "github.com/goreleaser/nfpm/v2/apk"  // blank import to register the format
+	_ "github.com/goreleaser/nfpm/v2/arch" // blank import to register the format
+	_ "github.com/goreleaser/nfpm/v2/deb"  // blank import to register the format
+	_ "github.com/goreleaser/nfpm/v2/rpm"  // blank import to register the format
 )
 
 const (
@@ -55,11 +56,11 @@ func (Pipe) Default(ctx *context.Context) error {
 		if fpm.FileNameTemplate == "" {
 			fpm.FileNameTemplate = defaultNameTemplate
 		}
-		if len(fpm.EmptyFolders) > 0 {
-			deprecate.Notice(ctx, "nfpms.empty_folders")
-		}
 		if fpm.Maintainer == "" {
-			deprecate.Notice(ctx, "nfpms.maintainer")
+			deprecate.NoticeCustom(ctx, "nfpms.maintainer", "`{{ .Property }}` should always be set, check {{ .URL }} for more info")
+		}
+		if len(fpm.Replacements) != 0 {
+			deprecate.Notice(ctx, "nfpms.replacements")
 		}
 		ids.Inc(fpm.ID)
 	}
@@ -85,7 +86,10 @@ func (Pipe) Run(ctx *context.Context) error {
 func doRun(ctx *context.Context, fpm config.NFPM) error {
 	filters := []artifact.Filter{
 		artifact.ByType(artifact.Binary),
-		artifact.ByGoos("linux"),
+		artifact.Or(
+			artifact.ByGoos("linux"),
+			artifact.ByGoos("ios"),
+		),
 	}
 	if len(fpm.Builds) > 0 {
 		filters = append(filters, artifact.ByIDs(fpm.Builds...))
@@ -124,24 +128,57 @@ func mergeOverrides(fpm config.NFPM, format string) (*config.NFPMOverridables, e
 	return &overridden, nil
 }
 
+const termuxFormat = "termux.deb"
+
+func isSupportedTermuxArch(arch string) bool {
+	for _, a := range []string{"amd64", "arm64", "386"} {
+		if strings.HasPrefix(arch, a) {
+			return true
+		}
+	}
+	return false
+}
+
 func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*artifact.Artifact) error {
 	// TODO: improve mips handling on nfpm
 	infoArch := binaries[0].Goarch + binaries[0].Goarm + binaries[0].Gomips // key used for the ConventionalFileName et al
 	arch := infoArch + binaries[0].Goamd64                                  // unique arch key
+	infoPlatform := binaries[0].Goos
+	if infoPlatform == "ios" {
+		infoPlatform = "iphoneos-arm64"
+	}
+
+	bindDir := fpm.Bindir
+	if format == termuxFormat {
+		if !isSupportedTermuxArch(arch) {
+			log.Debugf("skipping termux.deb for %s as its not supported by termux", arch)
+			return nil
+		}
+
+		replacer := strings.NewReplacer(
+			"386", "i686",
+			"amd64", "x86_64",
+			"arm64", "aarch64",
+		)
+		infoArch = replacer.Replace(infoArch)
+		arch = replacer.Replace(arch)
+		bindDir = filepath.Join("/data/data/com.termux/files", bindDir)
+	}
 
 	overridden, err := mergeOverrides(fpm, format)
 	if err != nil {
 		return err
 	}
+	// nolint:staticcheck
 	t := tmpl.New(ctx).
-		WithArtifact(binaries[0], overridden.Replacements).
+		WithArtifactReplacements(binaries[0], overridden.Replacements).
 		WithExtraFields(tmpl.Fields{
 			"Release":     fpm.Release,
 			"Epoch":       fpm.Epoch,
 			"PackageName": fpm.PackageName,
 		})
 
-	binDir, err := t.Apply(fpm.Bindir)
+	binDir, err := t.Apply(bindDir)
 	if err != nil {
 		return err
 	}
@@ -241,7 +278,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 
 	info := &nfpm.Info{
 		Arch:            infoArch,
-		Platform:        "linux",
+		Platform:        infoPlatform,
 		Name:            fpm.PackageName,
 		Version:         ctx.Version,
 		Section:         fpm.Section,
@@ -255,14 +292,15 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 		Vendor:          fpm.Vendor,
 		Homepage:        homepage,
 		License:         fpm.License,
+		Changelog:       fpm.Changelog,
 		Overridables: nfpm.Overridables{
-			Conflicts:    overridden.Conflicts,
-			Depends:      overridden.Dependencies,
-			Recommends:   overridden.Recommends,
-			Suggests:     overridden.Suggests,
-			Replaces:     overridden.Replaces,
-			EmptyFolders: overridden.EmptyFolders,
-			Contents:     contents,
+			Conflicts:  overridden.Conflicts,
+			Depends:    overridden.Dependencies,
+			Recommends: overridden.Recommends,
+			Provides:   overridden.Provides,
+			Suggests:   overridden.Suggests,
+			Replaces:   overridden.Replaces,
+			Contents:   contents,
 			Scripts: nfpm.Scripts{
 				PreInstall:  overridden.Scripts.PreInstall,
 				PostInstall: overridden.Scripts.PostInstall,
@@ -270,6 +308,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 				PostRemove:  overridden.Scripts.PostRemove,
 			},
 			Deb: nfpm.Deb{
+				// TODO: Compression, Fields
 				Scripts: nfpm.DebScripts{
 					Rules:     overridden.Deb.Scripts.Rules,
 					Templates: overridden.Deb.Scripts.Templates,
@@ -287,6 +326,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 					PackageSignature: nfpm.PackageSignature{
 						KeyFile:       debKeyFile,
 						KeyPassphrase: getPassphraseFromEnv(ctx, "DEB", fpm.ID),
+						// TODO: Method, Type, KeyID
 					},
 					Type: overridden.Deb.Signature.Type,
 				},
@@ -299,6 +339,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 					PackageSignature: nfpm.PackageSignature{
 						KeyFile:       rpmKeyFile,
 						KeyPassphrase: getPassphraseFromEnv(ctx, "RPM", fpm.ID),
+						// TODO: KeyID
 					},
 				},
 				Scripts: nfpm.RPMScripts{
@@ -319,6 +360,14 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 					PostUpgrade: overridden.APK.Scripts.PostUpgrade,
 				},
 			},
+			ArchLinux: nfpm.ArchLinux{
+				Pkgbase:  overridden.ArchLinux.Pkgbase,
+				Packager: overridden.ArchLinux.Packager,
+				Scripts: nfpm.ArchLinuxScripts{
+					PreUpgrade:  overridden.ArchLinux.Scripts.PreUpgrade,
+					PostUpgrade: overridden.ArchLinux.Scripts.PostUpgrade,
+				},
+			},
 		},
 	}
 
@@ -328,7 +377,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 		info.Deb.Signature = nfpm.DebSignature{}
 	}
 
-	packager, err := nfpm.Get(format)
+	packager, err := nfpm.Get(strings.Replace(format, "termux.", "", 1))
 	if err != nil {
 		return err
 	}
@@ -340,8 +389,16 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 	if err != nil {
 		return err
 	}
-	if !strings.HasSuffix(name, "."+format) {
-		name = name + "." + format
+
+	ext := "." + format
+	if packager, ok := packager.(nfpm.PackagerWithExtension); ok {
+		if format != "termux.deb" {
+			ext = packager.ConventionalExtension()
+		}
+	}
+
+	if !strings.HasSuffix(name, ext) {
+		name = name + ext
 	}
 
 	path := filepath.Join(ctx.Config.Dist, name)
@@ -353,7 +410,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 	defer w.Close()
 
 	if err := packager.Package(info, w); err != nil {
-		return fmt.Errorf("nfpm failed: %w", err)
+		return fmt.Errorf("nfpm failed for %s: %w", name, err)
 	}
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("could not close package file: %w", err)

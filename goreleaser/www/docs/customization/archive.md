@@ -27,7 +27,9 @@ archives:
 
     # This will create an archive without any binaries, only the files are there.
     # The name template must not contain any references to `Os`, `Arch` and etc, since the archive will be meta.
-    # Defaul is false.
+    #
+    # Default: false.
+    # Since: v1.9.
     meta: true
 
     # Archive name template.
@@ -38,23 +40,44 @@ archives:
     #   - `{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}`
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
-    # Replacements for GOOS and GOARCH in the archive name.
-    # Keys should be valid GOOSs or GOARCHs.
-    # Values are the respective replacements.
-    # Default is empty.
-    replacements:
-      amd64: 64-bit
-      386: 32-bit
-      darwin: macOS
-      linux: Tux
+    # Sets the given file info to all the binaries included from the `builds`.
+    #
+    # Default is to use the actual binary properties.
+    #
+    # Since: v1.14.0.
+    builds_info:
+      group: root
+      owner: root
+      mode: 0644
+      # format is `time.RFC3339Nano`
+      mtime: 2008-01-02T15:04:05Z
 
-    # Set to true, if you want all files in the archive to be in a single directory.
+
+    # Set this to true if you want all files in the archive to be in a single directory.
     # If set to true and you extract the archive 'goreleaser_Linux_arm64.tar.gz',
-    # you get a folder 'goreleaser_Linux_arm64'.
+    # you'll get a folder 'goreleaser_Linux_arm64'.
     # If set to false, all files are extracted separately.
     # You can also set it to a custom folder name (templating is supported).
     # Default is false.
     wrap_in_directory: true
+
+    # If set to true, will strip the parent directories away from binary files.
+    #
+    # This might be useful if you have your binary be built with a subdir for some reason, but do no want that subdir inside the archive.
+    #
+    # Default: false.
+    # Since: v1.11.
+    strip_parent_binary_folder: true
+
+
+    # This will make the destination paths be relative to the longest common
+    # path prefix between all the files matched and the source glob.
+    # Enabling this essentially mimic the behavior of nfpm's contents section.
+    # It will be the default by June 2023.
+    #
+    # Default: false
+    # Since: v1.14.
+    rlcp: true
 
     # Can be used to change the archive formats for specific GOOSs.
     # Most common use case is to archive as zip on Windows.
@@ -76,23 +99,57 @@ archives:
       # a more complete example, check the globbing deep dive below
       - src: '*.md'
         dst: docs
+
         # Strip parent folders when adding files to the archive.
         # Default: false
         strip_parent: true
+
         # File info.
         # Not all fields are supported by all formats available formats.
         # Defaults to the file info of the actual file if not provided.
         info:
+          # Templateable (since v1.14.0)
           owner: root
+
+          # Templateable (since v1.14.0)
           group: root
+
+          # Must be in time.RFC3339Nano format.
+          # Templateable (since v1.14.0)
+          mtime: '{{ .CommitDate }}'
+
+          # File mode.
           mode: 0644
-          # format is `time.RFC3339Nano`
-          mtime: 2008-01-02T15:04:05Z
+
+    # Before and after hooks for each archive.
+    # Skipped if archive format is binary.
+    # This feature is available in [GoReleaser Pro](/pro) only.
+    hooks:
+      before:
+      - make clean # simple string
+      - cmd: go generate ./... # specify cmd
+      - cmd: go mod tidy
+        output: true # always prints command output
+        dir: ./submodule # specify command working directory
+      - cmd: touch {{ .Env.FILE_TO_TOUCH }}
+        env:
+        - 'FILE_TO_TOUCH=something-{{ .ProjectName }}' # specify hook level environment variables
+
+      after:
+      - make clean
+      - cmd: cat *.yaml
+        dir: ./submodule
+      - cmd: touch {{ .Env.RELEASE_DONE }}
+        env:
+        - 'RELEASE_DONE=something-{{ .ProjectName }}' # specify hook level environment variables
 
     # Disables the binary count check.
     # Default: false
     allow_different_binary_count: true
 ```
+
+!!! success "GoReleaser Pro"
+    Archive hooks is a [GoReleaser Pro feature](/pro/).
 
 !!! tip
     Learn more about the [name template engine](/customization/templates/).
@@ -141,9 +198,6 @@ files:
   strip_parent: true
 # ...
 ```
-
-!!! warning
-    `strip_parent` is only effective if `dst` is not empty.
 
 ## Packaging only the binaries
 

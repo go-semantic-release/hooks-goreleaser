@@ -2,7 +2,7 @@
 package milestone
 
 import (
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/pipe"

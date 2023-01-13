@@ -1,10 +1,10 @@
 # Scoop Manifests
 
-After releasing to GitHub or GitLab, GoReleaser can generate and publish a
+After releasing to GitHub, GitLab, or Gitea, GoReleaser can generate and publish a
 _Scoop App Manifest_ into a repository that you have access to.
 
-The `scoop` section specifies how the manifest should be created. See
-the commented example below:
+The `scoop` section specifies how the manifest should be created. See the
+commented example below:
 
 ```yaml
 # .goreleaser.yaml
@@ -17,14 +17,19 @@ scoop:
 
   # Repository to push the app manifest to.
   bucket:
+    # Repository owner template. (templateable)
     owner: user
+
+    # Repository name. (templateable)
     name: scoop-bucket
 
-    # Optionally a branch can be provided.
+    # Optionally a branch can be provided. (templateable)
+    #
     # Defaults to the default repository branch.
     branch: main
 
-    # Optionally a token can be provided, if it differs from the token provided to GoReleaser
+    # Optionally a token can be provided, if it differs from the token provided
+    # to GoReleaser
     token: "{{ .Env.SCOOP_TAP_GITHUB_TOKEN }}"
 
   # Folder inside the repository to put the scoop.
@@ -79,7 +84,7 @@ scoop:
 ```
 
 By defining the `scoop` section, GoReleaser will take care of publishing the
-Scoop app. Assuming that the project name is `drumroll` and the current tag is
+Scoop app. Assuming that the project name is `drumroll`, and the current tag is
 `v1.2.3`, the above configuration will generate a `drumroll.json` manifest in
 the root of the repository specified in the `bucket` section.
 

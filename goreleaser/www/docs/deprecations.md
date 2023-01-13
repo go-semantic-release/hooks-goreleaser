@@ -36,6 +36,166 @@ Description.
 
 -->
 
+
+### archives.rlcp
+
+> since 2022-12-23 (v1.14.0)
+
+This is not so much a deprecation property (yet), as it is a default behavior
+change.
+
+The usage of relative longest common path (`rlcp`) on the destination side of
+archive files will be enabled by default by June 2023. Then, this option will be
+deprecated, and you will have another 6 months (until December 2023) to remove
+it.
+
+For now, if you want to keep the old behavior, no action is required, but it
+would be nice to have your opinion [here][rlcp-discuss].
+
+[rlcp-discuss]: https://github.com/goreleaser/goreleaser/discussions/3659
+
+If you want to make sure your releases will keep working properly, you can
+enable this option and test it out with
+`goreleaser release --snapshot --rm-dist`.
+
+=== "After"
+    ``` yaml
+    archives:
+    -
+      rlcp: true
+    ```
+
+### source.rlcp
+
+> since 2022-12-23 (v1.14.0)
+
+Same as [`archives.rlcp`](#archivesrlcp).
+
+=== "After"
+    ``` yaml
+    source:
+      rlcp: true
+    ```
+
+### archives.replacements
+
+> since 2022-11-24 (v1.14.0)
+
+The `replacements` will be removed soon from the archives section, as it was
+never handled correctly when multiple archives were being used, and it also
+causes confusion in other places.
+
+You can still get the same features by abusing the `name_template` property.
+
+=== "Before"
+
+    ``` yaml
+    archives:
+      - id: foo
+        name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+        replacements:
+          darwin: Darwin
+          linux: Linux
+          windows: Windows
+          386: i386
+          amd64: x86_64
+    ```
+
+=== "After"
+    ``` yaml
+    archives:
+      - id: foo
+        name_template: >-
+          {{ .ProjectName }}_
+          {{- title .Os }}_
+          {{- if eq .Arch "amd64" }}x86_64
+          {{- else if eq .Arch "386" }}i386
+          {{- else }}{{ .Arch }}{{ end }}
+    ```
+
+Those two configurations will yield the same results.
+
+
+### nfpms.replacements
+
+> since 2022-11-24 (v1.14.0)
+
+The `replacements` will be removed soon from the nFPMs section.
+
+You can still get the same features by abusing the `file_name_template` property.
+
+=== "Before"
+
+    ``` yaml
+    nfpms:
+      - id: foo
+        file_name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+        replacements:
+          darwin: Darwin
+          linux: Linux
+          windows: Windows
+          386: i386
+          amd64: x86_64
+    ```
+
+=== "After"
+    ``` yaml
+    nfpms:
+      - id: foo
+        file_name_template: >-
+          {{ .ProjectName }}_
+          {{- title .Os }}_
+          {{- if eq .Arch "amd64" }}x86_64
+          {{- else if eq .Arch "386" }}i386
+          {{- else }}{{ .Arch }}{{ end }}
+    ```
+
+Those two configurations will yield the same results.
+
+Generally speaking, is probably best to use `{{ .ConventionalFileName }}`
+instead of custom templates.
+
+### snapcrafts.replacements
+
+> since 2022-11-24 (v1.14.0)
+
+The `replacements` will be removed soon from the Snapcrafts section.
+
+You can still get the same features by abusing the `name_template` property.
+
+=== "Before"
+
+    ``` yaml
+    snapcrafts:
+      - id: foo
+        name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+        replacements:
+          darwin: Darwin
+          linux: Linux
+          windows: Windows
+          386: i386
+          amd64: x86_64
+    ```
+
+=== "After"
+    ``` yaml
+    snapcrafts:
+      - id: foo
+        name_template: >-
+          {{ .ProjectName }}_
+          {{- title .Os }}_
+          {{- if eq .Arch "amd64" }}x86_64
+          {{- else if eq .Arch "386" }}i386
+          {{- else }}{{ .Arch }}{{ end }}
+    ```
+
+Those two configurations will yield the same results.
+
+Generally speaking, is probably best to use `{{ .ConventionalFileName }}`
+instead of custom templates.
+
+
+
 ### nfpms.maintainer
 
 > since 2022-05-07 (v1.9.0)
@@ -53,23 +213,6 @@ nFPM will soon make mandatory setting the maintainer field.
     nfpms:
     - maintainer: 'Name <email>'
     ```
-
-
-### rigs
-
-> since 2022-03-21 (v1.8.0)
-
-GoFish was deprecated by their authors, therefore, we're removing its
-support from GoReleaser too.
-
-### dockers.use: buildpacks
-
-> since 2022-03-16 (v1.7.0)
-
-This will be removed soon due to some issues:
-
-- The binary gets rebuild again during the buildpacks build;
-- There is no ARM support.
 
 ### variables
 
@@ -93,9 +236,29 @@ On [GoReleaser PRO](/pro/) custom variables should now be prefixed with `.Var`.
     some_template: 'lala-{{ .Var.foo }}'
     ```
 
+## Expired deprecation notices
+
+The following options were deprecated in the past and were already removed.
+
+### dockers.use: buildpacks
+
+> since 2022-03-16 (v1.7.0), removed 2022-09-28 (v1.12.0)
+
+This was removed due to some issues:
+
+- The binary gets rebuild again during the buildpacks build;
+- There is no ARM support.
+
+### rigs
+
+> since 2022-03-21 (v1.8.0), removed 2022-08-16 (v1.11.0)
+
+GoFish was deprecated by their authors, therefore, we're removing its
+support from GoReleaser too.
+
 ### nfpms.empty_folders
 
-> since 2021-11-14  (v1.0.0)
+> since 2021-11-14 (v1.0.0), removed 2022-06-14 (v1.10.0)
 
 nFPM empty folders is now deprecated in favor of a `dir` content type:
 
@@ -115,9 +278,10 @@ nFPM empty folders is now deprecated in favor of a `dir` content type:
         type: dir
     ```
 
+
 ### builds for windows/arm64
 
-> since 2021-08-16 (v0.175.0)
+> since 2021-08-16 (v0.175.0), removed 2022-06-12 (v1.10.0)
 
 Since Go 1.17, `windows/arm64` is a valid target.
 
@@ -132,20 +296,26 @@ ignore:
   goarch: arm64
 ```
 
-If you try to use new versions of GoReleaser with Go 1.16 or older, it will warn about it until this deprecation warning expires, after that your build will likely fail.
-
-## Expired deprecation notices
-
-The following options were deprecated in the past and were already removed.
+If you try to use new versions of GoReleaser with Go 1.16 or older, it will warn
+about it until this deprecation warning expires, after that your build will
+likely fail.
 
 ### godownloader
 
 > since 2021-10-13 (all), removed 2022-05-18
 
-GoDownloader, the install script generator, wasn't been updated for a long time and is now officially deprecated.
+GoDownloader, the installation script generator, wasn't updated for a long time
+and is now officially deprecated.
 The website and all install scripts will be taken out in 6 months.
 You can still use any of the other install methods.
 
+This also includes `install.goreleaser.com`.
+
+Most common tools installed via that website were probably
+[GoReleaser](/install/) itself and
+[golangci-lint](https://golangci-lint.run/usage/install/).
+
+Please follow to the check their documentation for alternative install methods.
 
 ### dockers.use_buildx
 

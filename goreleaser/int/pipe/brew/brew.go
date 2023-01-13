@@ -12,7 +12,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/commitauthor"
@@ -108,8 +108,10 @@ func publishAll(ctx *context.Context, cli client.Client) error {
 }
 
 func doPublish(ctx *context.Context, formula *artifact.Artifact, cl client.Client) error {
-	brew := formula.Extra[brewConfigExtra].(config.Homebrew)
-	var err error
+	brew, err := artifact.Extra[config.Homebrew](*formula, brewConfigExtra)
+	if err != nil {
+		return err
+	}
 	cl, err = client.NewIfToken(ctx, cl, brew.Tap.Token)
 	if err != nil {
 		return err
@@ -194,17 +196,11 @@ func doRun(ctx *context.Context, brew config.Homebrew, cl client.Client) error {
 	}
 	brew.Name = name
 
-	tapOwner, err := tmpl.New(ctx).Apply(brew.Tap.Owner)
+	ref, err := client.TemplateRef(tmpl.New(ctx).Apply, brew.Tap)
 	if err != nil {
 		return err
 	}
-	brew.Tap.Owner = tapOwner
-
-	tapName, err := tmpl.New(ctx).Apply(brew.Tap.Name)
-	if err != nil {
-		return err
-	}
-	brew.Tap.Name = tapName
+	brew.Tap = ref
 
 	skipUpload, err := tmpl.New(ctx).Apply(brew.SkipUpload)
 	if err != nil {
@@ -251,9 +247,6 @@ func buildFormula(ctx *context.Context, brew config.Homebrew, client client.Clie
 func doBuildFormula(ctx *context.Context, data templateData) (string, error) {
 	t, err := template.
 		New(data.Name).
-		Funcs(template.FuncMap{
-			"join": strings.Join,
-		}).
 		Parse(formulaTemplate)
 	if err != nil {
 		return "", err
@@ -286,19 +279,23 @@ func doBuildFormula(ctx *context.Context, data templateData) (string, error) {
 	return out.String(), nil
 }
 
-func installs(cfg config.Homebrew, art *artifact.Artifact) []string {
-	if cfg.Install != "" {
-		return split(cfg.Install)
+func installs(ctx *context.Context, cfg config.Homebrew, art *artifact.Artifact) ([]string, error) {
+	applied, err := tmpl.New(ctx).WithArtifact(art).Apply(cfg.Install)
+	if err != nil {
+		return nil, err
+	}
+	if applied != "" {
+		return split(applied), nil
 	}
 
 	install := map[string]bool{}
 	switch art.Type {
 	case artifact.UploadableBinary:
 		name := art.Name
-		bin := art.ExtraOr(artifact.ExtraBinary, art.Name).(string)
+		bin := artifact.ExtraOr(*art, artifact.ExtraBinary, art.Name)
 		install[fmt.Sprintf("bin.install %q => %q", name, bin)] = true
 	case artifact.UploadableArchive:
-		for _, bin := range art.ExtraOr(artifact.ExtraBinaries, []string{}).([]string) {
+		for _, bin := range artifact.ExtraOr(*art, artifact.ExtraBinaries, []string{}) {
 			install[fmt.Sprintf("bin.install %q", bin)] = true
 		}
 	}
@@ -306,7 +303,7 @@ func installs(cfg config.Homebrew, art *artifact.Artifact) []string {
 	result := keys(install)
 	sort.Strings(result)
 	log.Warnf("guessing install to be %q", strings.Join(result, ", "))
-	return result
+	return result, nil
 }
 
 func keys(m map[string]bool) []string {
@@ -350,7 +347,12 @@ func dataFor(ctx *context.Context, cfg config.Homebrew, cl client.Client, artifa
 			cfg.URLTemplate = url
 		}
 
-		url, err := tmpl.New(ctx).WithArtifact(art, map[string]string{}).Apply(cfg.URLTemplate)
+		url, err := tmpl.New(ctx).WithArtifact(art).Apply(cfg.URLTemplate)
+		if err != nil {
+			return result, err
+		}
+
+		install, err := installs(ctx, cfg, art)
 		if err != nil {
 			return result, err
 		}
@@ -361,7 +363,7 @@ func dataFor(ctx *context.Context, cfg config.Homebrew, cl client.Client, artifa
 			OS:               art.Goos,
 			Arch:             art.Goarch,
 			DownloadStrategy: cfg.DownloadStrategy,
-			Install:          installs(cfg, art),
+			Install:          install,
 		}
 
 		counts[pkg.OS+pkg.Arch]++

@@ -33,9 +33,35 @@ func createFakeBinary(t *testing.T, dist, arch, bin string) {
 
 func TestRunPipe(t *testing.T) {
 	folder := testlib.Mktmp(t)
-	for _, format := range []string{"tar.gz", "zip"} {
-		t.Run("Archive format "+format, func(t *testing.T) {
-			dist := filepath.Join(folder, format+"_dist")
+	for _, dets := range []struct {
+		Format string
+		Strip  bool
+	}{
+		{
+			Format: "tar.gz",
+			Strip:  true,
+		},
+		{
+			Format: "tar.gz",
+			Strip:  false,
+		},
+
+		{
+			Format: "zip",
+			Strip:  true,
+		},
+		{
+			Format: "zip",
+			Strip:  false,
+		},
+	} {
+		format := dets.Format
+		name := "archive." + format
+		if dets.Strip {
+			name = "strip_" + name
+		}
+		t.Run(name, func(t *testing.T) {
+			dist := filepath.Join(folder, name+"_dist")
 			require.NoError(t, os.Mkdir(dist, 0o755))
 			for _, arch := range []string{"darwinamd64v1", "darwinall", "linux386", "linuxarm7", "linuxmipssoftfloat", "linuxamd64v3"} {
 				createFakeBinary(t, dist, arch, "bin/mybin")
@@ -56,9 +82,14 @@ func TestRunPipe(t *testing.T) {
 					ProjectName: "foobar",
 					Archives: []config.Archive{
 						{
-							ID:           "myid",
-							Builds:       []string{"default"},
-							NameTemplate: defaultNameTemplate,
+							ID:     "myid",
+							Builds: []string{"default"},
+							BuildsInfo: config.FileInfo{
+								Owner: "root",
+								Group: "root",
+							},
+							NameTemplate:            defaultNameTemplate,
+							StripParentBinaryFolder: dets.Strip,
 							Files: []config.File{
 								{Source: "README.{{.Os}}.*"},
 								{Source: "./foo/**/*"},
@@ -169,17 +200,23 @@ func TestRunPipe(t *testing.T) {
 			ctx.Config.Archives[0].Format = format
 			require.NoError(t, Pipe{}.Run(ctx))
 			archives := ctx.Artifacts.Filter(artifact.ByType(artifact.UploadableArchive)).List()
+
 			for _, arch := range archives {
 				expectBin := "bin/mybin"
 				if arch.Goos == "windows" {
 					expectBin += ".exe"
 				}
 				require.Equal(t, "myid", arch.ID(), "all archives must have the archive ID set")
-				require.Equal(t, []string{expectBin}, arch.ExtraOr(artifact.ExtraBinaries, []string{}).([]string))
-				require.Equal(t, "", arch.ExtraOr(artifact.ExtraBinary, "").(string))
+				require.Equal(t, []string{expectBin}, artifact.ExtraOr(*arch, artifact.ExtraBinaries, []string{}))
+				require.Equal(t, "", artifact.ExtraOr(*arch, artifact.ExtraBinary, ""))
 			}
 			require.Len(t, archives, 7)
 			// TODO: should verify the artifact fields here too
+
+			expectBin := "bin/mybin"
+			if dets.Strip {
+				expectBin = "mybin"
+			}
 
 			if format == "tar.gz" {
 				// Check archive contents
@@ -196,10 +233,15 @@ func TestRunPipe(t *testing.T) {
 						[]string{
 							fmt.Sprintf("README.%s.md", os),
 							"foo/bar/foobar/blah.txt",
-							"bin/mybin",
+							expectBin,
 						},
 						tarFiles(t, filepath.Join(dist, name)),
 					)
+
+					header := tarInfo(t, filepath.Join(dist, name), expectBin)
+					require.Equal(t, "root", header.Uname)
+					require.Equal(t, "root", header.Gname)
+
 				}
 			}
 			if format == "zip" {
@@ -208,7 +250,7 @@ func TestRunPipe(t *testing.T) {
 					[]string{
 						"README.windows.md",
 						"foo/bar/foobar/blah.txt",
-						"bin/mybin.exe",
+						expectBin + ".exe",
 					},
 					zipFiles(t, filepath.Join(dist, "foobar_0.0.1_windows_amd64.zip")),
 				)
@@ -330,6 +372,27 @@ func zipFiles(t *testing.T, path string) []string {
 	return paths
 }
 
+func tarInfo(t *testing.T, path, name string) *tar.Header {
+	t.Helper()
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	defer f.Close()
+	gr, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	defer gr.Close()
+	r := tar.NewReader(gr)
+	for {
+		next, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if next.Name == name {
+			return next
+		}
+	}
+	return nil
+}
+
 func tarFiles(t *testing.T, path string) []string {
 	t.Helper()
 	f, err := os.Open(path)
@@ -363,6 +426,9 @@ func TestRunPipeBinary(t *testing.T) {
 	f, err = os.Create(filepath.Join(dist, "windowsamd64", "mybin.exe"))
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
+	f, err = os.Create(filepath.Join(dist, "windowsamd64", "myotherbin"))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 	f, err = os.Create(filepath.Join(folder, "README.md"))
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
@@ -373,7 +439,7 @@ func TestRunPipeBinary(t *testing.T) {
 				{
 					Format:       "binary",
 					NameTemplate: defaultBinaryNameTemplate,
-					Builds:       []string{"default"},
+					Builds:       []string{"default", "default2"},
 				},
 			},
 		},
@@ -415,9 +481,22 @@ func TestRunPipeBinary(t *testing.T) {
 			artifact.ExtraID:     "default",
 		},
 	})
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Goos:   "windows",
+		Goarch: "amd64",
+		Name:   "myotherbin.exe",
+		Path:   filepath.Join(dist, "windowsamd64", "myotherbin.exe"),
+		Type:   artifact.Binary,
+		Extra: map[string]interface{}{
+			artifact.ExtraBinary: "myotherbin",
+			artifact.ExtraExt:    ".exe",
+			artifact.ExtraID:     "default2",
+		},
+	})
+
 	require.NoError(t, Pipe{}.Run(ctx))
 	binaries := ctx.Artifacts.Filter(artifact.ByType(artifact.UploadableBinary))
-	require.Len(t, binaries.List(), 3)
+	require.Len(t, binaries.List(), 4)
 	darwinThin := binaries.Filter(artifact.And(
 		artifact.ByGoos("darwin"),
 		artifact.ByGoarch("amd64"),
@@ -426,14 +505,17 @@ func TestRunPipeBinary(t *testing.T) {
 		artifact.ByGoos("darwin"),
 		artifact.ByGoarch("all"),
 	)).List()[0]
-	require.True(t, darwinUniversal.ExtraOr(artifact.ExtraReplaces, false).(bool))
+	require.True(t, artifact.ExtraOr(*darwinUniversal, artifact.ExtraReplaces, false))
 	windows := binaries.Filter(artifact.ByGoos("windows")).List()[0]
+	windows2 := binaries.Filter(artifact.ByGoos("windows")).List()[1]
 	require.Equal(t, "mybin_0.0.1_darwin_amd64", darwinThin.Name)
-	require.Equal(t, "mybin", darwinThin.ExtraOr(artifact.ExtraBinary, ""))
+	require.Equal(t, "mybin", artifact.ExtraOr(*darwinThin, artifact.ExtraBinary, ""))
 	require.Equal(t, "myunibin_0.0.1_darwin_all", darwinUniversal.Name)
-	require.Equal(t, "myunibin", darwinUniversal.ExtraOr(artifact.ExtraBinary, ""))
+	require.Equal(t, "myunibin", artifact.ExtraOr(*darwinUniversal, artifact.ExtraBinary, ""))
 	require.Equal(t, "mybin_0.0.1_windows_amd64.exe", windows.Name)
-	require.Equal(t, "mybin.exe", windows.ExtraOr(artifact.ExtraBinary, ""))
+	require.Equal(t, "mybin.exe", artifact.ExtraOr(*windows, artifact.ExtraBinary, ""))
+	require.Equal(t, "myotherbin_0.0.1_windows_amd64.exe", windows2.Name)
+	require.Equal(t, "myotherbin.exe", artifact.ExtraOr(*windows2, artifact.ExtraBinary, ""))
 }
 
 func TestRunPipeDistRemoved(t *testing.T) {
@@ -536,7 +618,7 @@ func TestRunPipeInvalidNameTemplate(t *testing.T) {
 			artifact.ExtraID:     "default",
 		},
 	})
-	require.EqualError(t, Pipe{}.Run(ctx), `template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
 }
 
 func TestRunPipeInvalidFilesNameTemplate(t *testing.T) {
@@ -574,7 +656,7 @@ func TestRunPipeInvalidFilesNameTemplate(t *testing.T) {
 			artifact.ExtraID:     "default",
 		},
 	})
-	require.EqualError(t, Pipe{}.Run(ctx), `failed to find files to archive: failed to apply template {{.asdsd}: template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
 }
 
 func TestRunPipeInvalidWrapInDirectoryTemplate(t *testing.T) {
@@ -659,7 +741,7 @@ func TestRunPipeWrap(t *testing.T) {
 
 	archives := ctx.Artifacts.Filter(artifact.ByType(artifact.UploadableArchive)).List()
 	require.Len(t, archives, 1)
-	require.Equal(t, "foo_macOS", archives[0].ExtraOr(artifact.ExtraWrappedIn, ""))
+	require.Equal(t, "foo_macOS", artifact.ExtraOr(*archives[0], artifact.ExtraWrappedIn, ""))
 
 	// Check archive contents
 	f, err = os.Open(filepath.Join(dist, "foo.tar.gz"))
@@ -689,6 +771,7 @@ func TestDefault(t *testing.T) {
 	require.NotEmpty(t, ctx.Config.Archives[0].NameTemplate)
 	require.Equal(t, "tar.gz", ctx.Config.Archives[0].Format)
 	require.NotEmpty(t, ctx.Config.Archives[0].Files)
+	require.False(t, ctx.Config.Archives[0].RLCP)
 }
 
 func TestDefaultSet(t *testing.T) {
@@ -709,7 +792,23 @@ func TestDefaultSet(t *testing.T) {
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, "foo", ctx.Config.Archives[0].NameTemplate)
 	require.Equal(t, "zip", ctx.Config.Archives[0].Format)
+	require.False(t, ctx.Config.Archives[0].RLCP)
 	require.Equal(t, config.File{Source: "foo"}, ctx.Config.Archives[0].Files[0])
+}
+
+func TestDefaultNoFiles(t *testing.T) {
+	ctx := &context.Context{
+		Config: config.Project{
+			Archives: []config.Archive{
+				{
+					Format: "tar.gz",
+				},
+			},
+		},
+	}
+	require.NoError(t, Pipe{}.Default(ctx))
+	require.Equal(t, defaultNameTemplate, ctx.Config.Archives[0].NameTemplate)
+	require.False(t, ctx.Config.Archives[0].RLCP)
 }
 
 func TestDefaultFormatBinary(t *testing.T) {
@@ -724,6 +823,7 @@ func TestDefaultFormatBinary(t *testing.T) {
 	}
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, defaultBinaryNameTemplate, ctx.Config.Archives[0].NameTemplate)
+	require.False(t, ctx.Config.Archives[0].RLCP)
 }
 
 func TestFormatFor(t *testing.T) {
@@ -817,13 +917,13 @@ func TestBinaryOverride(t *testing.T) {
 			darwin := archives.Filter(artifact.ByGoos("darwin")).List()[0]
 			require.Equal(t, "foobar_0.0.1_darwin_amd64."+format, darwin.Name)
 			require.Equal(t, format, darwin.Format())
-			require.Empty(t, darwin.ExtraOr(artifact.ExtraWrappedIn, ""))
+			require.Empty(t, artifact.ExtraOr(*darwin, artifact.ExtraWrappedIn, ""))
 
 			archives = ctx.Artifacts.Filter(artifact.ByType(artifact.UploadableBinary))
 			windows := archives.Filter(artifact.ByGoos("windows")).List()[0]
 			require.Equal(t, "foobar_0.0.1_windows_amd64.exe", windows.Name)
-			require.Empty(t, windows.ExtraOr(artifact.ExtraWrappedIn, ""))
-			require.Equal(t, "mybin.exe", windows.ExtraOr(artifact.ExtraBinary, ""))
+			require.Empty(t, artifact.ExtraOr(*windows, artifact.ExtraWrappedIn, ""))
+			require.Equal(t, "mybin.exe", artifact.ExtraOr(*windows, artifact.ExtraBinary, ""))
 		})
 	}
 }

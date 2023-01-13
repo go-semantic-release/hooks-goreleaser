@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"code.gitea.io/sdk/gitea"
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"

@@ -50,18 +50,23 @@ dockers:
     id: myimg
 
     # GOOS of the built binaries/packages that should be used.
+    # Default: `linux`.
     goos: linux
 
     # GOARCH of the built binaries/packages that should be used.
+    # Default: `amd64`.
     goarch: amd64
 
     # GOARM of the built binaries/packages that should be used.
+    # Default: `6`.
     goarm: ''
 
     # GOAMD64 of the built binaries/packages that should be used.
+    # Default: `v1`.
     goamd64: 'v2'
 
     # IDs to filter the binaries/packages.
+    # Default: `empty`.
     ids:
     - mybuild
     - mynfpm
@@ -73,6 +78,18 @@ dockers:
     - "myuser/myimage:{{ .Tag }}-{{ .Env.GO_VERSION }}"
     - "myuser/myimage:v{{ .Major }}"
     - "gcr.io/myuser/myimage:latest"
+
+
+    # Skips the docker build.
+    # Could be useful if you want to skip building the windows docker image on
+    # linux, for example.
+    #
+    # This field allows templates.
+    # Since: v1.14.0-pro.
+    # This option is only available on GoReleaser Pro.
+    #
+    # Defaults to false.
+    skip_build: false
 
     # Skips the docker push.
     # Could be useful if you also do draft releases.
@@ -89,8 +106,11 @@ dockers:
     dockerfile: '{{ .Env.DOCKERFILE }}'
 
     # Set the "backend" for the Docker pipe.
+    #
     # Valid options are: docker, buildx, podman.
-    # podman is a GoReleaser Pro feature and is only available on Linux.
+    #
+    # Podman is a GoReleaser Pro feature and is only available on Linux.
+    #
     # Defaults to docker.
     use: docker
 
@@ -122,6 +142,10 @@ dockers:
     - config.yml
 ```
 
+!!! warning
+    Note that you will have to manually login into the Docker registries you
+    want to push to — GoReleaser does not login by itself.
+
 !!! tip
     Learn more about the [name template engine](/customization/templates/).
 
@@ -140,7 +164,7 @@ That can be accomplished simply by adding template language in the definition:
 
 ```yaml
 # .goreleaser.yaml
-project: foo
+project_name: foo
 dockers:
   -
     image_templates:
@@ -240,6 +264,27 @@ docker build -t myuser/myimage . \
 !!! tip
     Learn more about the [name template engine](/customization/templates/).
 
+## Use a specific builder with Docker buildx
+
+If `buildx` is enabled, the `default` context builder will be used when building
+the image. This builder is always available and backed by BuildKit in the
+Docker engine. If you want to use a different builder, you can specify it using
+the `build_flag_templates` field:
+
+```yaml
+# .goreleaser.yaml
+dockers:
+  -
+    image_templates:
+    - "myuser/myimage"
+    use: buildx
+    build_flag_templates:
+    - "--builder=mybuilder"
+```
+
+!!! tip
+    Learn more about the [buildx builder instances](https://docs.docker.com/buildx/working-with-buildx/#work-with-builder-instances).
+
 ## Podman
 
 !!! success "GoReleaser Pro"
@@ -256,5 +301,9 @@ dockers:
     use: podman
 ```
 
-Note that GoReleaser will not install Podman for you, nor change any of its configuration.
+Note that GoReleaser will not install Podman for you, nor change any of its
+configuration.
+
+If you want to use it rootless, make sure to follow
+[this guide](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md).
 

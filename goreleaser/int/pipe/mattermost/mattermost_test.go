@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,7 +31,7 @@ func TestAnnounceInvalidTemplate(t *testing.T) {
 			},
 		},
 	})
-	require.EqualError(t, Pipe{}.Announce(ctx), `announce: failed to announce to mattermost: template: tmpl:1: unexpected "}" in operand`)
+	require.EqualError(t, Pipe{}.Announce(ctx), `mattermost: template: tmpl:1: unexpected "}" in operand`)
 }
 
 func TestAnnounceMissingEnv(t *testing.T) {
@@ -42,7 +41,7 @@ func TestAnnounceMissingEnv(t *testing.T) {
 		},
 	})
 	require.NoError(t, Pipe{}.Default(ctx))
-	require.EqualError(t, Pipe{}.Announce(ctx), `announce: failed to announce to mattermost: env: environment variable "MATTERMOST_WEBHOOK" should not be empty`)
+	require.EqualError(t, Pipe{}.Announce(ctx), `mattermost: env: environment variable "MATTERMOST_WEBHOOK" should not be empty`)
 }
 
 func TestSkip(t *testing.T) {
@@ -92,8 +91,7 @@ func TestPostWebhook(t *testing.T) {
 	ctx.ReleaseURL = "https://github.com/honk/honk/releases/tag/v1.0.0"
 	ctx.Git.URL = "https://github.com/honk/honk"
 
-	os.Setenv("MATTERMOST_WEBHOOK", ts.URL)
-	defer os.Unsetenv("MATTERMOST_WEBHOOK")
+	t.Setenv("MATTERMOST_WEBHOOK", ts.URL)
 
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.NoError(t, Pipe{}.Announce(ctx))

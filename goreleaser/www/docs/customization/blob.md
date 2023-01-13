@@ -10,20 +10,27 @@ Google GCS.
 blobs:
   # You can have multiple blob configs
   -
-    # Template for the cloud provider name
-    # s3 for AWS S3 Storage
-    # azblob for Azure Blob Storage
-    # gs for Google Cloud Storage
+    # Cloud provider name:
+    # - s3 for AWS S3 Storage
+    # - azblob for Azure Blob Storage
+    # - gs for Google Cloud Storage
+    #
+    # Templateable.
     provider: azblob
 
     # Set a custom endpoint, useful if you're using a minio backend or
     # other s3-compatible backends.
+    #
     # Implies s3ForcePathStyle and requires provider to be `s3`
+    #
+    # Templateable.
     endpoint: https://minio.foo.bar
 
     # Sets the bucket region.
     # Requires provider to be `s3`
     # Defaults to empty.
+    #
+    # Templateable.
     region: us-west-1
 
     # Disables SSL
@@ -32,6 +39,8 @@ blobs:
     disableSSL: true
 
     # Template for the bucket name
+    #
+    # Templateable.
     bucket: goreleaser-bucket
 
     # IDs of the artifacts you want to upload.
@@ -84,7 +93,7 @@ chain in the following order:
 
 ### Azure Blob Provider
 
-Currently it supports authentication only with
+It supports authentication only with
 [environment variables](https://docs.microsoft.com/en-us/azure/storage/common/storage-azure-cli#set-default-azure-storage-account-environment-variables):
 
 - `AZURE_STORAGE_ACCOUNT`

@@ -29,16 +29,6 @@ snapcrafts:
     # Default: `{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}`
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
-    # Replacements for GOOS and GOARCH in the package name.
-    # Keys should be valid GOOSs or GOARCHs.
-    # Values are the respective replacements.
-    # Default is empty.
-    replacements:
-      amd64: 64-bit
-      386: 32-bit
-      darwin: macOS
-      linux: Tux
-
     # The name of the snap. This is optional.
     # Default is project name.
     name: drumroll
@@ -69,10 +59,10 @@ snapcrafts:
       - beta
       - candidate
       - stable
-      - {{ .Major }}.{{ .Minor }}/edge
-      - {{ .Major }}.{{ .Minor }}/beta
-      - {{ .Major }}.{{ .Minor }}/candidate
-      - {{ .Major }}.{{ .Minor }}/stable
+      - '{{ .Major }}.{{ .Minor }}/edge'
+      - '{{ .Major }}.{{ .Minor }}/beta'
+      - '{{ .Major }}.{{ .Minor }}/candidate'
+      - '{{ .Major }}.{{ .Minor }}/stable'
 
     # A guardrail to prevent you from releasing a snap to all your users before
     # it is ready.
@@ -89,7 +79,8 @@ snapcrafts:
     # https://snapcraft.io/docs/reference/confinement
     confinement: strict
 
-    # Your app's license, based on SPDX license expressions: https://spdx.org/licenses
+    # Your app's license, based on SPDX license expressions:
+    # https://spdx.org/licenses
     # Default is empty.
     license: MIT
 
@@ -112,8 +103,8 @@ snapcrafts:
         mode: 0755
 
     # With layouts, you can make elements in $SNAP, $SNAP_DATA, $SNAP_COMMON
-    # accessible from locations such as /usr, /var and /etc. This helps when using
-    # pre-compiled binaries and libraries that expect to find files and
+    # accessible from locations such as /usr, /var and /etc. This helps when
+    # using pre-compiled binaries and libraries that expect to find files and
     # directories outside of locations referenced by $SNAP or $SNAP_DATA.
     # About snap environment variables:
     # * HOME: set to SNAP_USER_DATA for all commands
@@ -157,46 +148,64 @@ snapcrafts:
         args: --foo
 
         # The kind of wrapper to generate for the given command.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         adapter: none
 
         # List of applications that are ordered to be started after the current
         # one.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         after: ["postdrum"]
 
         # Aliases for the app command.
-        # Defaults to empty.
         # https://snapcraft.io/docs/commands-and-aliases#heading--aliases
+        #
+        # Default: empty.
+        # Since: v1.6.
         aliases: ["droll"]
 
         # Defines the name of the .desktop file used to start an application
         # with the desktop session.
-        # Defaults to empty.
         # https://snapcraft.io/docs/snap-format#heading--autostart
+        #
+        # Default: empty.
+        # Since: v1.6.
         autostart: drumroll.desktop
 
         # List of applications that are ordered to be started before the current
         # one.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         before: ["predrum"]
 
         # D-Bus name this service is reachable as. Mandatory if daemon=dbus.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         bus_name: drumbus
 
         # A list of commands to be executed in order before the command of this
         # app.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         command_chain: ["foo", "bar", "baz"]
 
         # An identifier to a desktop-id within an external appstream file.
         # https://snapcraft.io/docs/using-external-metadata
+        #
+        # Default: empty.
+        # Since: v1.6.
         common_id: "com.example.drumroll"
 
         # Bash completion snippet. More information about completion here:
-        # Defaults to empty.
         # https://docs.snapcraft.io/tab-completion-for-snaps.
+        #
+        # Default: empty.
         completer: drumroll-completion.bash
 
         # You can override the command name.
@@ -209,29 +218,40 @@ snapcrafts:
         daemon: simple
 
         # Location of the .desktop file.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         desktop: usr/share/applications/drumroll.desktop
 
         # A set of key-value pairs specifying environment variables.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         environment:
           foo: bar
           baz: quo
 
         # A list of Snapcraft extensions this app depends on.
-        # Defaults to empty.
         # https://snapcraft.io/docs/snapcraft-extensions
+        #
+        # Default: empty.
+        # Since: v1.6.
         extensions: ["gnome-3-38"]
 
         # Defines whether a freshly installed daemon is started automatically,
         # or whether startup control is deferred to the snap.
-        # Defaults to empty. Requires `daemon` to be set.
+        # Requires `daemon` to be set.
+        #
+        # Default: empty.
+        # Since: v1.6.
         install_mode: "disable"
 
         # A set of key-value attributes passed through to snap.yaml without
         # snapcraft validation.
-        # Defaults to empty.
         # https://snapcraft.io/docs/using-in-development-features
+        #
+        # Default: empty.
+        # Since: v1.6.
         passthrough:
           foo: bar
 
@@ -243,28 +263,41 @@ snapcrafts:
         plugs: ["home", "network", "personal-files"]
 
         # Sets a command to run from inside the snap after a service stops.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         post_stop_command: foo
 
         # Controls whether the daemon should be restarted during a snap refresh.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         refresh_mode: endure
 
         # Command to use to ask the service to reload its configuration.
-        # Defaults to empty. Requires `daemon` to be set.
+        # Requires `daemon` to be set.
+        #
+        # Default: empty.
+        # Since: v1.6.
         reload_command: foo
 
         # Restart condition of the snap.
-        # Defaults to empty.
         # https://snapcraft.io/docs/snapcraft-yaml-reference
+        #
+        # Default: empty.
         restart_condition: "always"
 
         # List of slots for interfaces to connect to.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         slots: ["foo", "bar", "baz"]
 
         # Maps a daemon’s sockets to services and activates them.
-        # Defaults to empty. Requires `plugs` to contain `network-bind`.
+        # Requires `plugs` to contain `network-bind`.
+        #
+        # Default: empty.
+        # Since: v1.6.
         sockets:
           sock:
             listen-stream: $SNAP_COMMON/socket
@@ -272,28 +305,44 @@ snapcrafts:
             socket-mode: 416
 
         # Time to wait for daemon to start.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         start_timeout: 42ms
 
         # Command to use to stop the service.
-        # Defaults to empty. Requires `daemon` to be set.
+        # Requires `daemon` to be set.
+        #
+        # Default: empty.
+        # Since: v1.6.
         stop_command: foo
 
         # Controls how the daemon should be stopped.
-        # Defaults to empty. Requires `daemon` to be set.
+        # Requires `daemon` to be set.
+        #
+        # Default: empty.
+        # Since: v1.6.
         stop_mode: sigterm
 
         # Time to wait for daemon to stop.
-        # Defaults to empty.
+        #
+        # Default: empty.
+        # Since: v1.6.
         stop_timeout: 42ms
 
         # Schedules when, or how often, to run a service or command.
-        # Defaults to empty. Requires `daemon` to be set.
+        # Requires `daemon` to be set.
         # https://snapcraft.io/docs/services-and-daemons
+        #
+        # Default: empty.
+        # Since: v1.6.
         timer: "00:00-24:00/24"
 
         # Declares the service watchdog timeout.
-        # Defaults to empty. Requires `plugs` to contain `daemon-notify`.
+        # Requires `plugs` to contain `daemon-notify`.
+        #
+        # Default: empty.
+        # Since: v1.6.
         watchdog_timeout: 42ms
 
     # Allows plugs to be configured. Plugs like system-files and personal-files

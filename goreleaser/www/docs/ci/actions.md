@@ -1,10 +1,10 @@
 # GitHub Actions
 
-GoReleaser can also be used within our official [GoReleaser Action][goreleaser-action]
-through [GitHub Actions][actions].
+GoReleaser can also be used within our official [GoReleaser
+Action][goreleaser-action] through [GitHub Actions][actions].
 
-You can create a workflow for pushing your releases by putting YAML configuration to
-`.github/workflows/release.yml`.
+You can create a workflow for pushing your releases by putting YAML
+configuration to `.github/workflows/release.yml`.
 
 ## Usage
 
@@ -30,34 +30,36 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      -
-        name: Fetch all tags
-        run: git fetch --force --tags
-      -
-        name: Set up Go
-        uses: actions/setup-go@v2
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v3
         with:
-          go-version: 1.18
-      -
-        name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+          go-version: '>=1.19.4'
+          cache: true
+      # More assembly might be required: Docker logins, GPG, etc. It all depends
+      # on your needs.
+      - uses: goreleaser/goreleaser-action@v4
         with:
-          # either 'goreleaser' (default) or 'goreleaser-pro'
+          # either 'goreleaser' (default) or 'goreleaser-pro':
           distribution: goreleaser
           version: latest
           args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
+          # Your GoReleaser Pro key, if you are using the 'goreleaser-pro'
+          # distribution:
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 ```
 
 !!! warning "Some things to look closely..."
+    #### The action does not install, configure or authenticate into dependencies
+    GoReleaser Action will not install nor setup any other software needed to
+    release. It's the user's responsibility to install and configure Go, Docker,
+    Syft, Cosign and any other tools the release might need. It's also the
+    user's responsibility to log in into tools that need it, such as docker.
+
     #### Fetch depthness
     Notice the `fetch-depth: 0` option on the `Checkout` workflow step.
     It is required for GoReleaser to work properly.
@@ -69,13 +71,18 @@ jobs:
     For more information, take a look at
     [actions/checkout#290](https://github.com/actions/checkout/issues/290).
 
+    #### Caching go dependencies
+    When using the `setup-go` action, you can optionally set `cache: true` for
+    it to aumatically cache and restore your go dependencies, which usually
+    helps speed up build times.
+
 !!! tip
     For detailed instructions please follow GitHub Actions [workflow syntax][syntax].
 
 ### Signing
 
-If [signing is enabled][signing] in your GoReleaser configuration, you can use the [Import GPG][import-gpg]
-GitHub Action along with this one:
+If [signing is enabled][signing] in your GoReleaser configuration, you can use
+the [Import GPG][import-gpg] GitHub Action along with this one:
 
 ```yaml
       -
@@ -87,7 +94,7 @@ GitHub Action along with this one:
           passphrase: ${{ secrets.PASSPHRASE }}
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@v4
         with:
           version: latest
           args: release --rm-dist
@@ -96,7 +103,8 @@ GitHub Action along with this one:
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
 ```
 
-And reference the fingerprint in your signing configuration using the `GPG_FINGERPRINT` environment variable:
+And reference the fingerprint in your signing configuration using the
+`GPG_FINGERPRINT` environment variable:
 
 ```yaml
 signs:
@@ -106,59 +114,69 @@ signs:
 
 ## Customizing
 
+<!-- to format the tables, use: https://tabletomarkdown.com/format-markdown-table/ -->
+
 ### Inputs
 
 Following inputs can be used as `step.with` keys
 
-| Name             | Type    | Default      | Description                                                      |
-|------------------|---------|--------------|------------------------------------------------------------------|
-| `distribution`   | String  | `goreleaser` | GoReleaser distribution, either `goreleaser` or `goreleaser-pro` |
-| `version`[^1]    | String  | `latest`     | GoReleaser version                                               |
-| `args`           | String  |              | Arguments to pass to GoReleaser                                  |
-| `workdir`        | String  | `.`          | Working directory (below repository root)                        |
-| `install-only`   | Bool    | `false`      | Just install GoReleaser                                          |
+Name          |Type  |Default     |Description
+--------------|------|------------|----------------------------------------------------------------
+`distribution`|String|`goreleaser`|GoReleaser distribution, either `goreleaser` or `goreleaser-pro`
+`version`[^1] |String|`latest`    |GoReleaser version
+`args`        |String|            |Arguments to pass to GoReleaser
+`workdir`     |String|`.`         |Working directory (below repository root)
+`install-only`|Bool  |`false`     |Just install GoReleaser
 
-[^1]: Can be a fixed version like `v0.117.0` or a max satisfying SemVer one like `~> 0.132`. In this case this will return `v0.132.1`.
+[^1]: Can be a fixed version like `v0.117.0` or a max satisfying SemVer one like
+  `~> 0.132`. In this case this will return `v0.132.1`.
 
 ### Outputs
 
 Following outputs are available
 
-| Name              | Type    | Description                           |
-|-------------------|---------|---------------------------------------|
-| `artifacts`       | JSON    | Build result artifacts |
-| `metadata`        | JSON    | Build result metadata |
+Name       |Type|Description
+-----------|----|----------------------
+`artifacts`|JSON|Build result artifacts
+`metadata` |JSON|Build result metadata
 
 ### Environment Variables
 
 Following environment variables can be used as `step.env` keys
 
-| Name             | Description                           |
-|------------------|---------------------------------------|
-| `GITHUB_TOKEN`   | [GITHUB_TOKEN](https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token) as provided by `secrets` |
-| `GORELEASER_KEY` | Your [GoReleaser Pro](https://goreleaser.com/pro) License Key, in case you are using the `goreleaser-pro` distribution                              |
+Name            |Description
+----------------|---------------------------------------------------------------------------------------------------------------------------------------------------
+`GITHUB_TOKEN`  |[GITHUB_TOKEN](https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token) as provided by `secrets`
+`GORELEASER_KEY`|Your [GoReleaser Pro](https://goreleaser.com/pro) License Key, in case you are using the `goreleaser-pro` distribution
 
 ## Token Permissions
 
-The following [permissions](https://docs.github.com/en/actions/reference/authentication-in-a-workflow#permissions-for-the-github_token) are required by GoReleaser:
+The following
+[permissions](https://docs.github.com/en/actions/reference/authentication-in-a-workflow#permissions-for-the-github_token)
+are required by GoReleaser:
 
- - `content: write` if you wish to
+ - `contents: write` if you wish to
     - [upload archives as GitHub Releases](/customization/release/), or
-    - publish to [Homebrew](/customization/homebrew/), or [Scoop](/customization/scoop/) (assuming it's part of the same repository)
- - or just `content: read` if you don't need any of the above
- - `packages: write` if you [push Docker images](/customization/docker/) to GitHub
- - `issues: write` if you use [milestone closing capability](/customization/milestone/)
+    - publish to [Homebrew](/customization/homebrew/), or
+      [Scoop](/customization/scoop/) (assuming it's part of the same repository)
+ - or just `contents: read` if you don't need any of the above
+ - `packages: write` if you [push Docker images](/customization/docker/) to
+   GitHub
+ - `issues: write` if you use [milestone closing
+   capability](/customization/milestone/)
 
-`GITHUB_TOKEN` permissions [are limited to the repository][about-github-token] that contains your workflow.
+`GITHUB_TOKEN` permissions [are limited to the repository][about-github-token]
+that contains your workflow.
 
-If you need to push the homebrew tap to another repository, you must therefore create a custom
-[Personal Access Token][pat] with `repo` permissions and [add it as a secret in the repository][secrets]. If you
-create a secret named `GH_PAT`, the step will look like this:
+If you need to push the homebrew tap to another repository, you must create a
+custom [Personal Access Token][pat] with `repo` permissions and [add it as a
+secret in the repository][secrets]. If you create a secret named `GH_PAT`, the
+step will look like this:
 
 ```yaml
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@v4
         with:
           version: latest
           args: release --rm-dist
@@ -168,7 +186,7 @@ create a secret named `GH_PAT`, the step will look like this:
 
 You can also read the [GitHub documentation](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) about it.
 
-## How does it look like?
+## What does it look like?
 
 You can check [this example repository](https://github.com/goreleaser/example) for a real world example.
 

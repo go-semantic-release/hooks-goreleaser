@@ -16,15 +16,18 @@ env_files:
   gitea_token: ~/.path/to/my/gitea_token
 ```
 
+Note that the environment variable will be used if available, regardless of the
+`gitea_token` file.
+
 ## URLs
 
 You can use GoReleaser with Gitea by providing its URLs in
-the `.goreleaser.yaml` configuration file. This takes a normal string or a template value.
+the `.goreleaser.yaml` configuration file. This takes a normal string, or a template value.
 
 ```yaml
 # .goreleaser.yaml
 gitea_urls:
-  api: https://gitea.myinstance.com/api/v1/
+  api: https://gitea.myinstance.com/api/v1
   download: https://gitea.myinstance.com
   # set to true if you use a self-signed certificate
   skip_tls_verify: false

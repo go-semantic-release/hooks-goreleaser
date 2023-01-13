@@ -1,7 +1,7 @@
 # Linux packages (via nFPM)
 
 GoReleaser can be wired to [nfpm](https://github.com/goreleaser/nfpm) to
-generate and publish `.deb`, `.rpm` and `.apk` packages.
+generate and publish `.deb`, `.rpm`, `.apk`, and Archlinux packages.
 
 Available options:
 
@@ -28,16 +28,6 @@ nfpms:
     builds:
       - foo
       - bar
-
-    # Replacements for GOOS and GOARCH in the package name.
-    # Keys should be valid GOOSs or GOARCHs.
-    # Values are the respective replacements.
-    # Default is empty.
-    replacements:
-      amd64: 64-bit
-      386: 32-bit
-      darwin: macOS
-      linux: Tux
 
     # Your app's vendor.
     # Default is empty.
@@ -66,28 +56,35 @@ nfpms:
       - apk
       - deb
       - rpm
+      - termux.deb # Since GoReleaser v1.11.
+      - archlinux  # Since GoReleaser v1.13.
 
-    # Packages your package depends on.
+    # Packages your package depends on. (overridable)
     dependencies:
       - git
       - zsh
 
-    # Packages your package recommends installing.
+    # Packages it provides. (overridable)
+    # Since: v1.11.
+    provides:
+      - bar
+
+    # Packages your package recommends installing. (overridable)
     recommends:
       - bzr
       - gtk
 
-    # Packages your package suggests installing.
+    # Packages your package suggests installing. (overridable)
     suggests:
       - cvs
       - ksh
 
-    # Packages that conflict with your package.
+    # Packages that conflict with your package. (overridable)
     conflicts:
       - svn
       - bash
 
-    # Packages it replaces.
+    # Packages it replaces. (overridable)
     replaces:
       - fish
 
@@ -105,7 +102,8 @@ nfpms:
 
     # Version Metadata (previously deb.metadata).
     # Default is extracted from `version` if it is semver compatible.
-    # Setting metadata might interfere with version comparisons depending on the packager.
+    # Setting metadata might interfere with version comparisons depending on the
+    # packager.
     version_metadata: git
 
     # Version Release.
@@ -117,30 +115,44 @@ nfpms:
     # Priority.
     priority: extra
 
-    # Makes a meta package - an empty package that contains only supporting files and dependencies.
+    # Makes a meta package - an empty package that contains only supporting
+    # files and dependencies.
     # When set to `true`, the `builds` option is ignored.
     # Defaults to false.
     meta: true
+
+    # Changelog YAML file, see: https://github.com/goreleaser/chglog
+    #
+    # You can use goreleaser/chglog to create the changelog for your project,
+    # pass that changelog yaml file to GoReleaser,
+    # and it should in turn setup it accordingly for the given available
+    # formats (deb and rpm at the moment).
+    #
+    # Experimental.
+    # Default: empty.
+    # Since: v1.11.
+    changelog: ./foo.yml
 
     # Contents to add to the package.
     # GoReleaser will automatically add the binaries.
     contents:
       # Basic file that applies to all packagers
-      - src: path/to/local/foo
-        dst: /usr/local/bin/foo
+      - src: path/to/foo
+        dst: /usr/bin/foo
 
       # Simple config file
-      - src: path/to/local/foo.conf
+      - src: path/to/foo.conf
         dst: /etc/foo.conf
         type: config
 
       # Simple symlink.
       # Corresponds to `ln -s /sbin/foo /usr/local/bin/foo`
       - src: /sbin/foo
-        dst: /usr/local/bin/foo
+        dst: /usr/bin/foo
         type: "symlink"
 
-      # Corresponds to `%config(noreplace)` if the packager is rpm, otherwise it is just a config file
+      # Corresponds to `%config(noreplace)` if the packager is rpm, otherwise it
+      # is just a config file
       - src: path/to/local/bar.conf
         dst: /etc/bar.conf
         type: "config|noreplace"
@@ -153,8 +165,8 @@ nfpms:
       # are added to the package header. From the RPM directives documentation:
       #
       # "There are times when a file should be owned by the package but not
-      # installed - log files and state files are good examples of cases you might
-      # desire this to happen."
+      # installed - log files and state files are good examples of cases you
+      # might desire this to happen."
       #
       # "The way to achieve this, is to use the %ghost directive. By adding this
       # directive to the line containing a file, RPM will know about the ghosted
@@ -166,7 +178,8 @@ nfpms:
       - dst: /var/log/boo.log
         type: ghost
 
-      # You can user the packager field to add files that are unique to a specific packager
+      # You can use the packager field to add files that are unique to a
+      # specific packager
       - src: path/to/rpm/file.conf
         dst: /etc/file.conf
         type: "config|noreplace"
@@ -180,8 +193,9 @@ nfpms:
         type: "config|noreplace"
         packager: apk
 
-      # Sometimes it is important to be able to set the mtime, mode, owner, or group for a file
-      # that differs from what is on the local build system at build time.
+      # Sometimes it is important to be able to set the mtime, mode, owner, or
+      # group for a file that differs from what is on the local build system at
+      # build time.
       - src: path/to/foo
         dst: /usr/local/foo
         file_info:
@@ -190,50 +204,54 @@ nfpms:
           owner: notRoot
           group: notRoot
 
-      # Using the type 'dir', empty directories can be created. When building RPMs, however, this
-      # type has another important purpose: Claiming ownership of that folder. This is important
-      # because when upgrading or removing an RPM package, only the directories for which it has
-      # claimed ownership are removed. However, you should not claim ownership of a folder that
-      # is created by the distro or a dependency of your package.
-      # A directory in the build environment can optionally be provided in the 'src' field in
-      # order copy mtime and mode from that directory without having to specify it manually.
+      # If `dst` ends with a `/`, it'll create the given path and copy the given
+      # `src` into it, the same way `cp` works with and without trailing `/`.
+      - src: ./foo/bar/*
+        dst: /usr/local/myapp/
+
+      # Using the type 'dir', empty directories can be created. When building
+      # RPMs, however, this type has another important purpose: Claiming
+      # ownership of that folder. This is important because when upgrading or
+      # removing an RPM package, only the directories for which it has claimed
+      # ownership are removed. However, you should not claim ownership of a
+      # folder that is created by the OS or a dependency of your package.
+      #
+      # A directory in the build environment can optionally be provided in the
+      # 'src' field in order copy mtime and mode from that directory without
+      # having to specify it manually.
       - dst: /some/dir
         type: dir
         file_info:
           mode: 0700
 
-    # Scripts to execute during the installation of the package.
+    # Scripts to execute during the installation of the package. (overridable)
+    #
     # Keys are the possible targets during the installation process
-    # Values are the paths to the scripts which will be executed
+    # Values are the paths to the scripts which will be executed.
     scripts:
       preinstall: "scripts/preinstall.sh"
       postinstall: "scripts/postinstall.sh"
       preremove: "scripts/preremove.sh"
       postremove: "scripts/postremove.sh"
 
-    # Some attributes can be overridden per package format.
+    # All fields above marked as `overridable` can be overridden for a given
+    # package format in this section.
     overrides:
+      # The depends override can for example be used to provide version
+      # constraints for dependencies where  different package formats use
+      # different versions or for dependencies that are named differently.
       deb:
-        conflicts:
-          - subversion
-        dependencies:
-          - git
-        suggests:
-          - gitk
-        recommends:
-          - tig
-        replaces:
-          - bash
+        depends:
+          - baz (>= 1.2.3-0)
+          - some-lib-dev
+        # ...
       rpm:
-        replacements:
-          amd64: x86_64
-        file_name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Arch }}"
-        files:
-          "tmp/man.gz": "/usr/share/man/man8/app.8.gz"
-        config_files:
-          "tmp/app_generated.conf": "/etc/app-rpm.conf"
-        scripts:
-          preinstall: "scripts/preinstall-rpm.sh"
+        depends:
+          - baz >= 1.2.3-0
+          - some-lib-devel
+        # ...
+      apk:
+        # ...
 
     # Custom configuration applied only to the RPM packager.
     rpm:
@@ -244,7 +262,8 @@ nfpms:
         # The posttrans script runs after all RPM package transactions / stages.
         posttrans: ./scripts/posttrans.sh
 
-      # The package summary.
+      # The package summary. This is, by default, the first line of the
+      # description, but can be explicitly provided here.
       # Defaults to the first line of the description.
       summary: Explicit Summary for Sample Package
 
@@ -252,27 +271,14 @@ nfpms:
       # but required by old distros like CentOS 5 / EL 5 and earlier.
       group: Unspecified
 
-      # Compression algorithm.
+      # The packager is used to identify the organization that actually packaged
+      # the software, as opposed to the author of the software.
+      # `maintainer` will be used as fallback if not specified.
+      # This will expand any env var you set in the field, eg packager: ${PACKAGER}
+      packager: GoReleaser <staff@goreleaser.com>
+
+      # Compression algorithm (gzip (default), lzma or xz).
       compression: lzma
-
-      # These config files will not be replaced by new versions if they were
-      # changed by the user. Corresponds to %config(noreplace).
-      config_noreplace_files:
-        path/to/local/bar.con: /etc/bar.conf
-
-      # These files are not actually present in the package, but the file names
-      # are added to the package header. From the RPM directives documentation:
-      #
-      # "There are times when a file should be owned by the package but not
-      # installed - log files and state files are good examples of cases you might
-      # desire this to happen."
-      #
-      # "The way to achieve this, is to use the %ghost directive. By adding this
-      # directive to the line containing a file, RPM will know about the ghosted
-      # file, but will not add it to the package."
-      ghost_files:
-        - /etc/casper.conf
-        - /var/log/boo.log
 
       # The package is signed if a key_file is set
       signature:
@@ -301,7 +307,7 @@ nfpms:
 
       # Custom deb triggers
       triggers:
-        # register interrest on a trigger activated by another package
+        # register interest on a trigger activated by another package
         # (also available: interest_await, interest_noawait)
         interest:
           - some-trigger-name
@@ -350,12 +356,37 @@ nfpms:
         # should be set as `$NFPM_DEFAULT_APK_PASSPHRASE`
         key_file: '{{ .Env.GPG_KEY_PATH }}'
 
-
         # The name of the signing key. When verifying a package, the signature
         # is matched to the public key store in /etc/apk/keys/<key_name>.rsa.pub.
         # If unset, it defaults to the maintainer email address.
         key_name: origin
+    archlinux:
+      # Archlinux-specific scripts
+      scripts:
+        # The preupgrade script runs before pacman upgrades the package.
+        preupgrade: ./scripts/preupgrade.sh
+        # The postupgrade script runs after pacman upgrades the package.
+        postupgrade: ./scripts/postupgrade.sh
+
+      # The pkgbase can be used to explicitly specify the name to be used to refer
+      # to a group of packages. See: https://wiki.archlinux.org/title/PKGBUILD#pkgbase.
+      pkgbase: foo
+
+      # The packager refers to the organization packaging the software, not to be confused
+      # with the maintainer, which is the person who maintains the software.
+      packager: GoReleaser <staff@goreleaser.com>
+
 ```
 
 !!! tip
     Learn more about the [name template engine](/customization/templates/).
+
+!!! info
+    Fields marked with "overridable" can be overriden for any format.
+
+## A note about Termux
+
+Termux is the same format as `deb`, the differences are:
+- it uses a different `bindir` (prefixed with `/data/data/com.termux/files/`)
+- it uses slightly different architecture names than Debian
+

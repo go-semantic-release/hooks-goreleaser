@@ -3,7 +3,7 @@
 ## API Token
 
 GoReleaser requires an API token with the `api` scope selected to deploy the artifacts to GitLab.
-That token can either be a Personal or a Project one.
+That token can either be a Personal, or a Project one.
 
 This token should be added to the environment variables as `GITLAB_TOKEN`.
 
@@ -20,21 +20,36 @@ env_files:
     If you use a project access token, make sure to set `use_package_registry`
     to `true` as well, otherwise it might not work.
 
+!!! warning
+    If you are using a [protected variable](https://docs.gitlab.com/ee/ci/variables/#protected-cicd-variables)
+    to store any of the values needed by goreleaser, ensure that you are protecting the tags as CI jobs in
+    Gitlab only may access protected variables if the job is run for protected refs
+    ([branches](https://docs.gitlab.com/ee/user/project/protected_branches.html),
+    [tags](https://docs.gitlab.com/ee/user/project/protected_tags.html)).
+
 ## GitLab Enterprise or private hosted
 
 You can use GoReleaser with GitLab Enterprise by providing its URLs in the
-`.goreleaser.yml` configuration file. This takes a normal string or a template value.
+`.goreleaser.yml` configuration file. This takes a normal string, or a template value.
 
 ```yaml
 # .goreleaser.yml
 gitlab_urls:
   api: https://gitlab.mycompany.com/api/v4/
   download: https://gitlab.company.com
+
   # set to true if you use a self-signed certificate
   skip_tls_verify: false
+
   # set to true if you want to upload to the Package Registry rather than attachments
   # Only works with GitLab 13.5+
+  # Since: v1.3.
   use_package_registry: false
+
+  # Set this if you set GITLAB_TOKEN to the value of CI_JOB_TOKEN.
+  # Default: false
+  # Since: v1.11.
+  use_job_token: true
 ```
 
 If none are set, they default to GitLab's public URLs.
@@ -48,7 +63,7 @@ If none are set, they default to GitLab's public URLs.
 
 GitLab introduced the [Generic Package Registry](https://docs.gitlab.com/ee/user/packages/package_registry/index.html) in Gitlab 13.5.
 
-Normally, `goreleaser` uploads release files as "attachments", which may have [administrative limits](https://docs.gitlab.com/ee/user/admin_area/settings/account_and_limit_settings.html).  Notably, hosted gitlab.com instances have a 10MB attachment limit which cannot be changed.
+Normally, `goreleaser` uploads release files as "attachments", which may have [administrative limits](https://docs.gitlab.com/ee/user/admin_area/settings/account_and_limit_settings.html).  Notably, hosted gitlab.com instances have a 10MB attachment limit, which cannot be changed.
 
 Uploading to the Generic Package Registry does not have this restriction.  To use it instead, set `use_package_registry` to `true`.
 
@@ -60,7 +75,7 @@ gitlab_urls:
 
 ## Example release
 
-Here's an example of how the release might look like:
+Here's an example of what the release might look like:
 
 <a href="https://gitlab.com/goreleaser/example/-/releases">
   <figure>

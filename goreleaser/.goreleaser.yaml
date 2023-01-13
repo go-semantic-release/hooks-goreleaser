@@ -52,18 +52,20 @@ changelog:
     - Merge branch
     - go mod tidy
   groups:
-    - title: 'New Features and updates'
-      regexp: "^.*feat[(\\w)]*:+.*$"
-      order: 0
+    - title: Dependency updates
+      regexp: '^.*?(feat|fix)\(deps\)!?:.+$'
+      order: 300
+    - title: 'New Features'
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 100
     - title: 'Bug fixes'
-      regexp: "^.*fix[(\\w)]*:+.*$"
-      order: 10
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 200
     - title: 'Documentation updates'
-      regexp: "^.*docs[(\\w)]*:+.*$"
-      order: 20
+      regexp: ^.*?doc(\([[:word:]]+\))??!?:.+$
+      order: 400
     - title: Other work
-      order: 999
-
+      order: 9999
 
 dockers:
 - image_templates:
@@ -127,16 +129,20 @@ docker_manifests:
   - 'ghcr.io/goreleaser/goreleaser:{{ .Tag }}-arm64'
 
 archives:
-  - name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
-    replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
+  - name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
     - goos: windows
       format: zip
+    builds_info:
+      group: root
+      owner: root
+    rlcp: true
     files:
       - README.md
       - LICENSE.md
@@ -221,7 +227,7 @@ nfpms:
         file_info:
           mode: 0644
       - src: ./completions/goreleaser.fish
-        dst: /usr/share/fish/completions/goreleaser.fish
+        dst: /usr/share/fish/vendor_completions.d/goreleaser.fish
         file_info:
           mode: 0644
       - src: ./completions/goreleaser.zsh
@@ -240,6 +246,7 @@ nfpms:
     - apk
     - deb
     - rpm
+    - archlinux
     dependencies:
     - git
     recommends:
@@ -284,7 +291,7 @@ docker_signs:
   output: true
   args:
   - 'sign'
-  - '${artifact}'
+  - '${artifact}@${digest}'
 
 publishers:
   - name: fury.io
@@ -301,18 +308,29 @@ release:
   footer: |
     **Full Changelog**: https://github.com/goreleaser/goreleaser/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-    ## What to do next?
+    * * *
 
-    - Read the [documentation](https://goreleaser.com/intro/)
-    - Check out the [GoReleaser Pro](https://goreleaser.com/pro) distribution
-    - Join our [Discord server](https://discord.gg/RGEBtg8vQ6)
-    - Follow us on [Twitter](https://twitter.com/goreleaser)
+    <a href="https://goreleaser.com"><img src="https://raw.githubusercontent.com/goreleaser/artwork/master/opencollective-header.png" with="100%" alt="GoReleaser logo"></a>
+
+    Find examples and commented usage of all options in our [website](https://goreleaser.com/intro/).
+    Want to help? You can [sponsor](https://goreleaser.com/sponsors/),get a [Pro License](https://goreleaser.com/pro) or [contribute](https://goreleaser.com/contributing).
+    Also, feel free to reach out on [Discord](https://discord.gg/RGEBtg8vQ6) and [Twitter](https://twitter.com/goreleaser)!
 
 announce:
   twitter:
     enabled: true
     message_template: 'GoReleaser {{ .Tag }} is out! Check it out: https://github.com/goreleaser/goreleaser/releases/tag/{{ .Tag }}'
 
+  mastodon:
+    enabled: true
+    message_template: '#GoReleaser {{ .Tag }} is out! Check it out: https://github.com/goreleaser/goreleaser/releases/tag/{{ .Tag }}'
+    server: https://fosstodon.org
+
   discord:
     enabled: true
     message_template: 'GoReleaser {{ .Tag }} is out! Check it out: https://github.com/goreleaser/goreleaser/releases/tag/{{ .Tag }}'
+
+
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=jcroql
+

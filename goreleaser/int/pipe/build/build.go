@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/apex/log"
 	"github.com/caarlos0/go-shellwords"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
 	"github.com/goreleaser/goreleaser/int/shell"
@@ -31,17 +31,16 @@ func (Pipe) String() string {
 
 // Run the pipe.
 func (Pipe) Run(ctx *context.Context) error {
+	g := semerrgroup.New(ctx.Parallelism)
 	for _, build := range ctx.Config.Builds {
 		if build.Skip {
 			log.WithField("id", build.ID).Info("skip is set")
 			continue
 		}
 		log.WithField("build", build).Debug("building")
-		if err := runPipeOnBuild(ctx, build); err != nil {
-			return err
-		}
+		runPipeOnBuild(ctx, g, build)
 	}
-	return nil
+	return g.Wait()
 }
 
 // Default sets the pipe defaults.
@@ -81,8 +80,7 @@ func buildWithDefaults(ctx *context.Context, build config.Build) (config.Build, 
 	return builders.For(build.Builder).WithDefaults(build)
 }
 
-func runPipeOnBuild(ctx *context.Context, build config.Build) error {
-	g := semerrgroup.New(ctx.Parallelism)
+func runPipeOnBuild(ctx *context.Context, g semerrgroup.Group, build config.Build) {
 	for _, target := range build.Targets {
 		target := target
 		build := build
@@ -106,8 +104,6 @@ func runPipeOnBuild(ctx *context.Context, build config.Build) error {
 			return nil
 		})
 	}
-
-	return g.Wait()
 }
 
 func runHook(ctx *context.Context, opts builders.Options, buildEnv []string, hooks config.Hooks) error {
@@ -119,9 +115,7 @@ func runHook(ctx *context.Context, opts builders.Options, buildEnv []string, hoo
 		var env []string
 
 		env = append(env, ctx.Env.Strings()...)
-		env = append(env, buildEnv...)
-
-		for _, rawEnv := range hook.Env {
+		for _, rawEnv := range append(buildEnv, hook.Env...) {
 			e, err := tmpl.New(ctx).WithBuildOptions(opts).Apply(rawEnv)
 			if err != nil {
 				return err
@@ -160,7 +154,7 @@ func doBuild(ctx *context.Context, build config.Build, opts builders.Options) er
 }
 
 func buildOptionsForTarget(ctx *context.Context, build config.Build, target string) (*builders.Options, error) {
-	ext := extFor(target, build.Flags)
+	ext := extFor(target, build.BuildDetails)
 	parts := strings.Split(target, "_")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("%s is not a valid build target", target)
@@ -215,20 +209,32 @@ func buildOptionsForTarget(ctx *context.Context, build config.Build, target stri
 	return &buildOpts, nil
 }
 
-func extFor(target string, flags config.FlagArray) string {
-	if strings.Contains(target, "windows") {
-		for _, s := range flags {
-			if s == "-buildmode=c-shared" {
-				return ".dll"
-			}
-			if s == "-buildmode=c-archive" {
-				return ".lib"
-			}
+func extFor(target string, build config.BuildDetails) string {
+	// Configure the extensions for shared and static libraries - by default .so and .a respectively -
+	// with overrides for Windows (.dll for shared and .lib for static) and .dylib for macOS.
+	switch build.Buildmode {
+	case "c-shared":
+		if strings.Contains(target, "darwin") {
+			return ".dylib"
 		}
-		return ".exe"
+		if strings.Contains(target, "windows") {
+			return ".dll"
+		}
+		return ".so"
+	case "c-archive":
+		if strings.Contains(target, "windows") {
+			return ".lib"
+		}
+		return ".a"
 	}
+
 	if target == "js_wasm" {
 		return ".wasm"
 	}
+
+	if strings.Contains(target, "windows") {
+		return ".exe"
+	}
+
 	return ""
 }

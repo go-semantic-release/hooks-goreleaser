@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -95,6 +95,12 @@ func (Pipe) Run(ctx *context.Context) error {
 	return os.WriteFile(path, []byte(ctx.ReleaseNotes), 0o644) //nolint: gosec
 }
 
+type changelogGroup struct {
+	title   string
+	entries []string
+	order   int
+}
+
 func formatChangelog(ctx *context.Context, entries []string) (string, error) {
 	newLine := "\n"
 	if ctx.TokenType == context.TokenTypeGitLab || ctx.TokenType == context.TokenTypeGitea {
@@ -108,6 +114,24 @@ func formatChangelog(ctx *context.Context, entries []string) (string, error) {
 		return strings.Join(entries, newLine), nil
 	}
 
+	for i := range entries {
+		entry := entries[i]
+		abbr := ctx.Config.Changelog.Abbrev
+		switch abbr {
+		case 0:
+			continue
+		case -1:
+			_, rest, _ := strings.Cut(entry, " ")
+			entries[i] = rest
+		default:
+			commit, rest, _ := strings.Cut(entry, " ")
+			if abbr > len(commit) {
+				continue
+			}
+			entries[i] = fmt.Sprintf("%s %s", commit[:abbr], rest)
+		}
+	}
+
 	result := []string{"## Changelog"}
 	if len(ctx.Config.Changelog.Groups) == 0 {
 		log.Debug("not grouping entries")
@@ -115,14 +139,15 @@ func formatChangelog(ctx *context.Context, entries []string) (string, error) {
 	}
 
 	log.Debug("grouping entries")
-	groups := ctx.Config.Changelog.Groups
-
-	sort.Slice(groups, func(i, j int) bool { return groups[i].Order < groups[j].Order })
-	for _, group := range groups {
-		items := make([]string, 0)
+	var groups []changelogGroup
+	for _, group := range ctx.Config.Changelog.Groups {
+		item := changelogGroup{
+			title: group.Title,
+			order: group.Order,
+		}
 		if group.Regexp == "" {
 			// If no regexp is provided, we purge all strikethrough entries and add remaining entries to the list
-			items = filterAndPrefixItems(entries)
+			item.entries = filterAndPrefixItems(entries)
 			// clear array
 			entries = nil
 		} else {
@@ -130,21 +155,36 @@ func formatChangelog(ctx *context.Context, entries []string) (string, error) {
 			if err != nil {
 				return "", fmt.Errorf("failed to group into %q: %w", group.Title, err)
 			}
-			for i, entry := range entries {
+
+			log.Debugf("group: %#v", group)
+			i := 0
+			for _, entry := range entries {
 				match := regex.MatchString(entry)
+				log.Debugf("entry: %s match: %b\n", entry, match)
 				if match {
-					items = append(items, li+entry)
-					// Striking out the matched entry
-					entries[i] = ""
+					item.entries = append(item.entries, li+entry)
+				} else {
+					// Keep unmatched entry.
+					entries[i] = entry
+					i++
 				}
 			}
+			entries = entries[:i]
 		}
-		if len(items) > 0 {
-			result = append(result, fmt.Sprintf("### %s", group.Title))
-			result = append(result, items...)
+		groups = append(groups, item)
+
+		if len(entries) == 0 {
+			break // No more entries to process.
 		}
 	}
 
+	sort.Slice(groups, func(i, j int) bool { return groups[i].order < groups[j].order })
+	for _, group := range groups {
+		if len(group.entries) > 0 {
+			result = append(result, fmt.Sprintf("\n### %s", group.title))
+			result = append(result, group.entries...)
+		}
+	}
 	return strings.Join(result, newLine), nil
 }
 
@@ -169,18 +209,19 @@ func loadFromFile(file string) (string, error) {
 
 func checkSortDirection(mode string) error {
 	switch mode {
-	case "":
-		fallthrough
-	case "asc":
-		fallthrough
-	case "desc":
+	case "", "asc", "desc":
 		return nil
+	default:
+		return ErrInvalidSortDirection
 	}
-	return ErrInvalidSortDirection
 }
 
 func buildChangelog(ctx *context.Context) ([]string, error) {
-	log, err := getChangelog(ctx, ctx.Git.CurrentTag)
+	l, err := getChangeloger(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log, err := l.Log(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -238,27 +279,6 @@ func remove(filter *regexp.Regexp, entries []string) (result []string) {
 
 func extractCommitInfo(line string) string {
 	return strings.Join(strings.Split(line, " ")[1:], " ")
-}
-
-func getChangelog(ctx *context.Context, tag string) (string, error) {
-	prev := ctx.Git.PreviousTag
-	if prev == "" {
-		// get first commit
-		result, err := git.Clean(git.Run(ctx, "rev-list", "--max-parents=0", "HEAD"))
-		if err != nil {
-			return "", err
-		}
-		prev = result
-	}
-	return doGetChangelog(ctx, prev, tag)
-}
-
-func doGetChangelog(ctx *context.Context, prev, tag string) (string, error) {
-	l, err := getChangeloger(ctx)
-	if err != nil {
-		return "", err
-	}
-	return l.Log(ctx, prev, tag)
 }
 
 func getChangeloger(ctx *context.Context) (changeloger, error) {
@@ -347,19 +367,20 @@ func loadContent(ctx *context.Context, fileName, tmplName string) (string, error
 }
 
 type changeloger interface {
-	Log(ctx *context.Context, prev, current string) (string, error)
+	Log(ctx *context.Context) (string, error)
 }
 
 type gitChangeloger struct{}
 
 var validSHA1 = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
 
-func (g gitChangeloger) Log(ctx *context.Context, prev, current string) (string, error) {
+func (g gitChangeloger) Log(ctx *context.Context) (string, error) {
 	args := []string{"log", "--pretty=oneline", "--abbrev-commit", "--no-decorate", "--no-color"}
+	prev, current := comparePair(ctx)
 	if validSHA1.MatchString(prev) {
 		args = append(args, prev, current)
 	} else {
-		args = append(args, fmt.Sprintf("tags/%s..tags/%s", prev, current))
+		args = append(args, fmt.Sprintf("tags/%s..tags/%s", ctx.Git.PreviousTag, ctx.Git.CurrentTag))
 	}
 	return git.Run(ctx, args...)
 }
@@ -369,7 +390,8 @@ type scmChangeloger struct {
 	repo   client.Repo
 }
 
-func (c *scmChangeloger) Log(ctx *context.Context, prev, current string) (string, error) {
+func (c *scmChangeloger) Log(ctx *context.Context) (string, error) {
+	prev, current := comparePair(ctx)
 	return c.client.Changelog(ctx, c.repo, prev, current)
 }
 
@@ -378,6 +400,15 @@ type githubNativeChangeloger struct {
 	repo   client.Repo
 }
 
-func (c *githubNativeChangeloger) Log(ctx *context.Context, prev, current string) (string, error) {
-	return c.client.GenerateReleaseNotes(ctx, c.repo, prev, current)
+func (c *githubNativeChangeloger) Log(ctx *context.Context) (string, error) {
+	return c.client.GenerateReleaseNotes(ctx, c.repo, ctx.Git.PreviousTag, ctx.Git.CurrentTag)
+}
+
+func comparePair(ctx *context.Context) (prev string, current string) {
+	prev = ctx.Git.PreviousTag
+	current = ctx.Git.CurrentTag
+	if prev == "" {
+		prev = ctx.Git.FirstCommit
+	}
+	return
 }
