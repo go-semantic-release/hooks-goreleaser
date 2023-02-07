@@ -9,6 +9,8 @@ builds:
       - linux_arm
       - windows_amd64
     main: ./cmd/hooks-goreleaser
+    flags:
+      - -trimpath
     ldflags:
       - -extldflags '-static'
       - -s -w -X github.com/go-semantic-release/hooks-goreleaser/pkg/hooks.HVERSION={{.Version}}
