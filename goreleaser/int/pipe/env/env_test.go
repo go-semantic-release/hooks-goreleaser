@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
@@ -210,14 +211,49 @@ func TestInvalidEnvChecksSkipped(t *testing.T) {
 
 func TestInvalidEnvReleaseDisabled(t *testing.T) {
 	require.NoError(t, os.Unsetenv("GITHUB_TOKEN"))
-	ctx := &context.Context{
-		Config: config.Project{
+
+	t.Run("true", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Env: []string{},
 			Release: config.Release{
-				Disable: true,
+				Disable: "true",
 			},
-		},
-	}
-	require.NoError(t, Pipe{}.Run(ctx))
+		})
+		require.NoError(t, Pipe{}.Run(ctx))
+	})
+
+	t.Run("tmpl true", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Env: []string{"FOO=true"},
+			Release: config.Release{
+				Disable: "{{ .Env.FOO }}",
+			},
+		})
+		require.NoError(t, Pipe{}.Run(ctx))
+	})
+
+	t.Run("tmpl false", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Env: []string{"FOO=true"},
+			Release: config.Release{
+				Disable: "{{ .Env.FOO }}-nope",
+			},
+		})
+		require.EqualError(t, Pipe{}.Run(ctx), ErrMissingToken.Error())
+	})
+
+	t.Run("tmpl error", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Release: config.Release{
+				Disable: "{{ .Env.FOO }}",
+			},
+		})
+		testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
+	})
+}
+
+func TestInvalidEnvReleaseDisabledTmpl(t *testing.T) {
+	require.NoError(t, os.Unsetenv("GITHUB_TOKEN"))
 }
 
 func TestLoadEnv(t *testing.T) {

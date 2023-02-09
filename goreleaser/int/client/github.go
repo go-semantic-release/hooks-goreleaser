@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/google/go-github/v48/github"
+	"github.com/google/go-github/v50/github"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"

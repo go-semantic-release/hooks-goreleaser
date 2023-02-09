@@ -250,7 +250,7 @@ func TestRunPipe(t *testing.T) {
 	}
 	require.NoError(t, Pipe{}.Run(ctx))
 	packages := ctx.Artifacts.Filter(artifact.ByType(artifact.LinuxPackage)).List()
-	require.Len(t, packages, 51)
+	require.Len(t, packages, 47)
 	for _, pkg := range packages {
 		format := pkg.Format()
 		require.NotEmpty(t, format)
@@ -554,6 +554,12 @@ func TestInvalidTemplate(t *testing.T) {
 	t.Run("apk key file", func(t *testing.T) {
 		ctx := makeCtx()
 		ctx.Config.NFPMs[0].APK.Signature.KeyFile = "{{ .NOPE_KEY_FILE }}"
+		testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
+	})
+
+	t.Run("apk key name", func(t *testing.T) {
+		ctx := makeCtx()
+		ctx.Config.NFPMs[0].APK.Signature.KeyName = "{{ .NOPE_KEY_FILE }}"
 		testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
 	})
 

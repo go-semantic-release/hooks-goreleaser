@@ -49,7 +49,7 @@ changelog:
 
   # Group commits messages by given regex and title.
   # Order value defines the order of the groups.
-  # Proving no regex means all commits will be grouped under the default group.
+  # Providing no regex means all commits will be grouped under the default group.
   # Groups are disabled when using github-native, as it already groups things by itself.
   # Matches are performed against strings of the form: "<abbrev-commit>[:] <title-commit>".
   # Regex use RE2 syntax as defined here: https://github.com/google/re2/wiki/Syntax.
@@ -64,6 +64,27 @@ changelog:
       order: 1
     - title: Others
       order: 999
+      # A group can have subgroups.
+      # If you use this, all the commits that match the parent group will also
+      # be checked against its subgroups. If some of them matches, it'll be
+      # grouped there, otherwise they'll remain ungrouped.
+      #
+      # The title is optional - you can think of groups as a way to order
+      # commits within a group.
+      #
+      # There can only be one level of subgroups, i.e. a subgroup cannot have
+      # subgroups.
+      #
+      # This feature is only available in GoReleaser Pro.
+      #
+      # Since: v1.15.0-pro
+      subgroups:
+        - title: 'Docs'
+          regex: '.*docs.*'
+          order: 1
+        - title: 'CI'
+          regex: '.*build.*'
+          order: 2
 
   filters:
     # Commit messages matching the regexp listed here will be removed from
@@ -76,4 +97,9 @@ changelog:
 ```
 
 !!! warning
-    Note that using the `github-native` changelog does not support `sort` and `filter`.
+    Some things to keep an eye on:
+
+    * The `github-native` changelog does not support `sort` and `filter`.
+    * When releasing a [nightly][], `use` will fallback to `git`.
+
+[nightly]: /customization/nightly

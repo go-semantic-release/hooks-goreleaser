@@ -14,6 +14,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
@@ -25,8 +26,11 @@ var ErrMultipleReleases = errors.New("multiple releases are defined. Only one is
 // Pipe for github release.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "scm releases" }
-func (Pipe) Skip(ctx *context.Context) bool { return ctx.Config.Release.Disable }
+func (Pipe) String() string { return "scm releases" }
+
+func (Pipe) Skip(ctx *context.Context) (bool, error) {
+	return tmpl.New(ctx).Bool(ctx.Config.Release.Disable)
+}
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {
@@ -116,7 +120,11 @@ func doPublish(ctx *context.Context, client client.Client) error {
 		return err
 	}
 
-	if ctx.Config.Release.SkipUpload {
+	skipUpload, err := tmpl.New(ctx).Bool(ctx.Config.Release.SkipUpload)
+	if err != nil {
+		return err
+	}
+	if skipUpload {
 		return pipe.Skip("release.skip_upload is set")
 	}
 

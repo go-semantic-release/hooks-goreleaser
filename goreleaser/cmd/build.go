@@ -11,6 +11,7 @@ import (
 	"github.com/caarlos0/ctrlc"
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/gio"
 	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
 	"github.com/goreleaser/goreleaser/int/middleware/logging"
@@ -33,7 +34,8 @@ type buildOpts struct {
 	skipValidate  bool
 	skipBefore    bool
 	skipPostHooks bool
-	rmDist        bool
+	clean         bool
+	rmDist        bool // deprecated
 	deprecated    bool
 	parallelism   int
 	timeout       time.Duration
@@ -74,6 +76,7 @@ When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and ` + "`GOARCH`" 
 	cmd.Flags().BoolVar(&root.opts.skipValidate, "skip-validate", false, "Skips several sanity checks")
 	cmd.Flags().BoolVar(&root.opts.skipBefore, "skip-before", false, "Skips global before hooks")
 	cmd.Flags().BoolVar(&root.opts.skipPostHooks, "skip-post-hooks", false, "Skips all post-build hooks")
+	cmd.Flags().BoolVar(&root.opts.clean, "clean", false, "Remove the dist folder before building")
 	cmd.Flags().BoolVar(&root.opts.rmDist, "rm-dist", false, "Remove the dist folder before building")
 	cmd.Flags().IntVarP(&root.opts.parallelism, "parallelism", "p", 0, "Amount tasks to run concurrently (default: number of CPUs)")
 	cmd.Flags().DurationVar(&root.opts.timeout, "timeout", 30*time.Minute, "Timeout to the entire build process")
@@ -82,6 +85,7 @@ When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and ` + "`GOARCH`" 
 	cmd.Flags().BoolVar(&root.opts.deprecated, "deprecated", false, "Force print the deprecation message - tests only")
 	cmd.Flags().StringVarP(&root.opts.output, "output", "o", "", "Copy the binary to the path after the build. Only taken into account when using --single-target and a single id (either with --id or if configuration only has one build)")
 	_ = cmd.Flags().SetAnnotation("output", cobra.BashCompFilenameExt, []string{""})
+	_ = cmd.Flags().MarkHidden("rm-dist")
 	_ = cmd.Flags().MarkHidden("deprecated")
 
 	root.cmd = cmd
@@ -122,6 +126,7 @@ func setupPipeline(ctx *context.Context, options buildOpts) []pipeline.Piper {
 }
 
 func setupBuildContext(ctx *context.Context, options buildOpts) error {
+	ctx.Deprecated = options.deprecated // test only
 	ctx.Parallelism = runtime.NumCPU()
 	if options.parallelism > 0 {
 		ctx.Parallelism = options.parallelism
@@ -131,8 +136,12 @@ func setupBuildContext(ctx *context.Context, options buildOpts) error {
 	ctx.SkipValidate = ctx.Snapshot || options.skipValidate
 	ctx.SkipBefore = options.skipBefore
 	ctx.SkipPostBuildHooks = options.skipPostHooks
-	ctx.RmDist = options.rmDist
 	ctx.SkipTokenCheck = true
+	ctx.Clean = options.clean || options.rmDist
+
+	if options.rmDist {
+		deprecate.NoticeCustom(ctx, "-rm-dist", "--rm-dist was deprecated in favor of --clean, check {{ .URL }} for more details")
+	}
 
 	if options.singleTarget {
 		setupBuildSingleTarget(ctx)
@@ -144,8 +153,6 @@ func setupBuildContext(ctx *context.Context, options buildOpts) error {
 		}
 	}
 
-	// test only
-	ctx.Deprecated = options.deprecated
 	return nil
 }
 

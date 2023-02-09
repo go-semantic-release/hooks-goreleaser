@@ -6,6 +6,7 @@ import (
 
 	"github.com/caarlos0/ctrlc"
 	"github.com/caarlos0/log"
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
 	"github.com/goreleaser/goreleaser/int/middleware/logging"
 	"github.com/goreleaser/goreleaser/int/middleware/skip"
@@ -36,8 +37,10 @@ type releaseOpts struct {
 	skipAnnounce       bool
 	skipSBOMCataloging bool
 	skipDocker         bool
+	skipKo             bool
 	skipBefore         bool
-	rmDist             bool
+	clean              bool
+	rmDist             bool // deprecated
 	deprecated         bool
 	parallelism        int
 	timeout            time.Duration
@@ -77,13 +80,17 @@ func newReleaseCmd() *releaseCmd {
 	cmd.Flags().BoolVar(&root.opts.skipSign, "skip-sign", false, "Skips signing artifacts")
 	cmd.Flags().BoolVar(&root.opts.skipSBOMCataloging, "skip-sbom", false, "Skips cataloging artifacts")
 	cmd.Flags().BoolVar(&root.opts.skipDocker, "skip-docker", false, "Skips Docker Images/Manifests builds")
+	cmd.Flags().BoolVar(&root.opts.skipKo, "skip-ko", false, "Skips Ko builds")
 	cmd.Flags().BoolVar(&root.opts.skipBefore, "skip-before", false, "Skips global before hooks")
 	cmd.Flags().BoolVar(&root.opts.skipValidate, "skip-validate", false, "Skips git checks")
+	cmd.Flags().BoolVar(&root.opts.clean, "clean", false, "Removes the dist folder")
 	cmd.Flags().BoolVar(&root.opts.rmDist, "rm-dist", false, "Removes the dist folder")
 	cmd.Flags().IntVarP(&root.opts.parallelism, "parallelism", "p", 0, "Amount tasks to run concurrently (default: number of CPUs)")
 	cmd.Flags().DurationVar(&root.opts.timeout, "timeout", 30*time.Minute, "Timeout to the entire release process")
 	cmd.Flags().BoolVar(&root.opts.deprecated, "deprecated", false, "Force print the deprecation message - tests only")
 	_ = cmd.Flags().MarkHidden("deprecated")
+	_ = cmd.Flags().MarkHidden("rm-dist")
+	_ = cmd.Flags().MarkDeprecated("rm-dist", "please use --clean instead")
 	_ = cmd.Flags().SetAnnotation("config", cobra.BashCompFilenameExt, []string{"yaml", "yml"})
 
 	root.cmd = cmd
@@ -115,6 +122,7 @@ func releaseProject(options releaseOpts) (*context.Context, error) {
 }
 
 func setupReleaseContext(ctx *context.Context, options releaseOpts) {
+	ctx.Deprecated = options.deprecated // test only
 	ctx.Parallelism = runtime.NumCPU()
 	if options.parallelism > 0 {
 		ctx.Parallelism = options.parallelism
@@ -137,9 +145,11 @@ func setupReleaseContext(ctx *context.Context, options releaseOpts) {
 	ctx.SkipSign = options.skipSign
 	ctx.SkipSBOMCataloging = options.skipSBOMCataloging
 	ctx.SkipDocker = options.skipDocker
+	ctx.SkipKo = options.skipKo
 	ctx.SkipBefore = options.skipBefore
-	ctx.RmDist = options.rmDist
+	ctx.Clean = options.clean || options.rmDist
 
-	// test only
-	ctx.Deprecated = options.deprecated
+	if options.rmDist {
+		deprecate.NoticeCustom(ctx, "-rm-dist", "--rm-dist was deprecated in favor of --clean, check {{ .URL }} for more details")
+	}
 }

@@ -36,7 +36,7 @@ jobs:
       - run: git fetch --force --tags
       - uses: actions/setup-go@v3
         with:
-          go-version: '>=1.19.4'
+          go-version: '>=1.20.0'
           cache: true
       # More assembly might be required: Docker logins, GPG, etc. It all depends
       # on your needs.
@@ -45,7 +45,7 @@ jobs:
           # either 'goreleaser' (default) or 'goreleaser-pro':
           distribution: goreleaser
           version: latest
-          args: release --rm-dist
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro'
@@ -97,7 +97,7 @@ the [Import GPG][import-gpg] GitHub Action along with this one:
         uses: goreleaser/goreleaser-action@v4
         with:
           version: latest
-          args: release --rm-dist
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
@@ -179,7 +179,7 @@ step will look like this:
         uses: goreleaser/goreleaser-action@v4
         with:
           version: latest
-          args: release --rm-dist
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 ```

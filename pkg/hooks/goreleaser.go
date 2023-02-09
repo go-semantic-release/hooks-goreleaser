@@ -56,7 +56,7 @@ func (gr *GoReleaser) Success(shConfig *hooks.SuccessHookConfig) error {
 	// set some fixed parameters for GoReleaser
 	ctx.Parallelism = gr.parallelism
 	log.Infof("build parallelism is set to %d", ctx.Parallelism)
-	ctx.RmDist = true
+	ctx.Clean = true
 	ctx.Config.Changelog.Skip = true // never generate changelog
 
 	ctx.Version = newVersion

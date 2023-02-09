@@ -145,7 +145,11 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 	arch := infoArch + binaries[0].Goamd64                                  // unique arch key
 	infoPlatform := binaries[0].Goos
 	if infoPlatform == "ios" {
-		infoPlatform = "iphoneos-arm64"
+		if format == "deb" {
+			infoPlatform = "iphoneos-arm64"
+		} else {
+			return nil
+		}
 	}
 
 	bindDir := fpm.Bindir
@@ -209,6 +213,11 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 	}
 
 	apkKeyFile, err := t.Apply(overridden.APK.Signature.KeyFile)
+	if err != nil {
+		return err
+	}
+
+	apkKeyName, err := t.Apply(overridden.APK.Signature.KeyName)
 	if err != nil {
 		return err
 	}
@@ -353,7 +362,7 @@ func create(ctx *context.Context, fpm config.NFPM, format string, binaries []*ar
 						KeyFile:       apkKeyFile,
 						KeyPassphrase: getPassphraseFromEnv(ctx, "APK", fpm.ID),
 					},
-					KeyName: overridden.APK.Signature.KeyName,
+					KeyName: apkKeyName,
 				},
 				Scripts: nfpm.APKScripts{
 					PreUpgrade:  overridden.APK.Scripts.PreUpgrade,

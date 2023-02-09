@@ -16,6 +16,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/discord"
 	"github.com/goreleaser/goreleaser/int/pipe/docker"
 	"github.com/goreleaser/goreleaser/int/pipe/gomod"
+	"github.com/goreleaser/goreleaser/int/pipe/ko"
 	"github.com/goreleaser/goreleaser/int/pipe/krew"
 	"github.com/goreleaser/goreleaser/int/pipe/linkedin"
 	"github.com/goreleaser/goreleaser/int/pipe/mastodon"
@@ -74,6 +75,7 @@ var Defaulters = []Defaulter{
 	aur.Pipe{},
 	brew.Pipe{},
 	krew.Pipe{},
+	ko.Pipe{},
 	scoop.Pipe{},
 	discord.Pipe{},
 	reddit.Pipe{},

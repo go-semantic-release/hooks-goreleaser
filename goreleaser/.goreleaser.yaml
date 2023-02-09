@@ -25,6 +25,7 @@ builds:
     - amd64
     - arm
     - arm64
+    - ppc64
   goarm:
     - "7"
   mod_timestamp: '{{ .CommitTimestamp }}'
@@ -63,6 +64,9 @@ changelog:
       order: 200
     - title: 'Documentation updates'
       regexp: ^.*?doc(\([[:word:]]+\))??!?:.+$
+      order: 400
+    - title: 'Build process updates'
+      regexp: ^.*?build(\([[:word:]]+\))??!?:.+$
       order: 400
     - title: Other work
       order: 9999
@@ -318,7 +322,7 @@ release:
 
 announce:
   twitter:
-    enabled: true
+    enabled: false
     message_template: 'GoReleaser {{ .Tag }} is out! Check it out: https://github.com/goreleaser/goreleaser/releases/tag/{{ .Tag }}'
 
   mastodon:

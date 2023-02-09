@@ -520,7 +520,7 @@ func TestDefaultPipeDisabled(t *testing.T) {
 
 	ctx := context.New(config.Project{
 		Release: config.Release{
-			Disable: true,
+			Disable: "true",
 		},
 	})
 	ctx.TokenType = context.TokenTypeGitHub
@@ -606,16 +606,53 @@ func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
 		ctx := context.New(config.Project{
 			Release: config.Release{
-				Disable: true,
+				Disable: "true",
 			},
 		})
-		require.True(t, Pipe{}.Skip(ctx))
+		b, err := Pipe{}.Skip(ctx)
+		require.NoError(t, err)
+		require.True(t, b)
+	})
+
+	t.Run("skip tmpl", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Env: []string{"FOO=true"},
+			Release: config.Release{
+				Disable: "{{ .Env.FOO }}",
+			},
+		})
+		b, err := Pipe{}.Skip(ctx)
+		require.NoError(t, err)
+		require.True(t, b)
+	})
+
+	t.Run("tmpl err", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Release: config.Release{
+				Disable: "{{ .Env.FOO }}",
+			},
+		})
+		_, err := Pipe{}.Skip(ctx)
+		require.Error(t, err)
 	})
 
 	t.Run("skip upload", func(t *testing.T) {
 		ctx := context.New(config.Project{
+			Env: []string{"FOO=true"},
 			Release: config.Release{
-				SkipUpload: true,
+				SkipUpload: "{{ .Env.FOO }}",
+			},
+		})
+		client := &client.Mock{}
+		testlib.AssertSkipped(t, doPublish(ctx, client))
+		require.True(t, client.CreatedRelease)
+		require.False(t, client.UploadedFile)
+	})
+
+	t.Run("skip upload tmpl", func(t *testing.T) {
+		ctx := context.New(config.Project{
+			Release: config.Release{
+				SkipUpload: "true",
 			},
 		})
 		client := &client.Mock{}
@@ -625,6 +662,8 @@ func TestSkip(t *testing.T) {
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		require.False(t, Pipe{}.Skip(context.New(config.Project{})))
+		b, err := Pipe{}.Skip(context.New(config.Project{}))
+		require.NoError(t, err)
+		require.False(t, b)
 	})
 }

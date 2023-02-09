@@ -23,7 +23,7 @@ steps:
   BuildMyApp:
     title: Compiling go code
     stage: build
-    image: 'golang:1.19'
+    image: 'golang:1.20'
     commands:
       - go build
   ReleaseMyApp:
@@ -31,7 +31,7 @@ steps:
     stage: release
     image: 'goreleaser/goreleaser'
     commands:
-      - goreleaser --rm-dist
+      - goreleaser --clean
 ```
 
 You need to pass the variable `GITHUB_TOKEN` in the Codefresh UI that

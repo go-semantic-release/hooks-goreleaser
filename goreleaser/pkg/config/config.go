@@ -199,6 +199,25 @@ type Krew struct {
 	SkipUpload            string       `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
 }
 
+// Ko contains the ko section
+type Ko struct {
+	ID                  string   `yaml:"id,omitempty" json:"id,omitempty"`
+	Build               string   `yaml:"build,omitempty" json:"build,omitempty"`
+	Main                string   `yaml:"main,omitempty" json:"main,omitempty"`
+	WorkingDir          string   `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+	BaseImage           string   `yaml:"base_image,omitempty" json:"base_image,omitempty"`
+	Repository          string   `yaml:"repository,omitempty" json:"repository,omitempty"`
+	Platforms           []string `yaml:"platforms,omitempty" json:"platforms,omitempty"`
+	Tags                []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	SBOM                string   `yaml:"sbom,omitempty" json:"sbom,omitempty"`
+	Ldflags             []string `yaml:"ldflags,omitempty" json:"ldflags,omitempty"`
+	Flags               []string `yaml:"flags,omitempty" json:"flags,omitempty"`
+	Env                 []string `yaml:"env,omitempty" json:"env,omitempty"`
+	Bare                bool     `yaml:"bare,omitempty" json:"bare,omitempty"`
+	PreserveImportPaths bool     `yaml:"preserve_import_paths,omitempty" json:"preserve_import_paths,omitempty"`
+	BaseImportPaths     bool     `yaml:"base_import_paths,omitempty" json:"base_import_paths,omitempty"`
+}
+
 // Scoop contains the scoop.sh section.
 type Scoop struct {
 	Name                  string       `yaml:"name,omitempty" json:"name,omitempty"`
@@ -316,7 +335,7 @@ type Build struct {
 	Hooks           BuildHookConfig `yaml:"hooks,omitempty" json:"hooks,omitempty"`
 	Builder         string          `yaml:"builder,omitempty" json:"builder,omitempty"`
 	ModTimestamp    string          `yaml:"mod_timestamp,omitempty" json:"mod_timestamp,omitempty"`
-	Skip            bool            `yaml:"skip,omitempty" json:"skip,omitempty" jsonschema:"oneof_type=string;boolean"`
+	Skip            bool            `yaml:"skip,omitempty" json:"skip,omitempty"`
 	GoBinary        string          `yaml:"gobinary,omitempty" json:"gobinary,omitempty"`
 	Command         string          `yaml:"command,omitempty" json:"command,omitempty"`
 	NoUniqueDistDir bool            `yaml:"no_unique_dist_dir,omitempty" json:"no_unique_dist_dir,omitempty"`
@@ -511,8 +530,8 @@ type Release struct {
 	Draft                  bool        `yaml:"draft,omitempty" json:"draft,omitempty"`
 	ReplaceExistingDraft   bool        `yaml:"replace_existing_draft,omitempty" json:"replace_existing_draft,omitempty"`
 	TargetCommitish        string      `yaml:"target_commitish,omitempty" json:"target_commitish,omitempty"`
-	Disable                bool        `yaml:"disable,omitempty" json:"disable,omitempty"`
-	SkipUpload             bool        `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty"`
+	Disable                string      `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
+	SkipUpload             string      `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
 	Prerelease             string      `yaml:"prerelease,omitempty" json:"prerelease,omitempty"`
 	NameTemplate           string      `yaml:"name_template,omitempty" json:"name_template,omitempty"`
 	IDs                    []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
@@ -826,15 +845,15 @@ type Filters struct {
 // Changelog Config.
 type Changelog struct {
 	Filters Filters          `yaml:"filters,omitempty" json:"filters,omitempty"`
-	Sort    string           `yaml:"sort,omitempty" json:"sort,omitempty"`
+	Sort    string           `yaml:"sort,omitempty" json:"sort,omitempty" jsonschema:"enum=asc,enum=desc,enum=,default="`
 	Skip    bool             `yaml:"skip,omitempty" json:"skip,omitempty"` // TODO(caarlos0): rename to Disable to match other pipes
 	Use     string           `yaml:"use,omitempty" json:"use,omitempty" jsonschema:"enum=git,enum=github,enum=github-native,enum=gitlab,default=git"`
-	Groups  []ChangeLogGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
+	Groups  []ChangelogGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
 	Abbrev  int              `yaml:"abbrev,omitempty" json:"abbrev,omitempty"`
 }
 
-// ChangeLogGroup holds the grouping criteria for the changelog.
-type ChangeLogGroup struct {
+// ChangelogGroup holds the grouping criteria for the changelog.
+type ChangelogGroup struct {
 	Title  string `yaml:"title,omitempty" json:"title,omitempty"`
 	Regexp string `yaml:"regexp,omitempty" json:"regexp,omitempty"`
 	Order  int    `yaml:"order,omitempty" json:"order,omitempty"`
@@ -916,6 +935,7 @@ type Project struct {
 	Brews           []Homebrew       `yaml:"brews,omitempty" json:"brews,omitempty"`
 	AURs            []AUR            `yaml:"aurs,omitempty" json:"aurs,omitempty"`
 	Krews           []Krew           `yaml:"krews,omitempty" json:"krews,omitempty"`
+	Kos             []Ko             `yaml:"kos,omitempty" json:"kos,omitempty"`
 	Scoop           Scoop            `yaml:"scoop,omitempty" json:"scoop,omitempty"`
 	Builds          []Build          `yaml:"builds,omitempty" json:"builds,omitempty"`
 	Archives        []Archive        `yaml:"archives,omitempty" json:"archives,omitempty"`
@@ -1066,7 +1086,7 @@ type LinkedIn struct {
 type Telegram struct {
 	Enabled         bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	MessageTemplate string `yaml:"message_template,omitempty" json:"message_template,omitempty"`
-	ChatID          int64  `yaml:"chat_id,omitempty" json:"chat_id,omitempty"`
+	ChatID          string `yaml:"chat_id,omitempty" json:"chat_id,omitempty" jsonschema:"oneof_type=string;integer"`
 }
 
 // Load config file.
