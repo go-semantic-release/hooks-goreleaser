@@ -2,10 +2,13 @@ package docker
 
 import (
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
@@ -13,6 +16,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -28,8 +32,23 @@ const (
 // Pipe for docker.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "docker images" }
-func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.Dockers) == 0 || ctx.SkipDocker }
+func (Pipe) String() string { return "docker images" }
+
+func (Pipe) Skip(ctx *context.Context) bool {
+	return len(ctx.Config.Dockers) == 0 || skips.Any(ctx, skips.Docker)
+}
+
+func (Pipe) Dependencies(ctx *context.Context) []string {
+	var cmds []string
+	for _, s := range ctx.Config.Dockers {
+		switch s.Use {
+		case useDocker, useBuildx:
+			cmds = append(cmds, "docker")
+			// TODO: how to check if buildx is installed
+		}
+	}
+	return cmds
+}
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {
@@ -60,11 +79,6 @@ func (Pipe) Default(ctx *context.Context) error {
 		}
 		if err := validateImager(docker.Use); err != nil {
 			return err
-		}
-		for _, f := range docker.Files {
-			if f == "." || strings.HasPrefix(f, ctx.Config.Dist) {
-				return fmt.Errorf("invalid docker.files: can't be . or inside dist folder: %s", f)
-			}
 		}
 	}
 	return ids.Validate()
@@ -143,12 +157,13 @@ func (Pipe) Run(ctx *context.Context) error {
 
 func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.Artifact) error {
 	if len(artifacts) == 0 {
-		log.Warn("not binaries or packages found for the given platform - COPY/ADD may not work")
+		log.Warn("no binaries or packages found for the given platform - COPY/ADD may not work")
 	}
-	tmp, err := os.MkdirTemp(ctx.Config.Dist, "goreleaserdocker")
+	tmp, err := os.MkdirTemp("", "goreleaserdocker")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary dir: %w", err)
 	}
+	defer os.RemoveAll(tmp)
 
 	images, err := processImageTemplates(ctx, docker)
 	if err != nil {
@@ -162,11 +177,15 @@ func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.A
 	log := log.WithField("image", images[0])
 	log.Debug("tempdir: " + tmp)
 
-	dockerfile, err := tmpl.New(ctx).Apply(docker.Dockerfile)
-	if err != nil {
+	if err := tmpl.New(ctx).ApplyAll(
+		&docker.Dockerfile,
+	); err != nil {
 		return err
 	}
-	if err := gio.Copy(dockerfile, filepath.Join(tmp, "Dockerfile")); err != nil {
+	if err := gio.Copy(
+		docker.Dockerfile,
+		filepath.Join(tmp, "Dockerfile"),
+	); err != nil {
 		return fmt.Errorf("failed to copy dockerfile: %w", err)
 	}
 
@@ -179,7 +198,12 @@ func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.A
 		}
 	}
 	for _, art := range artifacts {
-		if err := gio.Copy(art.Path, filepath.Join(tmp, filepath.Base(art.Path))); err != nil {
+		target := filepath.Join(tmp, art.Name)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("failed to make dir for artifact: %w", err)
+		}
+
+		if err := gio.Copy(art.Path, target); err != nil {
 			return fmt.Errorf("failed to copy artifact: %w", err)
 		}
 	}
@@ -191,6 +215,26 @@ func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.A
 
 	log.Info("building docker image")
 	if err := imagers[docker.Use].Build(ctx, tmp, images, buildFlags); err != nil {
+		if isFileNotFoundError(err.Error()) {
+			var files []string
+			_ = filepath.Walk(tmp, func(_ string, info fs.FileInfo, _ error) error {
+				if info.IsDir() {
+					return nil
+				}
+				files = append(files, info.Name())
+				return nil
+			})
+			return fmt.Errorf(`seems like you tried to copy a file that is not available in the build context.
+
+Here's more information about the build context:
+
+dir: %q
+files in that dir:
+ %s
+
+Previous error:
+%w`, tmp, strings.Join(files, "\n "), err)
+		}
 		return err
 	}
 
@@ -208,6 +252,14 @@ func process(ctx *context.Context, docker config.Docker, artifacts []*artifact.A
 		})
 	}
 	return nil
+}
+
+func isFileNotFoundError(out string) bool {
+	if strings.Contains(out, `executable file not found in $PATH`) {
+		return false
+	}
+	return strings.Contains(out, "file not found") ||
+		strings.Contains(out, ": not found")
 }
 
 func processImageTemplates(ctx *context.Context, docker config.Docker) ([]string, error) {
@@ -249,14 +301,18 @@ func dockerPush(ctx *context.Context, image *artifact.Artifact) error {
 		return err
 	}
 
-	if strings.TrimSpace(docker.SkipPush) == "true" {
+	skip, err := tmpl.New(ctx).Apply(docker.SkipPush)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(skip) == "true" {
 		return pipe.Skip("docker.skip_push is set: " + image.Name)
 	}
-	if strings.TrimSpace(docker.SkipPush) == "auto" && ctx.Semver.Prerelease != "" {
+	if strings.TrimSpace(skip) == "auto" && ctx.Semver.Prerelease != "" {
 		return pipe.Skip("prerelease detected with 'auto' push, skipping docker publish: " + image.Name)
 	}
 
-	digest, err := imagers[docker.Use].Push(ctx, image.Name, docker.PushFlags)
+	digest, err := doPush(ctx, imagers[docker.Use], image.Name, docker.PushFlags)
 	if err != nil {
 		return err
 	}
@@ -277,4 +333,53 @@ func dockerPush(ctx *context.Context, image *artifact.Artifact) error {
 
 	ctx.Artifacts.Add(art)
 	return nil
+}
+
+func doPush(ctx *context.Context, img imager, name string, flags []string) (string, error) {
+	var try int
+	for try < 10 {
+		digest, err := img.Push(ctx, name, flags)
+		if err == nil {
+			return digest, nil
+		}
+		if isRetryable(err) {
+			log.WithField("try", try).
+				WithField("image", name).
+				WithError(err).
+				Warnf("failed to push image, will retry")
+			time.Sleep(time.Duration(try*10) * time.Second)
+			try++
+			continue
+		}
+		return "", fmt.Errorf("failed to push %s after %d tries: %w", name, try, err)
+	}
+	return "", nil // will never happen
+}
+
+func isRetryable(err error) bool {
+	for _, code := range []int{
+		http.StatusInternalServerError,
+		// http.StatusNotImplemented,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+		// http.StatusHTTPVersionNotSupported,
+		http.StatusVariantAlsoNegotiates,
+		// http.StatusInsufficientStorage,
+		// http.StatusLoopDetected,
+		http.StatusNotExtended,
+		// http.StatusNetworkAuthenticationRequired,
+	} {
+		if strings.Contains(
+			err.Error(),
+			fmt.Sprintf(
+				"received unexpected HTTP status: %d %s",
+				code,
+				http.StatusText(code),
+			),
+		) {
+			return true
+		}
+	}
+	return false
 }

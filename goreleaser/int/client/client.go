@@ -22,6 +22,10 @@ const (
 // ErrNotImplemented is returned when a client does not implement certain feature.
 var ErrNotImplemented = fmt.Errorf("not implemented")
 
+// ErrReleaseDisabled happens when a configuration tries to use the default
+// url_template even though the release is disabled.
+var ErrReleaseDisabled = fmt.Errorf("release is disabled, cannot use default url_template")
+
 // Info of the repository.
 type Info struct {
 	Description string
@@ -30,9 +34,12 @@ type Info struct {
 }
 
 type Repo struct {
-	Owner  string
-	Name   string
-	Branch string
+	Owner         string
+	Name          string
+	Branch        string
+	GitURL        string
+	GitSSHCommand string
+	PrivateKey    string
 }
 
 func (r Repo) String() string {
@@ -46,17 +53,44 @@ func (r Repo) String() string {
 type Client interface {
 	CloseMilestone(ctx *context.Context, repo Repo, title string) (err error)
 	CreateRelease(ctx *context.Context, body string) (releaseID string, err error)
-	ReleaseURLTemplate(ctx *context.Context) (string, error)
-	CreateFile(ctx *context.Context, commitAuthor config.CommitAuthor, repo Repo, content []byte, path, message string) (err error)
 	Upload(ctx *context.Context, releaseID string, artifact *artifact.Artifact, file *os.File) (err error)
-	GetDefaultBranch(ctx *context.Context, repo Repo) (string, error)
 	Changelog(ctx *context.Context, repo Repo, prev, current string) (string, error)
+	ReleaseURLTemplater
+	FileCreator
 }
 
-// GitHubClient is the client with GitHub-only features.
-type GitHubClient interface {
-	Client
+// ReleaseURLTemplater provides the release URL as a template, containing the
+// artifact name as well.
+type ReleaseURLTemplater interface {
+	ReleaseURLTemplate(ctx *context.Context) (string, error)
+}
+
+// RepoFile is a file to be created.
+type RepoFile struct {
+	Content    []byte
+	Path       string
+	Identifier string // for the use of the caller.
+}
+
+// FileCreator can create the given file to some code repository.
+type FileCreator interface {
+	CreateFile(ctx *context.Context, commitAuthor config.CommitAuthor, repo Repo, content []byte, path, message string) (err error)
+}
+
+// FilesCreator can create the multiple files in some repository and in a single commit.
+type FilesCreator interface {
+	FileCreator
+	CreateFiles(ctx *context.Context, commitAuthor config.CommitAuthor, repo Repo, message string, files []RepoFile) (err error)
+}
+
+// ReleaseNotesGenerator can generate release notes.
+type ReleaseNotesGenerator interface {
 	GenerateReleaseNotes(ctx *context.Context, repo Repo, prev, current string) (string, error)
+}
+
+// PullRequestOpener can open pull requests.
+type PullRequestOpener interface {
+	OpenPullRequest(ctx *context.Context, base, head Repo, title string, draft bool) error
 }
 
 // New creates a new client depending on the token type.
@@ -64,15 +98,36 @@ func New(ctx *context.Context) (Client, error) {
 	return newWithToken(ctx, ctx.Token)
 }
 
+// NewReleaseClient returns a ReleaserURLTemplater, handling the possibility of
+// the release being disabled.
+func NewReleaseClient(ctx *context.Context) (ReleaseURLTemplater, error) {
+	disable, err := tmpl.New(ctx).Bool(ctx.Config.Release.Disable)
+	if err != nil {
+		return nil, err
+	}
+	if disable {
+		return errURLTemplater{}, nil
+	}
+	return New(ctx)
+}
+
+var _ ReleaseURLTemplater = errURLTemplater{}
+
+type errURLTemplater struct{}
+
+func (errURLTemplater) ReleaseURLTemplate(_ *context.Context) (string, error) {
+	return "", ErrReleaseDisabled
+}
+
 func newWithToken(ctx *context.Context, token string) (Client, error) {
 	log.WithField("type", ctx.TokenType).Debug("token type")
 	switch ctx.TokenType {
 	case context.TokenTypeGitHub:
-		return NewGitHub(ctx, token)
+		return newGitHub(ctx, token)
 	case context.TokenTypeGitLab:
-		return NewGitLab(ctx, token)
+		return newGitLab(ctx, token)
 	case context.TokenTypeGitea:
-		return NewGitea(ctx, token)
+		return newGitea(ctx, token)
 	default:
 		return nil, fmt.Errorf("invalid client token type: %q", ctx.TokenType)
 	}

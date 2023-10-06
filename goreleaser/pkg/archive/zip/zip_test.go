@@ -59,6 +59,11 @@ func TestZipFile(t *testing.T) {
 		Destination: "link.txt",
 	}))
 
+	require.ErrorIs(t, archive.Add(config.File{
+		Source:      "../testdata/regular.txt",
+		Destination: "link.txt",
+	}), fs.ErrExist)
+
 	require.NoError(t, archive.Close())
 	require.Error(t, archive.Add(config.File{
 		Source:      "tar.go",
@@ -81,8 +86,8 @@ func TestZipFile(t *testing.T) {
 	for i, zf := range r.File {
 		paths[i] = zf.Name
 		if zf.Name == "sub1/executable" {
-			ex := zf.Mode() | 0o111
-			require.Equal(t, zf.Mode().String(), ex.String())
+			ex := zf.Mode()&0o111 != 0
+			require.True(t, ex, "expected executable permissions, got %s", zf.Mode())
 		}
 		if zf.Name == "link.txt" {
 			require.True(t, zf.FileInfo().Mode()&os.ModeSymlink != 0)
@@ -154,3 +159,5 @@ func TestTarInvalidLink(t *testing.T) {
 		Destination: "badlink.txt",
 	}))
 }
+
+// TODO: add copying test

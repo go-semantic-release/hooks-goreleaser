@@ -14,12 +14,25 @@ for more details.
 # .goreleaser.yaml
 brews:
   -
-    # Name template of the recipe
-    # Default to project name
+    # Name of the recipe
+    #
+    # Default: ProjectName
+    # Templates: allowed
     name: myproject
 
+    # Alternative names for the current recipe.
+    #
+    # Useful if you want to publish a versioned formula as well, so users can
+    # more easily downgrade.
+    #
+    # Since: v1.20 (pro)
+    # Templates: allowed
+    alternative_names:
+      - myproject@{{ .Version }}
+      - myproject@{{ .Major }}
+
     # IDs of the archives to use.
-    # Defaults to all.
+    # Empty means all IDs.
     ids:
     - foo
     - bar
@@ -27,80 +40,61 @@ brews:
     # GOARM to specify which 32-bit arm version to use if there are multiple
     # versions from the build section. Brew formulas support only one 32-bit
     # version.
-    # Default is 6 for all artifacts or each id if there a multiple versions.
+    #
+    # Default: 6
     goarm: 6
 
     # GOAMD64 to specify which amd64 version to use if there are multiple
     # versions from the build section.
-    # Default is v1.
-    goamd64: v3
+    #
+    # Default: v1
+    goamd64: v1
 
     # NOTE: make sure the url_template, the token and given repo (github or
     # gitlab) owner and name are from the same kind.
     # We will probably unify this in the next major version like it is
     # done with scoop.
 
-    # GitHub/GitLab repository to push the formula to
-    tap:
-      # Repository owner template. (templateable)
-      owner: user
-
-      # Repository name. (templateable)
-      name: homebrew-tap
-
-      # Optionally a branch can be provided. (templateable)
-      #
-      # Defaults to the default repository branch.
-      branch: main
-
-      # Optionally a token can be provided, if it differs from the token
-      # provided to GoReleaser
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-
-    # Template for the url which is determined by the given Token (github,
-    # gitlab or gitea)
+    # URL which is determined by the given Token (github, gitlab or gitea).
     #
     # Default depends on the client.
+    # Templates: allowed
     url_template: "https://github.mycompany.com/foo/bar/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
     # Allows you to set a custom download strategy. Note that you'll need
     # to implement the strategy and add it to your tap repository.
     # Example: https://docs.brew.sh/Formula-Cookbook#specifying-the-download-strategy-explicitly
-    # Default is empty.
     download_strategy: CurlDownloadStrategy
 
     # Allows you to add a custom require_relative at the top of the formula
     # template.
-    # Default is empty
     custom_require: custom_download_strategy
 
     # Git author used to commit to the repository.
-    # Defaults are shown.
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
 
     # The project name and current git tag are used in the format string.
+    #
+    # Templates: allowed
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
 
     # Folder inside the repository to put the formula.
-    # Default is the root folder.
     folder: Formula
 
     # Caveats for the user of your binary.
-    # Default is empty.
     caveats: "How to use this binary"
 
     # Your app's homepage.
-    # Default is empty.
     homepage: "https://example.com/"
 
-    # Template of your app's description.
-    # Default is empty.
+    # Your app's description.
+    #
+    # Templates: allowed
     description: "Software to create fast and easy drum rolls."
 
     # SPDX identifier of your app's license.
-    # Default is empty.
     license: "MIT"
 
     # Setting this will prevent goreleaser to actually try to commit the updated
@@ -108,12 +102,12 @@ brews:
     # leaving the responsibility of publishing it to the user.
     # If set to auto, the release will not be uploaded to the homebrew tap
     # in case there is an indicator for prerelease in the tag e.g. v1.0.0-rc1
-    # Default is false.
+    #
+    # Templates: allowed
     skip_upload: true
 
     # Custom block for brew.
     # Can be used to specify alternate downloads for devel or head releases.
-    # Default is empty.
     custom_block: |
       head "https://github.com/some/package.git"
       ...
@@ -138,40 +132,53 @@ brews:
       - bash
 
     # Specify for packages that run as a service.
-    # Default is empty.
     plist: |
       <?xml version="1.0" encoding="UTF-8"?>
       # ...
 
     # Service block.
     #
-    # Since: v1.7.
+    # Since: v1.7
     service: |
       run: foo/bar
       # ...
 
     # So you can `brew test` your formula.
-    # Default is empty.
+    #
+    # Template: allowed
     test: |
       system "#{bin}/foo --version"
       # ...
 
     # Custom install script for brew.
-    # Default is 'bin.install "the binary name"'.
+    #
+    # Template: allowed
+    # Default: 'bin.install "BinaryName"'
     install: |
       bin.install "some_other_name"
       bash_completion.install "completions/foo.bash" => "foo"
       # ...
 
+    # Additional install instructions so you don't need to override `install`.
+    #
+    # Template: allowed
+    # Since: v1.20.
+    extra_install: |
+      bash_completion.install "completions/foo.bash" => "foo"
+      man1.install "man/foo.1.gz"
+      # ...
+
     # Custom post_install script for brew.
     # Could be used to do any additional work after the "install" script
-    # Default is empty.
     post_install: |
     	etc.install "app-config.conf"
-    	...
+      # ...
+
+{% include-markdown "../includes/repository.md" comments=false %}
 ```
 
 !!! tip
+
     Learn more about the [name template engine](/customization/templates/).
 
 By defining the `brew` section, GoReleaser will take care of publishing the
@@ -219,6 +226,7 @@ end
 ```
 
 !!! info
+
     Note that GoReleaser does not generate a valid homebrew-core formula.
     The generated formulas are meant to be published as
     [homebrew taps](https://docs.brew.sh/Taps.html), and in their current
@@ -232,6 +240,42 @@ from one software to another.
 Our suggestion is to create a `my-app-head.rb` file on your tap following
 [homebrew's documentation](https://docs.brew.sh/Formula-Cookbook#unstable-versions-head).
 
+## Versioned formulas
+
+!!! success "GoReleaser Pro"
+
+    This requires [GoReleaser Pro](/pro/).
+
+GoReleaser can also create a versioned formula.
+For instance, you might want to make keep previous minor versions available to
+your users, so they easily downgrade and/or keep using an older version.
+
+To do that, use `alternative_names`:
+
+```yaml
+# .goreleaser.yaml
+brews:
+  - name: foo
+    alternative_names:
+      - "foo@{{ .Major }}.{{ .Minor }}"
+    # other fields
+```
+
+So, if you tag `v1.2.3`, GoReleaser will create and push `foo.rb` and
+`foo@1.2.rb`.
+
+Later on, you can tag `v1.3.0`, and then GoReleaser will create and push both
+`foo.rb` (thus overriding the previous version) and `foo@1.3.rb`.
+Your users can then `brew install foo@1.2` to keep using the previous version.
+
+## GitHub Actions
+
+To publish a formula from one repository to another using GitHub Actions, you cannot use the default action token.
+You must use a separate token with content write privileges for the tap repository.
+You can check the [resource not accessible by integration](https://goreleaser.com/errors/resource-not-accessible-by-integration/) for more information.
+
 ## Limitations
 
 - Only one `GOARM` build is allowed;
+
+{% include-markdown "../includes/prs.md" comments=false %}

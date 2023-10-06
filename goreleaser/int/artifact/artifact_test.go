@@ -20,10 +20,12 @@ var _ fmt.Stringer = Type(0)
 func TestAdd(t *testing.T) {
 	var g errgroup.Group
 	artifacts := New()
+	wd, _ := os.Getwd()
 	for _, a := range []*Artifact{
 		{
 			Name: "foo",
 			Type: UploadableArchive,
+			Path: filepath.Join(wd, "/foo/bar.tgz"),
 		},
 		{
 			Name: "bar",
@@ -46,6 +48,8 @@ func TestAdd(t *testing.T) {
 	}
 	require.NoError(t, g.Wait())
 	require.Len(t, artifacts.List(), 4)
+	archives := artifacts.Filter(ByType(UploadableArchive)).List()
+	require.Len(t, archives, 1)
 }
 
 func TestFilter(t *testing.T) {
@@ -344,7 +348,7 @@ func TestChecksumFileDoesntExist(t *testing.T) {
 		Path: file,
 	}
 	sum, err := artifact.Checksum("sha1")
-	require.EqualError(t, err, fmt.Sprintf(`failed to checksum: open %s: no such file or directory`, file))
+	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Empty(t, sum)
 }
 
@@ -405,7 +409,7 @@ func TestExtra(t *testing.T) {
 
 	t.Run("unmarshal error", func(t *testing.T) {
 		_, err := Extra[config.Docker](a, "fail-plz")
-		require.EqualError(t, err, "json: unknown field \"tap\"")
+		require.EqualError(t, err, "json: unknown field \"repository\"")
 	})
 
 	t.Run("marshal error", func(t *testing.T) {
@@ -921,4 +925,12 @@ func TestArtifactStringer(t *testing.T) {
 	require.Equal(t, "foobar", Artifact{
 		Name: "foobar",
 	}.String())
+}
+
+func TestArtifactTypeStringer(t *testing.T) {
+	for i := 1; i <= 29; i++ {
+		t.Run(fmt.Sprintf("type-%d-%s", i, Type(i).String()), func(t *testing.T) {
+			require.NotEqual(t, "unknown", Type(i).String())
+		})
+	}
 }

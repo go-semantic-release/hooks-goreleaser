@@ -23,6 +23,8 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/mattermost"
 	"github.com/goreleaser/goreleaser/int/pipe/milestone"
 	"github.com/goreleaser/goreleaser/int/pipe/nfpm"
+	"github.com/goreleaser/goreleaser/int/pipe/nix"
+	"github.com/goreleaser/goreleaser/int/pipe/opencollective"
 	"github.com/goreleaser/goreleaser/int/pipe/project"
 	"github.com/goreleaser/goreleaser/int/pipe/reddit"
 	"github.com/goreleaser/goreleaser/int/pipe/release"
@@ -38,7 +40,10 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/telegram"
 	"github.com/goreleaser/goreleaser/int/pipe/twitter"
 	"github.com/goreleaser/goreleaser/int/pipe/universalbinary"
+	"github.com/goreleaser/goreleaser/int/pipe/upload"
+	"github.com/goreleaser/goreleaser/int/pipe/upx"
 	"github.com/goreleaser/goreleaser/int/pipe/webhook"
+	"github.com/goreleaser/goreleaser/int/pipe/winget"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
@@ -60,6 +65,7 @@ var Defaulters = []Defaulter{
 	gomod.Pipe{},
 	build.Pipe{},
 	universalbinary.Pipe{},
+	upx.Pipe{},
 	sourcearchive.Pipe{},
 	archive.Pipe{},
 	nfpm.Pipe{},
@@ -72,7 +78,10 @@ var Defaulters = []Defaulter{
 	docker.ManifestPipe{},
 	artifactory.Pipe{},
 	blob.Pipe{},
+	upload.Pipe{},
 	aur.Pipe{},
+	nix.Pipe{},
+	winget.Pipe{},
 	brew.Pipe{},
 	krew.Pipe{},
 	ko.Pipe{},
@@ -90,4 +99,5 @@ var Defaulters = []Defaulter{
 	telegram.Pipe{},
 	webhook.Pipe{},
 	chocolatey.Pipe{},
+	opencollective.Pipe{},
 }

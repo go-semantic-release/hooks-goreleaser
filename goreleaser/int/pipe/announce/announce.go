@@ -11,6 +11,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/linkedin"
 	"github.com/goreleaser/goreleaser/int/pipe/mastodon"
 	"github.com/goreleaser/goreleaser/int/pipe/mattermost"
+	"github.com/goreleaser/goreleaser/int/pipe/opencollective"
 	"github.com/goreleaser/goreleaser/int/pipe/reddit"
 	"github.com/goreleaser/goreleaser/int/pipe/slack"
 	"github.com/goreleaser/goreleaser/int/pipe/smtp"
@@ -18,6 +19,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/telegram"
 	"github.com/goreleaser/goreleaser/int/pipe/twitter"
 	"github.com/goreleaser/goreleaser/int/pipe/webhook"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
@@ -35,6 +37,7 @@ var announcers = []Announcer{
 	linkedin.Pipe{},
 	mastodon.Pipe{},
 	mattermost.Pipe{},
+	opencollective.Pipe{},
 	reddit.Pipe{},
 	slack.Pipe{},
 	smtp.Pipe{},
@@ -50,7 +53,7 @@ type Pipe struct{}
 func (Pipe) String() string { return "announcing" }
 
 func (Pipe) Skip(ctx *context.Context) (bool, error) {
-	if ctx.SkipAnnounce {
+	if skips.Any(ctx, skips.Announce) {
 		return true, nil
 	}
 	return tmpl.New(ctx).Bool(ctx.Config.Announce.Skip)

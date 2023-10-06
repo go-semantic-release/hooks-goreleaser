@@ -150,6 +150,9 @@
 					},
 					"webhook": {
 						"$ref": "#/$defs/Webhook"
+					},
+					"opencolletive": {
+						"$ref": "#/$defs/OpenCollective"
 					}
 				},
 				"additionalProperties": false,
@@ -172,16 +175,19 @@
 					"name_template": {
 						"type": "string"
 					},
-					"replacements": {
-						"patternProperties": {
-							".*": {
-								"type": "string"
-							}
-						},
-						"type": "object"
-					},
 					"format": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"tar",
+							"tgz",
+							"tar.gz",
+							"zip",
+							"gz",
+							"tar.xz",
+							"txz",
+							"binary"
+						],
+						"default": "tar.gz"
 					},
 					"format_overrides": {
 						"items": {
@@ -202,9 +208,6 @@
 					"strip_parent_binary_folder": {
 						"type": "boolean"
 					},
-					"rlcp": {
-						"type": "boolean"
-					},
 					"files": {
 						"items": {
 							"$ref": "#/$defs/File"
@@ -216,6 +219,17 @@
 					},
 					"allow_different_binary_count": {
 						"type": "boolean"
+					},
+					"rlcp": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						],
+						"description": "you can now remove this"
 					}
 				},
 				"additionalProperties": false,
@@ -267,6 +281,16 @@
 							"$ref": "#/$defs/ExtraFile"
 						},
 						"type": "array"
+					},
+					"disable": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
 					}
 				},
 				"additionalProperties": false,
@@ -465,7 +489,14 @@
 						"default": ""
 					},
 					"skip": {
-						"type": "boolean"
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
 					},
 					"use": {
 						"type": "string",
@@ -546,7 +577,7 @@
 					"package_source_url": {
 						"type": "string"
 					},
-					"authoers": {
+					"owners": {
 						"type": "string"
 					},
 					"title": {
@@ -656,6 +687,7 @@
 							"config",
 							"config|noreplace",
 							"dir",
+							"tree",
 							""
 						],
 						"default": ""
@@ -937,6 +969,12 @@
 			},
 			"Filters": {
 				"properties": {
+					"include": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
 					"exclude": {
 						"items": {
 							"type": "string"
@@ -966,7 +1004,18 @@
 						"type": "string"
 					},
 					"format": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"tar",
+							"tgz",
+							"tar.gz",
+							"zip",
+							"gz",
+							"tar.xz",
+							"txz",
+							"binary"
+						],
+						"default": "tar.gz"
 					}
 				},
 				"additionalProperties": false,
@@ -975,7 +1024,21 @@
 			"Git": {
 				"properties": {
 					"tag_sort": {
+						"type": "string",
+						"enum": [
+							"-version:refname",
+							"-version:creatordate"
+						],
+						"default": "-version:refname"
+					},
+					"prerelease_suffix": {
 						"type": "string"
+					},
+					"ignore_tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
 					}
 				},
 				"additionalProperties": false,
@@ -1015,6 +1078,21 @@
 					},
 					"use_job_token": {
 						"type": "boolean"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"GitRepoRef": {
+				"properties": {
+					"url": {
+						"type": "string"
+					},
+					"ssh_command": {
+						"type": "string"
+					},
+					"private_key": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -1061,7 +1139,7 @@
 					"name": {
 						"type": "string"
 					},
-					"tap": {
+					"repository": {
 						"$ref": "#/$defs/RepoRef"
 					},
 					"commit_author": {
@@ -1076,10 +1154,10 @@
 					"caveats": {
 						"type": "string"
 					},
-					"plist": {
+					"install": {
 						"type": "string"
 					},
-					"install": {
+					"extra_install": {
 						"type": "string"
 					},
 					"post_install": {
@@ -1152,6 +1230,14 @@
 					},
 					"service": {
 						"type": "string"
+					},
+					"tap": {
+						"$ref": "#/$defs/RepoRef",
+						"description": "use repository instead"
+					},
+					"plist": {
+						"type": "string",
+						"description": "use service instead"
 					}
 				},
 				"additionalProperties": false,
@@ -1181,41 +1267,47 @@
 					}
 				]
 			},
-			"Hook": {
+			"Hooks": {
 				"oneOf": [
 					{
 						"type": "string"
 					},
 					{
-						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/t",
-						"properties": {
-							"dir": {
-								"type": "string"
-							},
-							"cmd": {
-								"type": "string"
-							},
-							"env": {
-								"items": {
+						"items": {
+							"$schema": "https://json-schema.org/draft/2020-12/schema",
+							"$id": "https://github.com/goreleaser/goreleaser/pkg/config/hook",
+							"oneOf": [
+								{
 									"type": "string"
 								},
-								"type": "array"
-							},
-							"output": {
-								"type": "boolean"
-							}
+								{
+									"$schema": "https://json-schema.org/draft/2020-12/schema",
+									"$id": "https://github.com/goreleaser/goreleaser/pkg/config/t",
+									"properties": {
+										"dir": {
+											"type": "string"
+										},
+										"cmd": {
+											"type": "string"
+										},
+										"env": {
+											"items": {
+												"type": "string"
+											},
+											"type": "array"
+										},
+										"output": {
+											"type": "boolean"
+										}
+									},
+									"additionalProperties": false,
+									"type": "object"
+								}
+							]
 						},
-						"additionalProperties": false,
-						"type": "object"
+						"type": "array"
 					}
 				]
-			},
-			"Hooks": {
-				"items": {
-					"$ref": "#/$defs/Hook"
-				},
-				"type": "array"
 			},
 			"IgnoredBuild": {
 				"properties": {
@@ -1262,6 +1354,12 @@
 					"base_image": {
 						"type": "string"
 					},
+					"labels": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"type": "object"
+					},
 					"repository": {
 						"type": "string"
 					},
@@ -1276,6 +1374,12 @@
 							"type": "string"
 						},
 						"type": "array"
+					},
+					"creation_time": {
+						"type": "string"
+					},
+					"ko_data_creation_time": {
+						"type": "string"
 					},
 					"sbom": {
 						"type": "string"
@@ -1322,7 +1426,7 @@
 					"name": {
 						"type": "string"
 					},
-					"index": {
+					"repository": {
 						"$ref": "#/$defs/RepoRef"
 					},
 					"commit_author": {
@@ -1368,6 +1472,10 @@
 								"type": "boolean"
 							}
 						]
+					},
+					"index": {
+						"$ref": "#/$defs/RepoRef",
+						"description": "use repository instead"
 					}
 				},
 				"additionalProperties": false,
@@ -1471,14 +1579,6 @@
 					"version_metadata": {
 						"type": "string"
 					},
-					"replacements": {
-						"patternProperties": {
-							".*": {
-								"type": "string"
-							}
-						},
-						"type": "object"
-					},
 					"dependencies": {
 						"items": {
 							"type": "string"
@@ -1502,6 +1602,9 @@
 							"type": "string"
 						},
 						"type": "array"
+					},
+					"umask": {
+						"type": "integer"
 					},
 					"replaces": {
 						"items": {
@@ -1534,10 +1637,8 @@
 						"$ref": "#/$defs/NFPMArchLinux"
 					},
 					"overrides": {
-						"patternProperties": {
-							".*": {
-								"$ref": "#/$defs/NFPMOverridables"
-							}
+						"additionalProperties": {
+							"$ref": "#/$defs/NFPMOverridables"
 						},
 						"type": "object"
 					},
@@ -1766,14 +1867,6 @@
 					"version_metadata": {
 						"type": "string"
 					},
-					"replacements": {
-						"patternProperties": {
-							".*": {
-								"type": "string"
-							}
-						},
-						"type": "object"
-					},
 					"dependencies": {
 						"items": {
 							"type": "string"
@@ -1797,6 +1890,9 @@
 							"type": "string"
 						},
 						"type": "array"
+					},
+					"umask": {
+						"type": "integer"
 					},
 					"replaces": {
 						"items": {
@@ -1848,6 +1944,15 @@
 					},
 					"scripts": {
 						"$ref": "#/$defs/NFPMRPMScripts"
+					},
+					"prefixes": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"packager": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -1892,6 +1997,119 @@
 				"additionalProperties": false,
 				"type": "object"
 			},
+			"Nix": {
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"path": {
+						"type": "string"
+					},
+					"repository": {
+						"$ref": "#/$defs/RepoRef"
+					},
+					"commit_author": {
+						"$ref": "#/$defs/CommitAuthor"
+					},
+					"commit_msg_template": {
+						"type": "string"
+					},
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goamd64": {
+						"type": "string"
+					},
+					"skip_upload": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					},
+					"url_template": {
+						"type": "string"
+					},
+					"install": {
+						"type": "string"
+					},
+					"extra_install": {
+						"type": "string"
+					},
+					"post_install": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"homepage": {
+						"type": "string"
+					},
+					"license": {
+						"type": "string"
+					},
+					"dependencies": {
+						"items": {
+							"$ref": "#/$defs/NixDependency"
+						},
+						"type": "array"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"NixDependency": {
+				"oneOf": [
+					{
+						"type": "string"
+					},
+					{
+						"$schema": "https://json-schema.org/draft/2020-12/schema",
+						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/t",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"os": {
+								"type": "string",
+								"enum": [
+									"linux",
+									"darwin"
+								]
+							}
+						},
+						"additionalProperties": false,
+						"type": "object",
+						"required": [
+							"name"
+						]
+					}
+				]
+			},
+			"OpenCollective": {
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"title_template": {
+						"type": "string"
+					},
+					"message_template": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
 			"Project": {
 				"properties": {
 					"project_name": {
@@ -1918,6 +2136,18 @@
 						},
 						"type": "array"
 					},
+					"nix": {
+						"items": {
+							"$ref": "#/$defs/Nix"
+						},
+						"type": "array"
+					},
+					"winget": {
+						"items": {
+							"$ref": "#/$defs/Winget"
+						},
+						"type": "array"
+					},
 					"aurs": {
 						"items": {
 							"$ref": "#/$defs/AUR"
@@ -1936,8 +2166,11 @@
 						},
 						"type": "array"
 					},
-					"scoop": {
-						"$ref": "#/$defs/Scoop"
+					"scoops": {
+						"items": {
+							"$ref": "#/$defs/Scoop"
+						},
+						"type": "array"
 					},
 					"builds": {
 						"items": {
@@ -2053,14 +2286,33 @@
 					"git": {
 						"$ref": "#/$defs/Git"
 					},
+					"report_sizes": {
+						"type": "boolean"
+					},
+					"metadata": {
+						"$ref": "#/$defs/ProjectMetadata"
+					},
 					"universal_binaries": {
 						"items": {
 							"$ref": "#/$defs/UniversalBinary"
 						},
 						"type": "array"
 					},
-					"build": {
-						"$ref": "#/$defs/Build"
+					"upx": {
+						"items": {
+							"$ref": "#/$defs/UPX"
+						},
+						"type": "array"
+					},
+					"force_token": {
+						"type": "string",
+						"enum": [
+							"github",
+							"gitlab",
+							"gitea",
+							""
+						],
+						"default": ""
 					},
 					"github_urls": {
 						"$ref": "#/$defs/GitHubURLs"
@@ -2070,6 +2322,23 @@
 					},
 					"gitea_urls": {
 						"$ref": "#/$defs/GiteaURLs"
+					},
+					"scoop": {
+						"$ref": "#/$defs/Scoop",
+						"description": "use scoops instead"
+					},
+					"build": {
+						"$ref": "#/$defs/Build",
+						"description": "use builds instead"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"ProjectMetadata": {
+				"properties": {
+					"mod_timestamp": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -2109,10 +2378,59 @@
 							"$ref": "#/$defs/ExtraFile"
 						},
 						"type": "array"
+					},
+					"disable": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
 					}
 				},
 				"additionalProperties": false,
 				"type": "object"
+			},
+			"PullRequest": {
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"base": {
+						"$ref": "#/$defs/PullRequestBase"
+					},
+					"draft": {
+						"type": "boolean"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"PullRequestBase": {
+				"oneOf": [
+					{
+						"type": "string"
+					},
+					{
+						"$schema": "https://json-schema.org/draft/2020-12/schema",
+						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/pull-request-base",
+						"properties": {
+							"owner": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"branch": {
+								"type": "string"
+							}
+						},
+						"additionalProperties": false,
+						"type": "object"
+					}
+				]
 			},
 			"Reddit": {
 				"properties": {
@@ -2181,6 +2499,16 @@
 					"prerelease": {
 						"type": "string"
 					},
+					"make_latest": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					},
 					"name_template": {
 						"type": "string"
 					},
@@ -2244,6 +2572,12 @@
 					},
 					"branch": {
 						"type": "string"
+					},
+					"git": {
+						"$ref": "#/$defs/GitRepoRef"
+					},
+					"pull_request": {
+						"$ref": "#/$defs/PullRequest"
 					}
 				},
 				"additionalProperties": false,
@@ -2276,7 +2610,16 @@
 						"type": "array"
 					},
 					"artifacts": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"source",
+							"package",
+							"archive",
+							"binary",
+							"any",
+							"any"
+						],
+						"default": "archive"
 					},
 					"ids": {
 						"items": {
@@ -2329,7 +2672,13 @@
 					"name": {
 						"type": "string"
 					},
-					"bucket": {
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"repository": {
 						"$ref": "#/$defs/RepoRef"
 					},
 					"folder": {
@@ -2381,8 +2730,27 @@
 						},
 						"type": "array"
 					},
+					"depends": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"shortcuts": {
+						"items": {
+							"items": {
+								"type": "string"
+							},
+							"type": "array"
+						},
+						"type": "array"
+					},
 					"goamd64": {
 						"type": "string"
+					},
+					"bucket": {
+						"$ref": "#/$defs/RepoRef",
+						"description": "use repository instead"
 					}
 				},
 				"additionalProperties": false,
@@ -2508,14 +2876,6 @@
 					"name_template": {
 						"type": "string"
 					},
-					"replacements": {
-						"patternProperties": {
-							".*": {
-								"type": "string"
-							}
-						},
-						"type": "object"
-					},
 					"publish": {
 						"type": "boolean"
 					},
@@ -2531,10 +2891,16 @@
 					"name": {
 						"type": "string"
 					},
+					"title": {
+						"type": "string"
+					},
 					"summary": {
 						"type": "string"
 					},
 					"description": {
+						"type": "string"
+					},
+					"icon": {
 						"type": "string"
 					},
 					"base": {
@@ -2555,24 +2921,39 @@
 					"confinement": {
 						"type": "string"
 					},
+					"assumes": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
 					"layout": {
-						"patternProperties": {
-							".*": {
-								"$ref": "#/$defs/SnapcraftLayoutMetadata"
-							}
+						"additionalProperties": {
+							"$ref": "#/$defs/SnapcraftLayoutMetadata"
 						},
 						"type": "object"
 					},
 					"apps": {
-						"patternProperties": {
-							".*": {
-								"$ref": "#/$defs/SnapcraftAppMetadata"
-							}
+						"additionalProperties": {
+							"$ref": "#/$defs/SnapcraftAppMetadata"
 						},
+						"type": "object"
+					},
+					"hooks": {
 						"type": "object"
 					},
 					"plugs": {
 						"type": "object"
+					},
+					"disable": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
 					},
 					"extra_files": {
 						"items": {
@@ -2758,7 +3139,14 @@
 						"type": "string"
 					},
 					"format": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"tar",
+							"tgz",
+							"tar.gz",
+							"zip"
+						],
+						"default": "tar.gz"
 					},
 					"enabled": {
 						"type": "boolean"
@@ -2773,7 +3161,15 @@
 						"type": "array"
 					},
 					"rlcp": {
-						"type": "boolean"
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						],
+						"description": "you can now remove this"
 					}
 				},
 				"additionalProperties": false,
@@ -2830,6 +3226,14 @@
 								"type": "integer"
 							}
 						]
+					},
+					"parse_mode": {
+						"type": "string",
+						"enum": [
+							"MarkdownV2",
+							"HTML"
+						],
+						"default": "MarkdownV2"
 					}
 				},
 				"additionalProperties": false,
@@ -2842,6 +3246,78 @@
 					},
 					"message_template": {
 						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"UPX": {
+				"properties": {
+					"enabled": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					},
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goos": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goarch": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goarm": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goamd64": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"binary": {
+						"type": "string"
+					},
+					"compress": {
+						"type": "string",
+						"enum": [
+							"1",
+							"2",
+							"3",
+							"4",
+							"5",
+							"6",
+							"7",
+							"8",
+							"9",
+							"best",
+							""
+						],
+						"default": ""
+					},
+					"lzma": {
+						"type": "boolean"
+					},
+					"brute": {
+						"type": "boolean"
 					}
 				},
 				"additionalProperties": false,
@@ -2866,6 +3342,9 @@
 					},
 					"hooks": {
 						"$ref": "#/$defs/BuildHookConfig"
+					},
+					"mod_timestamp": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -2922,10 +3401,8 @@
 						"type": "boolean"
 					},
 					"custom_headers": {
-						"patternProperties": {
-							".*": {
-								"type": "string"
-							}
+						"additionalProperties": {
+							"type": "string"
 						},
 						"type": "object"
 					}
@@ -2948,10 +3425,8 @@
 						"type": "string"
 					},
 					"headers": {
-						"patternProperties": {
-							".*": {
-								"type": "string"
-							}
+						"additionalProperties": {
+							"type": "string"
 						},
 						"type": "object"
 					},
@@ -2961,6 +3436,118 @@
 				},
 				"additionalProperties": false,
 				"type": "object"
+			},
+			"Winget": {
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"package_identifier": {
+						"type": "string"
+					},
+					"publisher": {
+						"type": "string"
+					},
+					"publisher_url": {
+						"type": "string"
+					},
+					"publisher_support_url": {
+						"type": "string"
+					},
+					"copyright": {
+						"type": "string"
+					},
+					"copyright_url": {
+						"type": "string"
+					},
+					"author": {
+						"type": "string"
+					},
+					"path": {
+						"type": "string"
+					},
+					"repository": {
+						"$ref": "#/$defs/RepoRef"
+					},
+					"commit_author": {
+						"$ref": "#/$defs/CommitAuthor"
+					},
+					"commit_msg_template": {
+						"type": "string"
+					},
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goamd64": {
+						"type": "string"
+					},
+					"skip_upload": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					},
+					"url_template": {
+						"type": "string"
+					},
+					"short_description": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"homepage": {
+						"type": "string"
+					},
+					"license": {
+						"type": "string"
+					},
+					"license_url": {
+						"type": "string"
+					},
+					"release_notes": {
+						"type": "string"
+					},
+					"release_notes_url": {
+						"type": "string"
+					},
+					"tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"dependencies": {
+						"items": {
+							"$ref": "#/$defs/WingetDependency"
+						},
+						"type": "array"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"WingetDependency": {
+				"properties": {
+					"package_identifier": {
+						"type": "string"
+					},
+					"minimum_version": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"package_identifier"
+				]
 			}
 		},
 		"description": "goreleaser configuration definition file"

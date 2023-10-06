@@ -12,7 +12,6 @@ import (
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
-	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -30,8 +29,10 @@ var cmd cmder = stdCmd{}
 // Pipe for chocolatey packaging.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "chocolatey packages" }
-func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.Chocolateys) == 0 }
+func (Pipe) String() string                           { return "chocolatey packages" }
+func (Pipe) ContinueOnError() bool                    { return true }
+func (Pipe) Skip(ctx *context.Context) bool           { return len(ctx.Config.Chocolateys) == 0 }
+func (Pipe) Dependencies(_ *context.Context) []string { return []string{"choco"} }
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {
@@ -60,13 +61,13 @@ func (Pipe) Default(ctx *context.Context) error {
 
 // Run the pipe.
 func (Pipe) Run(ctx *context.Context) error {
-	client, err := client.New(ctx)
+	cli, err := client.NewReleaseClient(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, choco := range ctx.Config.Chocolateys {
-		if err := doRun(ctx, client, choco); err != nil {
+		if err := doRun(ctx, cli, choco); err != nil {
 			return err
 		}
 	}
@@ -76,10 +77,6 @@ func (Pipe) Run(ctx *context.Context) error {
 
 // Publish packages.
 func (Pipe) Publish(ctx *context.Context) error {
-	if ctx.SkipPublish {
-		return pipe.ErrSkipPublishEnabled
-	}
-
 	artifacts := ctx.Artifacts.Filter(
 		artifact.ByType(artifact.PublishableChocolatey),
 	).List()
@@ -93,7 +90,7 @@ func (Pipe) Publish(ctx *context.Context) error {
 	return nil
 }
 
-func doRun(ctx *context.Context, cl client.Client, choco config.Chocolatey) error {
+func doRun(ctx *context.Context, cl client.ReleaseURLTemplater, choco config.Chocolatey) error {
 	filters := []artifact.Filter{
 		artifact.ByGoos("windows"),
 		artifact.ByType(artifact.UploadableArchive),
@@ -202,7 +199,7 @@ func doPush(ctx *context.Context, art *artifact.Artifact) error {
 		choco.SourceRepo,
 		"--api-key",
 		key,
-		art.Path,
+		filepath.Clean(art.Path),
 	}
 
 	if out, err := cmd.Exec(ctx, "choco", args...); err != nil {
@@ -216,18 +213,12 @@ func doPush(ctx *context.Context, art *artifact.Artifact) error {
 
 func buildNuspec(ctx *context.Context, choco config.Chocolatey) ([]byte, error) {
 	tpl := tmpl.New(ctx)
-	summary, err := tpl.Apply(choco.Summary)
-	if err != nil {
-		return nil, err
-	}
 
-	description, err := tpl.Apply(choco.Description)
-	if err != nil {
-		return nil, err
-	}
-
-	releaseNotes, err := tpl.Apply(choco.ReleaseNotes)
-	if err != nil {
+	if err := tpl.ApplyAll(
+		&choco.Summary,
+		&choco.Description,
+		&choco.ReleaseNotes,
+	); err != nil {
 		return nil, err
 	}
 
@@ -249,9 +240,9 @@ func buildNuspec(ctx *context.Context, choco config.Chocolatey) ([]byte, error) 
 			DocsURL:                  choco.DocsURL,
 			BugTrackerURL:            choco.BugTrackerURL,
 			Tags:                     choco.Tags,
-			Summary:                  summary,
-			Description:              description,
-			ReleaseNotes:             releaseNotes,
+			Summary:                  choco.Summary,
+			Description:              choco.Description,
+			ReleaseNotes:             choco.ReleaseNotes,
 		},
 		Files: Files{File: []File{
 			{Source: "tools\\**", Target: "tools"},
@@ -284,7 +275,7 @@ func buildTemplate(name string, text string, data templateData) ([]byte, error) 
 	return out.Bytes(), nil
 }
 
-func dataFor(ctx *context.Context, cl client.Client, choco config.Chocolatey, artifacts []*artifact.Artifact) (templateData, error) {
+func dataFor(ctx *context.Context, cl client.ReleaseURLTemplater, choco config.Chocolatey, artifacts []*artifact.Artifact) (templateData, error) {
 	result := templateData{}
 
 	if choco.URLTemplate == "" {
@@ -324,7 +315,7 @@ func dataFor(ctx *context.Context, cl client.Client, choco config.Chocolatey, ar
 // The intention is to be used to wrap the standard exec and provide the
 // ability to create a fake one for testing.
 type cmder interface {
-	// Exec executes an command.
+	// Exec executes a command.
 	Exec(*context.Context, string, ...string) ([]byte, error)
 }
 
@@ -334,5 +325,8 @@ type stdCmd struct{}
 var _ cmder = &stdCmd{}
 
 func (stdCmd) Exec(ctx *context.Context, name string, args ...string) ([]byte, error) {
+	log.WithField("cmd", name).
+		WithField("args", args).
+		Debug("running")
 	return exec.CommandContext(ctx, name, args...).CombinedOutput()
 }

@@ -6,10 +6,14 @@ You can customize how the changelog is generated using the `changelog` section i
 # .goreleaser.yml
 changelog:
   # Set this to true if you don't want any changelog at all.
+  #
   # Warning: this will also ignore any changelog files passed via `--release-notes`,
   # and will render an empty changelog.
+  #
   # This may result in an empty release notes on GitHub/GitLab/Gitea.
-  skip: true
+  #
+  # Templates: allowed
+  skip: "{{ .Env.CREATE_CHANGELOG }}"
 
   # Changelog generation implementation to use.
   #
@@ -19,12 +23,11 @@ changelog:
   # - `gitlab`: uses the compare GitLab API, appending the author name and email to the changelog.
   # - `github-native`: uses the GitHub release notes generation API, disables the groups feature.
   #
-  # Defaults to `git`.
+  # Default: 'git'
   use: github
 
   # Sorts the changelog by the commit's messages.
   # Could either be asc, desc or empty
-  # Default is empty
   sort: asc
 
   # Max commit hash length to use in the changelog.
@@ -33,33 +36,33 @@ changelog:
   # -1: remove the commit hash from the changelog
   # any other number: max length.
   #
-  # Default: 0.
   # Since: v1.11.2
   abbrev: -1
 
   # Paths to filter the commits for.
   # Only works when `use: git`, otherwise ignored.
-  # Only on GoReleaser Pro.
   #
-  # Default: monorepo.dir value, or empty if no monorepo.
-  # Since: v1.12.0-pro
+  # Default: monorepo.dir value, or empty if no monorepo
+  # Since: v1.12 (pro)
+  # This feature is only available in GoReleaser Pro.
   paths:
-  - foo/
-  - bar/
+    - foo/
+    - bar/
 
   # Group commits messages by given regex and title.
   # Order value defines the order of the groups.
   # Providing no regex means all commits will be grouped under the default group.
-  # Groups are disabled when using github-native, as it already groups things by itself.
-  # Matches are performed against strings of the form: "<abbrev-commit>[:] <title-commit>".
-  # Regex use RE2 syntax as defined here: https://github.com/google/re2/wiki/Syntax.
   #
-  # Default is no groups.
+  # Matches are performed against the first line of the commit message only,
+  # prefixed with the commit SHA1, usually in the form of
+  # `<abbrev-commit>[:] <title-commit>`.
+  # Groups are disabled when using github-native, as it already groups things by itself.
+  # Regex use RE2 syntax as defined here: https://github.com/google/re2/wiki/Syntax.
   groups:
     - title: Features
       regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
       order: 0
-    - title: 'Bug fixes'
+    - title: "Bug fixes"
       regexp: '^.*?bug(\([[:word:]]+\))??!?:.+$'
       order: 1
     - title: Others
@@ -77,29 +80,53 @@ changelog:
       #
       # This feature is only available in GoReleaser Pro.
       #
-      # Since: v1.15.0-pro
+      # Since: v1.15 (pro)
+      # This feature is only available in GoReleaser Pro.
       subgroups:
-        - title: 'Docs'
-          regex: '.*docs.*'
+        - title: "Docs"
+          regex: ".*docs.*"
           order: 1
-        - title: 'CI'
-          regex: '.*build.*'
+        - title: "CI"
+          regex: ".*build.*"
           order: 2
+
+  # Divider to use between groups.
+  #
+  # Since: v1.16 (pro)
+  # This feature is only available in GoReleaser Pro.
+  divider: "---"
 
   filters:
     # Commit messages matching the regexp listed here will be removed from
     # the changelog
-    # Default is empty
+    #
+    # Matches are performed against the first line of the commit message only,
+    # prefixed with the commit SHA1, usually in the form of
+    # `<abbrev-commit>[:] <title-commit>`.
     exclude:
-      - '^docs:'
+      - "^docs:"
       - typo
       - (?i)foo
+
+    # Commit messages matching the regexp listed here will be the only ones
+    # added to the changelog
+    #
+    # If include is not-empty, exclude will be ignored.
+    #
+    # Matches are performed against the first line of the commit message only,
+    # prefixed with the commit SHA1, usually in the form of
+    # `<abbrev-commit>[:] <title-commit>`.
+    #
+    # Since: v1.19
+    include:
+      - "^feat:"
 ```
 
 !!! warning
+
     Some things to keep an eye on:
 
     * The `github-native` changelog does not support `sort` and `filter`.
     * When releasing a [nightly][], `use` will fallback to `git`.
 
-[nightly]: /customization/nightly
+[nightly]: ./nightlies.md

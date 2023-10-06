@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/goreleaser/nfpm/v2/files"
 	"github.com/invopop/jsonschema"
@@ -18,7 +18,9 @@ import (
 
 // Git configs.
 type Git struct {
-	TagSort string `yaml:"tag_sort,omitempty" json:"tag_sort,omitempty"`
+	TagSort          string   `yaml:"tag_sort,omitempty" json:"tag_sort,omitempty" jsonschema:"enum=-version:refname,enum=-version:creatordate,default=-version:refname"`
+	PrereleaseSuffix string   `yaml:"prerelease_suffix,omitempty" json:"prerelease_suffix,omitempty"`
+	IgnoreTags       []string `yaml:"ignore_tags,omitempty" json:"ignore_tags,omitempty"`
 }
 
 // GitHubURLs holds the URLs to be used when using github enterprise.
@@ -83,6 +85,65 @@ type RepoRef struct {
 	Name   string `yaml:"name,omitempty" json:"name,omitempty"`
 	Token  string `yaml:"token,omitempty" json:"token,omitempty"`
 	Branch string `yaml:"branch,omitempty" json:"branch,omitempty"`
+
+	Git         GitRepoRef  `yaml:"git,omitempty" json:"git,omitempty"`
+	PullRequest PullRequest `yaml:"pull_request,omitempty" json:"pull_request,omitempty"`
+}
+
+type GitRepoRef struct {
+	URL        string `yaml:"url,omitempty" json:"url,omitempty"`
+	SSHCommand string `yaml:"ssh_command,omitempty" json:"ssh_command,omitempty"`
+	PrivateKey string `yaml:"private_key,omitempty" json:"private_key,omitempty"`
+}
+
+type PullRequestBase struct {
+	Owner  string `yaml:"owner,omitempty" json:"owner,omitempty"`
+	Name   string `yaml:"name,omitempty" json:"name,omitempty"`
+	Branch string `yaml:"branch,omitempty" json:"branch,omitempty"`
+}
+
+// type alias to prevent stack overflowing in the custom unmarshaler.
+type pullRequestBase PullRequestBase
+
+// UnmarshalYAML is a custom unmarshaler that accept brew deps in both the old and new format.
+func (a *PullRequestBase) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var str string
+	if err := unmarshal(&str); err == nil {
+		a.Branch = str
+		return nil
+	}
+
+	var base pullRequestBase
+	if err := unmarshal(&base); err != nil {
+		return err
+	}
+
+	a.Branch = base.Branch
+	a.Owner = base.Owner
+	a.Name = base.Name
+
+	return nil
+}
+
+func (a PullRequestBase) JSONSchema() *jsonschema.Schema {
+	reflector := jsonschema.Reflector{
+		ExpandedStruct: true,
+	}
+	schema := reflector.Reflect(&pullRequestBase{})
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			{
+				Type: "string",
+			},
+			schema,
+		},
+	}
+}
+
+type PullRequest struct {
+	Enabled bool            `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Base    PullRequestBase `yaml:"base,omitempty" json:"base,omitempty"`
+	Draft   bool            `yaml:"draft,omitempty" json:"draft,omitempty"`
 }
 
 // HomebrewDependency represents Homebrew dependency.
@@ -157,13 +218,13 @@ type AUR struct {
 // Homebrew contains the brew section.
 type Homebrew struct {
 	Name                  string               `yaml:"name,omitempty" json:"name,omitempty"`
-	Tap                   RepoRef              `yaml:"tap,omitempty" json:"tap,omitempty"`
+	Repository            RepoRef              `yaml:"repository,omitempty" json:"repository,omitempty"`
 	CommitAuthor          CommitAuthor         `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
 	CommitMessageTemplate string               `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
 	Folder                string               `yaml:"folder,omitempty" json:"folder,omitempty"`
 	Caveats               string               `yaml:"caveats,omitempty" json:"caveats,omitempty"`
-	Plist                 string               `yaml:"plist,omitempty" json:"plist,omitempty"`
 	Install               string               `yaml:"install,omitempty" json:"install,omitempty"`
+	ExtraInstall          string               `yaml:"extra_install,omitempty" json:"extra_install,omitempty"`
 	PostInstall           string               `yaml:"post_install,omitempty" json:"post_install,omitempty"`
 	Dependencies          []HomebrewDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
 	Test                  string               `yaml:"test,omitempty" json:"test,omitempty"`
@@ -180,13 +241,112 @@ type Homebrew struct {
 	Goarm                 string               `yaml:"goarm,omitempty" json:"goarm,omitempty" jsonschema:"oneof_type=string;integer"`
 	Goamd64               string               `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
 	Service               string               `yaml:"service,omitempty" json:"service,omitempty"`
+
+	// Deprecated: use Repository instead.
+	Tap RepoRef `yaml:"tap,omitempty" json:"tap,omitempty" jsonschema:"deprecated=true,description=use repository instead"`
+
+	// Deprecated: use Service instead.
+	Plist string `yaml:"plist,omitempty" json:"plist,omitempty" jsonschema:"deprecated=true,description=use service instead"`
+}
+
+type Nix struct {
+	Name                  string       `yaml:"name,omitempty" json:"name,omitempty"`
+	Path                  string       `yaml:"path,omitempty" json:"path,omitempty"`
+	Repository            RepoRef      `yaml:"repository,omitempty" json:"repository,omitempty"`
+	CommitAuthor          CommitAuthor `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
+	CommitMessageTemplate string       `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
+	IDs                   []string     `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Goamd64               string       `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
+	SkipUpload            string       `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
+	URLTemplate           string       `yaml:"url_template,omitempty" json:"url_template,omitempty"`
+	Install               string       `yaml:"install,omitempty" json:"install,omitempty"`
+	ExtraInstall          string       `yaml:"extra_install,omitempty" json:"extra_install,omitempty"`
+	PostInstall           string       `yaml:"post_install,omitempty" json:"post_install,omitempty"`
+	Description           string       `yaml:"description,omitempty" json:"description,omitempty"`
+	Homepage              string       `yaml:"homepage,omitempty" json:"homepage,omitempty"`
+	License               string       `yaml:"license,omitempty" json:"license,omitempty"`
+
+	Dependencies []NixDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+}
+
+type NixDependency struct {
+	Name string `yaml:"name" json:"name"`
+	OS   string `yaml:"os,omitempty" json:"os,omitempty" jsonschema:"enum=linux,enum=darwin"`
+}
+
+func (a NixDependency) JSONSchema() *jsonschema.Schema {
+	reflector := jsonschema.Reflector{
+		ExpandedStruct: true,
+	}
+	type t NixDependency
+	schema := reflector.Reflect(&t{})
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
+			{
+				Type: "string",
+			},
+			schema,
+		},
+	}
+}
+
+func (a *NixDependency) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var str string
+	if err := unmarshal(&str); err == nil {
+		a.Name = str
+		return nil
+	}
+
+	type t NixDependency
+	var dep t
+	if err := unmarshal(&dep); err != nil {
+		return err
+	}
+
+	a.Name = dep.Name
+	a.OS = dep.OS
+
+	return nil
+}
+
+type Winget struct {
+	Name                  string             `yaml:"name,omitempty" json:"name,omitempty"`
+	PackageIdentifier     string             `yaml:"package_identifier,omitempty" json:"package_identifier,omitempty"`
+	Publisher             string             `yaml:"publisher,omitempty" json:"publisher,omitempty"`
+	PublisherURL          string             `yaml:"publisher_url,omitempty" json:"publisher_url,omitempty"`
+	PublisherSupportURL   string             `yaml:"publisher_support_url,omitempty" json:"publisher_support_url,omitempty"`
+	Copyright             string             `yaml:"copyright,omitempty" json:"copyright,omitempty"`
+	CopyrightURL          string             `yaml:"copyright_url,omitempty" json:"copyright_url,omitempty"`
+	Author                string             `yaml:"author,omitempty" json:"author,omitempty"`
+	Path                  string             `yaml:"path,omitempty" json:"path,omitempty"`
+	Repository            RepoRef            `yaml:"repository,omitempty" json:"repository,omitempty"`
+	CommitAuthor          CommitAuthor       `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
+	CommitMessageTemplate string             `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
+	IDs                   []string           `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Goamd64               string             `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
+	SkipUpload            string             `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
+	URLTemplate           string             `yaml:"url_template,omitempty" json:"url_template,omitempty"`
+	ShortDescription      string             `yaml:"short_description,omitempty" json:"short_description,omitempty"`
+	Description           string             `yaml:"description,omitempty" json:"description,omitempty"`
+	Homepage              string             `yaml:"homepage,omitempty" json:"homepage,omitempty"`
+	License               string             `yaml:"license,omitempty" json:"license,omitempty"`
+	LicenseURL            string             `yaml:"license_url,omitempty" json:"license_url,omitempty"`
+	ReleaseNotes          string             `yaml:"release_notes,omitempty" json:"release_notes,omitempty"`
+	ReleaseNotesURL       string             `yaml:"release_notes_url,omitempty" json:"release_notes_url,omitempty"`
+	Tags                  []string           `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Dependencies          []WingetDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+}
+
+type WingetDependency struct {
+	PackageIdentifier string `yaml:"package_identifier" json:"package_identifier"`
+	MinimumVersion    string `yaml:"minimum_version,omitempty" json:"minimum_version,omitempty"`
 }
 
 // Krew contains the krew section.
 type Krew struct {
 	IDs                   []string     `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Name                  string       `yaml:"name,omitempty" json:"name,omitempty"`
-	Index                 RepoRef      `yaml:"index,omitempty" json:"index,omitempty"`
+	Repository            RepoRef      `yaml:"repository,omitempty" json:"repository,omitempty"`
 	CommitAuthor          CommitAuthor `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
 	CommitMessageTemplate string       `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
 	Caveats               string       `yaml:"caveats,omitempty" json:"caveats,omitempty"`
@@ -197,31 +357,38 @@ type Krew struct {
 	Goarm                 string       `yaml:"goarm,omitempty" json:"goarm,omitempty" jsonschema:"oneof_type=string;integer"`
 	Goamd64               string       `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
 	SkipUpload            string       `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
+
+	// Deprecated: use Repository instead.
+	Index RepoRef `yaml:"index,omitempty" json:"index,omitempty" jsonschema:"deprecated=true,description=use repository instead"`
 }
 
 // Ko contains the ko section
 type Ko struct {
-	ID                  string   `yaml:"id,omitempty" json:"id,omitempty"`
-	Build               string   `yaml:"build,omitempty" json:"build,omitempty"`
-	Main                string   `yaml:"main,omitempty" json:"main,omitempty"`
-	WorkingDir          string   `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
-	BaseImage           string   `yaml:"base_image,omitempty" json:"base_image,omitempty"`
-	Repository          string   `yaml:"repository,omitempty" json:"repository,omitempty"`
-	Platforms           []string `yaml:"platforms,omitempty" json:"platforms,omitempty"`
-	Tags                []string `yaml:"tags,omitempty" json:"tags,omitempty"`
-	SBOM                string   `yaml:"sbom,omitempty" json:"sbom,omitempty"`
-	Ldflags             []string `yaml:"ldflags,omitempty" json:"ldflags,omitempty"`
-	Flags               []string `yaml:"flags,omitempty" json:"flags,omitempty"`
-	Env                 []string `yaml:"env,omitempty" json:"env,omitempty"`
-	Bare                bool     `yaml:"bare,omitempty" json:"bare,omitempty"`
-	PreserveImportPaths bool     `yaml:"preserve_import_paths,omitempty" json:"preserve_import_paths,omitempty"`
-	BaseImportPaths     bool     `yaml:"base_import_paths,omitempty" json:"base_import_paths,omitempty"`
+	ID                  string            `yaml:"id,omitempty" json:"id,omitempty"`
+	Build               string            `yaml:"build,omitempty" json:"build,omitempty"`
+	Main                string            `yaml:"main,omitempty" json:"main,omitempty"`
+	WorkingDir          string            `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+	BaseImage           string            `yaml:"base_image,omitempty" json:"base_image,omitempty"`
+	Labels              map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
+	Repository          string            `yaml:"repository,omitempty" json:"repository,omitempty"`
+	Platforms           []string          `yaml:"platforms,omitempty" json:"platforms,omitempty"`
+	Tags                []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
+	CreationTime        string            `yaml:"creation_time,omitempty" json:"creation_time,omitempty"`
+	KoDataCreationTime  string            `yaml:"ko_data_creation_time,omitempty" json:"ko_data_creation_time,omitempty"`
+	SBOM                string            `yaml:"sbom,omitempty" json:"sbom,omitempty"`
+	Ldflags             []string          `yaml:"ldflags,omitempty" json:"ldflags,omitempty"`
+	Flags               []string          `yaml:"flags,omitempty" json:"flags,omitempty"`
+	Env                 []string          `yaml:"env,omitempty" json:"env,omitempty"`
+	Bare                bool              `yaml:"bare,omitempty" json:"bare,omitempty"`
+	PreserveImportPaths bool              `yaml:"preserve_import_paths,omitempty" json:"preserve_import_paths,omitempty"`
+	BaseImportPaths     bool              `yaml:"base_import_paths,omitempty" json:"base_import_paths,omitempty"`
 }
 
 // Scoop contains the scoop.sh section.
 type Scoop struct {
 	Name                  string       `yaml:"name,omitempty" json:"name,omitempty"`
-	Bucket                RepoRef      `yaml:"bucket,omitempty" json:"bucket,omitempty"`
+	IDs                   []string     `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Repository            RepoRef      `yaml:"repository,omitempty" json:"repository,omitempty"`
 	Folder                string       `yaml:"folder,omitempty" json:"folder,omitempty"`
 	CommitAuthor          CommitAuthor `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
 	CommitMessageTemplate string       `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
@@ -233,7 +400,12 @@ type Scoop struct {
 	SkipUpload            string       `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
 	PreInstall            []string     `yaml:"pre_install,omitempty" json:"pre_install,omitempty"`
 	PostInstall           []string     `yaml:"post_install,omitempty" json:"post_install,omitempty"`
+	Depends               []string     `yaml:"depends,omitempty" json:"depends,omitempty"`
+	Shortcuts             [][]string   `yaml:"shortcuts,omitempty" json:"shortcuts,omitempty"`
 	Goamd64               string       `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
+
+	// Deprecated: use Repository instead.
+	Bucket RepoRef `yaml:"bucket,omitempty" json:"bucket,omitempty" jsonschema:"deprecated=true,description=use repository instead"`
 }
 
 // CommitAuthor is the author of a Git commit.
@@ -391,6 +563,22 @@ func (bhc *Hooks) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+func (bhc Hooks) JSONSchema() *jsonschema.Schema {
+	reflector := jsonschema.Reflector{
+		ExpandedStruct: true,
+	}
+	var t Hook
+	schema := reflector.Reflect(&t)
+	return &jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{{
+			Type: "string",
+		}, {
+			Type:  "array",
+			Items: schema,
+		}},
+	}
+}
+
 type Hook struct {
 	Dir    string   `yaml:"dir,omitempty" json:"dir,omitempty"`
 	Cmd    string   `yaml:"cmd,omitempty" json:"cmd,omitempty"`
@@ -434,7 +622,7 @@ func (bh Hook) JSONSchema() *jsonschema.Schema {
 // FormatOverride is used to specify a custom format for a specific GOOS.
 type FormatOverride struct {
 	Goos   string `yaml:"goos,omitempty" json:"goos,omitempty"`
-	Format string `yaml:"format,omitempty" json:"format,omitempty"`
+	Format string `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"enum=tar,enum=tgz,enum=tar.gz,enum=zip,enum=gz,enum=tar.xz,enum=txz,enum=binary,default=tar.gz"`
 }
 
 // File is a file inside an archive.
@@ -443,6 +631,7 @@ type File struct {
 	Destination string   `yaml:"dst,omitempty" json:"dst,omitempty"`
 	StripParent bool     `yaml:"strip_parent,omitempty" json:"strip_parent,omitempty"`
 	Info        FileInfo `yaml:"info,omitempty" json:"info,omitempty"`
+	Default     bool     `yaml:"-" json:"-"`
 }
 
 // FileInfo is the file info of a file.
@@ -489,28 +678,44 @@ func (f File) JSONSchema() *jsonschema.Schema {
 
 // UniversalBinary setups macos universal binaries.
 type UniversalBinary struct {
-	ID           string          `yaml:"id,omitempty" json:"id,omitempty"` // deprecated
+	ID           string          `yaml:"id,omitempty" json:"id,omitempty"`
 	IDs          []string        `yaml:"ids,omitempty" json:"ids,omitempty"`
 	NameTemplate string          `yaml:"name_template,omitempty" json:"name_template,omitempty"`
 	Replace      bool            `yaml:"replace,omitempty" json:"replace,omitempty"`
 	Hooks        BuildHookConfig `yaml:"hooks,omitempty" json:"hooks,omitempty"`
+	ModTimestamp string          `yaml:"mod_timestamp,omitempty" json:"mod_timestamp,omitempty"`
+}
+
+// UPX allows to compress binaries with `upx`.
+type UPX struct {
+	Enabled  string   `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"oneof_type=string;boolean"`
+	IDs      []string `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Goos     []string `yaml:"goos,omitempty" json:"goos,omitempty"`
+	Goarch   []string `yaml:"goarch,omitempty" json:"goarch,omitempty"`
+	Goarm    []string `yaml:"goarm,omitempty" json:"goarm,omitempty"`
+	Goamd64  []string `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
+	Binary   string   `yaml:"binary,omitempty" json:"binary,omitempty"`
+	Compress string   `yaml:"compress,omitempty" json:"compress,omitempty" jsonschema:"enum=1,enum=2,enum=3,enum=4,enum=5,enum=6,enum=7,enum=8,enum=9,enum=best,enum=,default="`
+	LZMA     bool     `yaml:"lzma,omitempty" json:"lzma,omitempty"`
+	Brute    bool     `yaml:"brute,omitempty" json:"brute,omitempty"`
 }
 
 // Archive config used for the archive.
 type Archive struct {
-	ID                        string            `yaml:"id,omitempty" json:"id,omitempty"`
-	Builds                    []string          `yaml:"builds,omitempty" json:"builds,omitempty"`
-	BuildsInfo                FileInfo          `yaml:"builds_info,omitempty" json:"builds_info,omitempty"`
-	NameTemplate              string            `yaml:"name_template,omitempty" json:"name_template,omitempty"`
-	Replacements              map[string]string `yaml:"replacements,omitempty" json:"replacements,omitempty"` // Deprecated: use templates instead
-	Format                    string            `yaml:"format,omitempty" json:"format,omitempty"`
-	FormatOverrides           []FormatOverride  `yaml:"format_overrides,omitempty" json:"format_overrides,omitempty"`
-	WrapInDirectory           string            `yaml:"wrap_in_directory,omitempty" json:"wrap_in_directory,omitempty" jsonschema:"oneof_type=string;boolean"`
-	StripParentBinaryFolder   bool              `yaml:"strip_parent_binary_folder,omitempty" json:"strip_parent_binary_folder,omitempty"`
-	RLCP                      bool              `yaml:"rlcp,omitempty" json:"rlcp,omitempty"`
-	Files                     []File            `yaml:"files,omitempty" json:"files,omitempty"`
-	Meta                      bool              `yaml:"meta,omitempty" json:"meta,omitempty"`
-	AllowDifferentBinaryCount bool              `yaml:"allow_different_binary_count,omitempty" json:"allow_different_binary_count,omitempty"`
+	ID                        string           `yaml:"id,omitempty" json:"id,omitempty"`
+	Builds                    []string         `yaml:"builds,omitempty" json:"builds,omitempty"`
+	BuildsInfo                FileInfo         `yaml:"builds_info,omitempty" json:"builds_info,omitempty"`
+	NameTemplate              string           `yaml:"name_template,omitempty" json:"name_template,omitempty"`
+	Format                    string           `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"enum=tar,enum=tgz,enum=tar.gz,enum=zip,enum=gz,enum=tar.xz,enum=txz,enum=binary,default=tar.gz"`
+	FormatOverrides           []FormatOverride `yaml:"format_overrides,omitempty" json:"format_overrides,omitempty"`
+	WrapInDirectory           string           `yaml:"wrap_in_directory,omitempty" json:"wrap_in_directory,omitempty" jsonschema:"oneof_type=string;boolean"`
+	StripParentBinaryFolder   bool             `yaml:"strip_parent_binary_folder,omitempty" json:"strip_parent_binary_folder,omitempty"`
+	Files                     []File           `yaml:"files,omitempty" json:"files,omitempty"`
+	Meta                      bool             `yaml:"meta,omitempty" json:"meta,omitempty"`
+	AllowDifferentBinaryCount bool             `yaml:"allow_different_binary_count,omitempty" json:"allow_different_binary_count,omitempty"`
+
+	// Deprecated: don't need to set this anymore.
+	RLCP string `yaml:"rlcp,omitempty" json:"rlcp,omitempty"  jsonschema:"oneof_type=string;boolean,deprecated=true,description=you can now remove this"`
 }
 
 type ReleaseNotesMode string
@@ -533,6 +738,7 @@ type Release struct {
 	Disable                string      `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
 	SkipUpload             string      `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
 	Prerelease             string      `yaml:"prerelease,omitempty" json:"prerelease,omitempty"`
+	MakeLatest             string      `yaml:"make_latest,omitempty" json:"make_latest,omitempty" jsonschema:"oneof_type=string;boolean"`
 	NameTemplate           string      `yaml:"name_template,omitempty" json:"name_template,omitempty"`
 	IDs                    []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
 	ExtraFiles             []ExtraFile `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
@@ -604,6 +810,8 @@ type NFPMRPM struct {
 	Compression string           `yaml:"compression,omitempty" json:"compression,omitempty"`
 	Signature   NFPMRPMSignature `yaml:"signature,omitempty" json:"signature,omitempty"`
 	Scripts     NFPMRPMScripts   `yaml:"scripts,omitempty" json:"scripts,omitempty"`
+	Prefixes    []string         `yaml:"prefixes,omitempty" json:"prefixes,omitempty"`
+	Packager    string           `yaml:"packager,omitempty" json:"packager,omitempty"`
 }
 
 // NFPMDebScripts is scripts only available on deb packages.
@@ -675,25 +883,25 @@ type NFPMArchLinux struct {
 
 // NFPMOverridables is used to specify per package format settings.
 type NFPMOverridables struct {
-	FileNameTemplate string            `yaml:"file_name_template,omitempty" json:"file_name_template,omitempty"`
-	PackageName      string            `yaml:"package_name,omitempty" json:"package_name,omitempty"`
-	Epoch            string            `yaml:"epoch,omitempty" json:"epoch,omitempty"`
-	Release          string            `yaml:"release,omitempty" json:"release,omitempty"`
-	Prerelease       string            `yaml:"prerelease,omitempty" json:"prerelease,omitempty"`
-	VersionMetadata  string            `yaml:"version_metadata,omitempty" json:"version_metadata,omitempty"`
-	Replacements     map[string]string `yaml:"replacements,omitempty" json:"replacements,omitempty"` // Deprecated: use templates instead
-	Dependencies     []string          `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
-	Recommends       []string          `yaml:"recommends,omitempty" json:"recommends,omitempty"`
-	Suggests         []string          `yaml:"suggests,omitempty" json:"suggests,omitempty"`
-	Conflicts        []string          `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
-	Replaces         []string          `yaml:"replaces,omitempty" json:"replaces,omitempty"`
-	Provides         []string          `yaml:"provides,omitempty" json:"provides,omitempty"`
-	Contents         files.Contents    `yaml:"contents,omitempty" json:"contents,omitempty"`
-	Scripts          NFPMScripts       `yaml:"scripts,omitempty" json:"scripts,omitempty"`
-	RPM              NFPMRPM           `yaml:"rpm,omitempty" json:"rpm,omitempty"`
-	Deb              NFPMDeb           `yaml:"deb,omitempty" json:"deb,omitempty"`
-	APK              NFPMAPK           `yaml:"apk,omitempty" json:"apk,omitempty"`
-	ArchLinux        NFPMArchLinux     `yaml:"archlinux,omitempty" json:"archlinux,omitempty"`
+	FileNameTemplate string         `yaml:"file_name_template,omitempty" json:"file_name_template,omitempty"`
+	PackageName      string         `yaml:"package_name,omitempty" json:"package_name,omitempty"`
+	Epoch            string         `yaml:"epoch,omitempty" json:"epoch,omitempty"`
+	Release          string         `yaml:"release,omitempty" json:"release,omitempty"`
+	Prerelease       string         `yaml:"prerelease,omitempty" json:"prerelease,omitempty"`
+	VersionMetadata  string         `yaml:"version_metadata,omitempty" json:"version_metadata,omitempty"`
+	Dependencies     []string       `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	Recommends       []string       `yaml:"recommends,omitempty" json:"recommends,omitempty"`
+	Suggests         []string       `yaml:"suggests,omitempty" json:"suggests,omitempty"`
+	Conflicts        []string       `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
+	Umask            fs.FileMode    `yaml:"umask,omitempty" json:"umask,omitempty"`
+	Replaces         []string       `yaml:"replaces,omitempty" json:"replaces,omitempty"`
+	Provides         []string       `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Contents         files.Contents `yaml:"contents,omitempty" json:"contents,omitempty"`
+	Scripts          NFPMScripts    `yaml:"scripts,omitempty" json:"scripts,omitempty"`
+	RPM              NFPMRPM        `yaml:"rpm,omitempty" json:"rpm,omitempty"`
+	Deb              NFPMDeb        `yaml:"deb,omitempty" json:"deb,omitempty"`
+	APK              NFPMAPK        `yaml:"apk,omitempty" json:"apk,omitempty"`
+	ArchLinux        NFPMArchLinux  `yaml:"archlinux,omitempty" json:"archlinux,omitempty"`
 }
 
 // SBOM config.
@@ -703,7 +911,7 @@ type SBOM struct {
 	Env       []string `yaml:"env,omitempty" json:"env,omitempty"`
 	Args      []string `yaml:"args,omitempty" json:"args,omitempty"`
 	Documents []string `yaml:"documents,omitempty" json:"documents,omitempty"`
-	Artifacts string   `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+	Artifacts string   `yaml:"artifacts,omitempty" json:"artifacts,omitempty" jsonschema:"enum=source,enum=package,enum=archive,enum=binary,enum=any,enum=any,default=archive"`
 	IDs       []string `yaml:"ids,omitempty" json:"ids,omitempty"`
 }
 
@@ -767,23 +975,26 @@ type SnapcraftLayoutMetadata struct {
 
 // Snapcraft config.
 type Snapcraft struct {
-	NameTemplate string            `yaml:"name_template,omitempty" json:"name_template,omitempty"`
-	Replacements map[string]string `yaml:"replacements,omitempty" json:"replacements,omitempty"` // Deprecated: use templates instead.
-	Publish      bool              `yaml:"publish,omitempty" json:"publish,omitempty"`
-
+	NameTemplate     string                             `yaml:"name_template,omitempty" json:"name_template,omitempty"`
+	Publish          bool                               `yaml:"publish,omitempty" json:"publish,omitempty"`
 	ID               string                             `yaml:"id,omitempty" json:"id,omitempty"`
 	Builds           []string                           `yaml:"builds,omitempty" json:"builds,omitempty"`
 	Name             string                             `yaml:"name,omitempty" json:"name,omitempty"`
+	Title            string                             `yaml:"title,omitempty" json:"title,omitempty"`
 	Summary          string                             `yaml:"summary,omitempty" json:"summary,omitempty"`
 	Description      string                             `yaml:"description,omitempty" json:"description,omitempty"`
+	Icon             string                             `yaml:"icon,omitempty" json:"icon,omitempty"`
 	Base             string                             `yaml:"base,omitempty" json:"base,omitempty"`
 	License          string                             `yaml:"license,omitempty" json:"license,omitempty"`
 	Grade            string                             `yaml:"grade,omitempty" json:"grade,omitempty"`
 	ChannelTemplates []string                           `yaml:"channel_templates,omitempty" json:"channel_templates,omitempty"`
 	Confinement      string                             `yaml:"confinement,omitempty" json:"confinement,omitempty"`
+	Assumes          []string                           `yaml:"assumes,omitempty" json:"assumes,omitempty"`
 	Layout           map[string]SnapcraftLayoutMetadata `yaml:"layout,omitempty" json:"layout,omitempty"`
 	Apps             map[string]SnapcraftAppMetadata    `yaml:"apps,omitempty" json:"apps,omitempty"`
+	Hooks            map[string]interface{}             `yaml:"hooks,omitempty" json:"hooks,omitempty"`
 	Plugs            map[string]interface{}             `yaml:"plugs,omitempty" json:"plugs,omitempty"`
+	Disable          string                             `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
 
 	Files []SnapcraftExtraFiles `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
 }
@@ -839,6 +1050,7 @@ type DockerManifest struct {
 
 // Filters config.
 type Filters struct {
+	Include []string `yaml:"include,omitempty" json:"include,omitempty"`
 	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
 }
 
@@ -846,7 +1058,7 @@ type Filters struct {
 type Changelog struct {
 	Filters Filters          `yaml:"filters,omitempty" json:"filters,omitempty"`
 	Sort    string           `yaml:"sort,omitempty" json:"sort,omitempty" jsonschema:"enum=asc,enum=desc,enum=,default="`
-	Skip    bool             `yaml:"skip,omitempty" json:"skip,omitempty"` // TODO(caarlos0): rename to Disable to match other pipes
+	Skip    string           `yaml:"skip,omitempty" json:"skip,omitempty" jsonschema:"oneof_type=string;boolean"` // TODO(caarlos0): rename to Disable to match other pipes
 	Use     string           `yaml:"use,omitempty" json:"use,omitempty" jsonschema:"enum=git,enum=github,enum=github-native,enum=gitlab,default=git"`
 	Groups  []ChangelogGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
 	Abbrev  int              `yaml:"abbrev,omitempty" json:"abbrev,omitempty"`
@@ -883,6 +1095,7 @@ type Blob struct {
 	IDs        []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Endpoint   string      `yaml:"endpoint,omitempty" json:"endpoint,omitempty"` // used for minio for example
 	ExtraFiles []ExtraFile `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
+	Disable    string      `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
 }
 
 // Upload configuration.
@@ -914,16 +1127,19 @@ type Publisher struct {
 	Cmd        string      `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 	Env        []string    `yaml:"env,omitempty" json:"env,omitempty"`
 	ExtraFiles []ExtraFile `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
+	Disable    string      `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
 }
 
 // Source configuration.
 type Source struct {
 	NameTemplate   string `yaml:"name_template,omitempty" json:"name_template,omitempty"`
-	Format         string `yaml:"format,omitempty" json:"format,omitempty"`
+	Format         string `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"enum=tar,enum=tgz,enum=tar.gz,enum=zip,default=tar.gz"`
 	Enabled        bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	PrefixTemplate string `yaml:"prefix_template,omitempty" json:"prefix_template,omitempty"`
 	Files          []File `yaml:"files,omitempty" json:"files,omitempty"`
-	RLCP           bool   `yaml:"rlcp,omitempty" json:"rlcp,omitempty"`
+
+	// Deprecated: don't need to set this anymore.
+	RLCP string `yaml:"rlcp,omitempty" json:"rlcp,omitempty" jsonschema:"oneof_type=string;boolean,deprecated=true,description=you can now remove this"`
 }
 
 // Project includes all project configuration.
@@ -933,10 +1149,12 @@ type Project struct {
 	Release         Release          `yaml:"release,omitempty" json:"release,omitempty"`
 	Milestones      []Milestone      `yaml:"milestones,omitempty" json:"milestones,omitempty"`
 	Brews           []Homebrew       `yaml:"brews,omitempty" json:"brews,omitempty"`
+	Nix             []Nix            `yaml:"nix,omitempty" json:"nix,omitempty"`
+	Winget          []Winget         `yaml:"winget,omitempty" json:"winget,omitempty"`
 	AURs            []AUR            `yaml:"aurs,omitempty" json:"aurs,omitempty"`
 	Krews           []Krew           `yaml:"krews,omitempty" json:"krews,omitempty"`
 	Kos             []Ko             `yaml:"kos,omitempty" json:"kos,omitempty"`
-	Scoop           Scoop            `yaml:"scoop,omitempty" json:"scoop,omitempty"`
+	Scoops          []Scoop          `yaml:"scoops,omitempty" json:"scoops,omitempty"`
 	Builds          []Build          `yaml:"builds,omitempty" json:"builds,omitempty"`
 	Archives        []Archive        `yaml:"archives,omitempty" json:"archives,omitempty"`
 	NFPMs           []NFPM           `yaml:"nfpms,omitempty" json:"nfpms,omitempty"`
@@ -961,11 +1179,14 @@ type Project struct {
 	SBOMs           []SBOM           `yaml:"sboms,omitempty" json:"sboms,omitempty"`
 	Chocolateys     []Chocolatey     `yaml:"chocolateys,omitempty" json:"chocolateys,omitempty"`
 	Git             Git              `yaml:"git,omitempty" json:"git,omitempty"`
+	ReportSizes     bool             `yaml:"report_sizes,omitempty" json:"report_sizes,omitempty"`
+	Metadata        ProjectMetadata  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 
 	UniversalBinaries []UniversalBinary `yaml:"universal_binaries,omitempty" json:"universal_binaries,omitempty"`
+	UPXs              []UPX             `yaml:"upx,omitempty" json:"upx,omitempty"`
 
-	// this is a hack ¯\_(ツ)_/¯
-	SingleBuild Build `yaml:"build,omitempty" json:"build,omitempty"`
+	// force the SCM token to use when multiple are set
+	ForceToken string `yaml:"force_token,omitempty" json:"force_token,omitempty" jsonschema:"enum=github,enum=gitlab,enum=gitea,enum=,default="`
 
 	// should be set if using github enterprise
 	GitHubURLs GitHubURLs `yaml:"github_urls,omitempty" json:"github_urls,omitempty"`
@@ -975,6 +1196,16 @@ type Project struct {
 
 	// should be set if using Gitea
 	GiteaURLs GiteaURLs `yaml:"gitea_urls,omitempty" json:"gitea_urls,omitempty"`
+
+	// Deprecated: use Scoops instead.
+	Scoop Scoop `yaml:"scoop,omitempty" json:"scoop,omitempty" jsonschema:"deprecated=true,description=use scoops instead"`
+
+	// Deprecated: use Builds instead.
+	SingleBuild Build `yaml:"build,omitempty" json:"build,omitempty" jsonschema:"deprecated=true,description=use builds instead"`
+}
+
+type ProjectMetadata struct {
+	ModTimestamp string `yaml:"mod_timestamp,omitempty" json:"mod_timestamp,omitempty"`
 }
 
 type GoMod struct {
@@ -985,18 +1216,19 @@ type GoMod struct {
 }
 
 type Announce struct {
-	Skip       string     `yaml:"skip,omitempty" json:"skip,omitempty" jsonschema:"oneof_type=string;boolean"`
-	Twitter    Twitter    `yaml:"twitter,omitempty" json:"twitter,omitempty"`
-	Mastodon   Mastodon   `yaml:"mastodon,omitempty" json:"mastodon,omitempty"`
-	Reddit     Reddit     `yaml:"reddit,omitempty" json:"reddit,omitempty"`
-	Slack      Slack      `yaml:"slack,omitempty" json:"slack,omitempty"`
-	Discord    Discord    `yaml:"discord,omitempty" json:"discord,omitempty"`
-	Teams      Teams      `yaml:"teams,omitempty" json:"teams,omitempty"`
-	SMTP       SMTP       `yaml:"smtp,omitempty" json:"smtp,omitempty"`
-	Mattermost Mattermost `yaml:"mattermost,omitempty" json:"mattermost,omitempty"`
-	LinkedIn   LinkedIn   `yaml:"linkedin,omitempty" json:"linkedin,omitempty"`
-	Telegram   Telegram   `yaml:"telegram,omitempty" json:"telegram,omitempty"`
-	Webhook    Webhook    `yaml:"webhook,omitempty" json:"webhook,omitempty"`
+	Skip           string         `yaml:"skip,omitempty" json:"skip,omitempty" jsonschema:"oneof_type=string;boolean"`
+	Twitter        Twitter        `yaml:"twitter,omitempty" json:"twitter,omitempty"`
+	Mastodon       Mastodon       `yaml:"mastodon,omitempty" json:"mastodon,omitempty"`
+	Reddit         Reddit         `yaml:"reddit,omitempty" json:"reddit,omitempty"`
+	Slack          Slack          `yaml:"slack,omitempty" json:"slack,omitempty"`
+	Discord        Discord        `yaml:"discord,omitempty" json:"discord,omitempty"`
+	Teams          Teams          `yaml:"teams,omitempty" json:"teams,omitempty"`
+	SMTP           SMTP           `yaml:"smtp,omitempty" json:"smtp,omitempty"`
+	Mattermost     Mattermost     `yaml:"mattermost,omitempty" json:"mattermost,omitempty"`
+	LinkedIn       LinkedIn       `yaml:"linkedin,omitempty" json:"linkedin,omitempty"`
+	Telegram       Telegram       `yaml:"telegram,omitempty" json:"telegram,omitempty"`
+	Webhook        Webhook        `yaml:"webhook,omitempty" json:"webhook,omitempty"`
+	OpenCollective OpenCollective `yaml:"opencollective,omitempty" json:"opencolletive,omitempty"`
 }
 
 type Webhook struct {
@@ -1087,6 +1319,14 @@ type Telegram struct {
 	Enabled         bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	MessageTemplate string `yaml:"message_template,omitempty" json:"message_template,omitempty"`
 	ChatID          string `yaml:"chat_id,omitempty" json:"chat_id,omitempty" jsonschema:"oneof_type=string;integer"`
+	ParseMode       string `yaml:"parse_mode,omitempty" json:"parse_mode,omitempty" jsonschema:"enum=MarkdownV2,enum=HTML,default=MarkdownV2"`
+}
+
+type OpenCollective struct {
+	Enabled         bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Slug            string `yaml:"slug,omitempty" json:"slug,omitempty"`
+	TitleTemplate   string `yaml:"title_template,omitempty" json:"title_template,omitempty"`
+	MessageTemplate string `yaml:"message_template,omitempty" json:"message_template,omitempty"`
 }
 
 // Load config file.
@@ -1096,7 +1336,6 @@ func Load(file string) (config Project, err error) {
 		return
 	}
 	defer f.Close()
-	log.WithField("file", file).Info("loading config file")
 	return LoadReader(f)
 }
 
@@ -1107,7 +1346,6 @@ func LoadReader(fd io.Reader) (config Project, err error) {
 		return config, err
 	}
 	err = yaml.UnmarshalStrict(data, &config)
-	log.WithField("config", config).Debug("loaded config file")
 	return config, err
 }
 
@@ -1160,7 +1398,7 @@ type Chocolatey struct {
 	Name                     string                 `yaml:"name,omitempty" json:"name,omitempty"`
 	IDs                      []string               `yaml:"ids,omitempty" json:"ids,omitempty"`
 	PackageSourceURL         string                 `yaml:"package_source_url,omitempty" json:"package_source_url,omitempty"`
-	Owners                   string                 `yaml:"owners,omitempty" json:"authoers,omitempty"`
+	Owners                   string                 `yaml:"owners,omitempty" json:"owners,omitempty"`
 	Title                    string                 `yaml:"title,omitempty" json:"title,omitempty"`
 	Authors                  string                 `yaml:"authors,omitempty" json:"authors,omitempty"`
 	ProjectURL               string                 `yaml:"project_url,omitempty" json:"project_url,omitempty"`

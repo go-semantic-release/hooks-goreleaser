@@ -1,4 +1,4 @@
-// Package pipeline provides generic erros for pipes to use.
+// Package pipeline provides generic errors for pipes to use.
 package pipeline
 
 import (
@@ -23,8 +23,10 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/krew"
 	"github.com/goreleaser/goreleaser/int/pipe/metadata"
 	"github.com/goreleaser/goreleaser/int/pipe/nfpm"
+	"github.com/goreleaser/goreleaser/int/pipe/nix"
 	"github.com/goreleaser/goreleaser/int/pipe/prebuild"
 	"github.com/goreleaser/goreleaser/int/pipe/publish"
+	"github.com/goreleaser/goreleaser/int/pipe/reportsizes"
 	"github.com/goreleaser/goreleaser/int/pipe/sbom"
 	"github.com/goreleaser/goreleaser/int/pipe/scoop"
 	"github.com/goreleaser/goreleaser/int/pipe/semver"
@@ -33,6 +35,8 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/snapshot"
 	"github.com/goreleaser/goreleaser/int/pipe/sourcearchive"
 	"github.com/goreleaser/goreleaser/int/pipe/universalbinary"
+	"github.com/goreleaser/goreleaser/int/pipe/upx"
+	"github.com/goreleaser/goreleaser/int/pipe/winget"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
@@ -55,10 +59,10 @@ var BuildPipeline = []Piper{
 	semver.Pipe{},
 	// load default configs
 	defaults.Pipe{},
-	// run global hooks before build
-	before.Pipe{},
 	// snapshot version handling
 	snapshot.Pipe{},
+	// run global hooks before build
+	before.Pipe{},
 	// ensure ./dist is clean
 	dist.Pipe{},
 	// setup gomod-related stuff
@@ -73,11 +77,17 @@ var BuildPipeline = []Piper{
 	build.Pipe{},
 	// universal binary handling
 	universalbinary.Pipe{},
+	// upx
+	upx.Pipe{},
 }
 
 // BuildCmdPipeline is the pipeline run by goreleaser build.
 // nolint:gochecknoglobals
-var BuildCmdPipeline = append(BuildPipeline, metadata.Pipe{})
+var BuildCmdPipeline = append(
+	BuildPipeline,
+	reportsizes.Pipe{},
+	metadata.Pipe{},
+)
 
 // Pipeline contains all pipe implementations in order.
 // nolint: gochecknoglobals
@@ -101,6 +111,10 @@ var Pipeline = append(
 	sign.Pipe{},
 	// create arch linux aur pkgbuild
 	aur.Pipe{},
+	// create nixpkgs
+	nix.NewBuild(),
+	// winget installers
+	winget.Pipe{},
 	// create brew tap
 	brew.Pipe{},
 	// krew plugins
@@ -109,10 +123,12 @@ var Pipeline = append(
 	scoop.Pipe{},
 	// create chocolatey pkg and publish
 	chocolatey.Pipe{},
+	// reports artifacts sizes to the log and to artifacts.json
+	reportsizes.Pipe{},
 	// create and push docker images
 	docker.Pipe{},
 	// publishes artifacts
-	publish.Pipe{},
+	publish.New(),
 	// creates a metadata.json and an artifacts.json files in the dist folder
 	metadata.Pipe{},
 	// announce releases

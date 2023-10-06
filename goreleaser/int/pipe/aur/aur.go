@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,18 +15,15 @@ import (
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/commitauthor"
-	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
-	"golang.org/x/crypto/ssh"
 )
 
 const (
-	aurExtra          = "AURConfig"
-	defaultSSHCommand = "ssh -i {{ .KeyPath }} -o StrictHostKeyChecking=accept-new -F /dev/null"
-	defaultCommitMsg  = "Update to {{ .Tag }}"
+	aurExtra         = "AURConfig"
+	defaultCommitMsg = "Update to {{ .Tag }}"
 )
 
 var ErrNoArchivesFound = errors.New("no linux archives found")
@@ -36,6 +32,7 @@ var ErrNoArchivesFound = errors.New("no linux archives found")
 type Pipe struct{}
 
 func (Pipe) String() string                 { return "arch user repositories" }
+func (Pipe) ContinueOnError() bool          { return true }
 func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.AURs) == 0 }
 
 func (Pipe) Default(ctx *context.Context) error {
@@ -61,9 +58,6 @@ func (Pipe) Default(ctx *context.Context) error {
 		if pkg.Rel == "" {
 			pkg.Rel = "1"
 		}
-		if pkg.GitSSHCommand == "" {
-			pkg.GitSSHCommand = defaultSSHCommand
-		}
 		if pkg.Goamd64 == "" {
 			pkg.Goamd64 = "v1"
 		}
@@ -73,7 +67,7 @@ func (Pipe) Default(ctx *context.Context) error {
 }
 
 func (Pipe) Run(ctx *context.Context) error {
-	cli, err := client.New(ctx)
+	cli, err := client.NewReleaseClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,7 +75,7 @@ func (Pipe) Run(ctx *context.Context) error {
 	return runAll(ctx, cli)
 }
 
-func runAll(ctx *context.Context, cli client.Client) error {
+func runAll(ctx *context.Context, cli client.ReleaseURLTemplater) error {
 	for _, aur := range ctx.Config.AURs {
 		err := doRun(ctx, aur, cli)
 		if err != nil {
@@ -91,7 +85,7 @@ func runAll(ctx *context.Context, cli client.Client) error {
 	return nil
 }
 
-func doRun(ctx *context.Context, aur config.AUR, cl client.Client) error {
+func doRun(ctx *context.Context, aur config.AUR, cl client.ReleaseURLTemplater) error {
 	name, err := tmpl.New(ctx).Apply(aur.Name)
 	if err != nil {
 		return err
@@ -195,7 +189,7 @@ func doRun(ctx *context.Context, aur config.AUR, cl client.Client) error {
 	return nil
 }
 
-func buildPkgFile(ctx *context.Context, pkg config.AUR, client client.Client, artifacts []*artifact.Artifact, tpl string) (string, error) {
+func buildPkgFile(ctx *context.Context, pkg config.AUR, client client.ReleaseURLTemplater, artifacts []*artifact.Artifact, tpl string) (string, error) {
 	data, err := dataFor(ctx, pkg, client, artifacts)
 	if err != nil {
 		return "", err
@@ -280,7 +274,7 @@ func toPkgBuildArch(arch string) string {
 	}
 }
 
-func dataFor(ctx *context.Context, cfg config.AUR, cl client.Client, artifacts []*artifact.Artifact) (templateData, error) {
+func dataFor(ctx *context.Context, cfg config.AUR, cl client.ReleaseURLTemplater, artifacts []*artifact.Artifact) (templateData, error) {
 	result := templateData{
 		Name:         cfg.Name,
 		Desc:         cfg.Description,
@@ -368,28 +362,7 @@ func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
 		return pipe.Skip("prerelease detected with 'auto' upload, skipping aur publish")
 	}
 
-	key, err := tmpl.New(ctx).Apply(cfg.PrivateKey)
-	if err != nil {
-		return err
-	}
-
-	key, err = keyPath(key)
-	if err != nil {
-		return err
-	}
-
-	url, err := tmpl.New(ctx).Apply(cfg.GitURL)
-	if err != nil {
-		return err
-	}
-
-	if url == "" {
-		return pipe.Skip("aur.git_url is empty")
-	}
-
-	sshcmd, err := tmpl.New(ctx).WithExtraFields(tmpl.Fields{
-		"KeyPath": key,
-	}).Apply(cfg.GitSSHCommand)
+	author, err := commitauthor.Get(ctx, cfg.CommitAuthor)
 	if err != nil {
 		return err
 	}
@@ -399,107 +372,26 @@ func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
 		return err
 	}
 
-	author, err := commitauthor.Get(ctx, cfg.CommitAuthor)
-	if err != nil {
-		return err
-	}
+	cli := client.NewGitUploadClient("master")
+	repo := client.RepoFromRef(config.RepoRef{
+		Git: config.GitRepoRef{
+			PrivateKey: cfg.PrivateKey,
+			URL:        cfg.GitURL,
+			SSHCommand: cfg.GitSSHCommand,
+		},
+		Name: cfg.Name,
+	})
 
-	parent := filepath.Join(ctx.Config.Dist, "aur", "repos")
-	cwd := filepath.Join(parent, cfg.Name)
-
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return err
-	}
-
-	env := []string{fmt.Sprintf("GIT_SSH_COMMAND=%s", sshcmd)}
-
-	if err := runGitCmds(ctx, parent, env, [][]string{
-		{"clone", url, cfg.Name},
-	}); err != nil {
-		return fmt.Errorf("failed to setup local AUR repo: %w", err)
-	}
-
-	if err := runGitCmds(ctx, cwd, env, [][]string{
-		// setup auth et al
-		{"config", "--local", "user.name", author.Name},
-		{"config", "--local", "user.email", author.Email},
-		{"config", "--local", "commit.gpgSign", "false"},
-		{"config", "--local", "init.defaultBranch", "master"},
-	}); err != nil {
-		return fmt.Errorf("failed to setup local AUR repo: %w", err)
-	}
-
+	files := make([]client.RepoFile, 0, len(pkgs))
 	for _, pkg := range pkgs {
-		bts, err := os.ReadFile(pkg.Path)
+		content, err := os.ReadFile(pkg.Path)
 		if err != nil {
-			return fmt.Errorf("failed to read %s: %w", pkg.Name, err)
+			return err
 		}
-
-		if err := os.WriteFile(filepath.Join(cwd, pkg.Name), bts, 0o644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", pkg.Name, err)
-		}
+		files = append(files, client.RepoFile{
+			Path:    pkg.Name,
+			Content: content,
+		})
 	}
-
-	log.WithField("repo", url).WithField("name", cfg.Name).Info("pushing")
-	if err := runGitCmds(ctx, cwd, env, [][]string{
-		{"add", "-A", "."},
-		{"commit", "-m", msg},
-		{"push", "origin", "HEAD"},
-	}); err != nil {
-		return fmt.Errorf("failed to push %q (%q): %w", cfg.Name, url, err)
-	}
-
-	return nil
-}
-
-func keyPath(key string) (string, error) {
-	if key == "" {
-		return "", pipe.Skip("aur.private_key is empty")
-	}
-
-	path := key
-	if _, err := ssh.ParsePrivateKey([]byte(key)); err == nil {
-		// if it can be parsed as a valid private key, we write it to a
-		// temp file and use that path on GIT_SSH_COMMAND.
-		f, err := os.CreateTemp("", "id_*")
-		if err != nil {
-			return "", fmt.Errorf("failed to store private key: %w", err)
-		}
-		defer f.Close()
-
-		// the key needs to EOF at an empty line, seems like github actions
-		// is somehow removing them.
-		if !strings.HasSuffix(key, "\n") {
-			key += "\n"
-		}
-
-		if _, err := io.WriteString(f, key); err != nil {
-			return "", fmt.Errorf("failed to store private key: %w", err)
-		}
-		if err := f.Close(); err != nil {
-			return "", fmt.Errorf("failed to store private key: %w", err)
-		}
-		path = f.Name()
-	}
-
-	if _, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("could not stat aur.private_key: %w", err)
-	}
-
-	// in any case, ensure the key has the correct permissions.
-	if err := os.Chmod(path, 0o600); err != nil {
-		return "", fmt.Errorf("failed to ensure aur.private_key permissions: %w", err)
-	}
-
-	return path, nil
-}
-
-func runGitCmds(ctx *context.Context, cwd string, env []string, cmds [][]string) error {
-	for _, cmd := range cmds {
-		args := append([]string{"-C", cwd}, cmd...)
-		if _, err := git.Clean(git.RunWithEnv(ctx, env, args...)); err != nil {
-			return fmt.Errorf("%q failed: %w", strings.Join(cmd, " "), err)
-		}
-	}
-	return nil
+	return cli.CreateFiles(ctx, author, repo, msg, files)
 }

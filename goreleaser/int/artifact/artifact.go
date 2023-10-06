@@ -15,6 +15,8 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/caarlos0/log"
@@ -23,6 +25,7 @@ import (
 // Type defines the type of an artifact.
 type Type int
 
+// If you add more types, update TestArtifactTypeStringer!
 const (
 	// UploadableArchive a tar.gz/zip archive to be uploaded.
 	UploadableArchive Type = iota + 1
@@ -56,6 +59,14 @@ const (
 	UploadableSourceArchive
 	// BrewTap is an uploadable homebrew tap recipe file.
 	BrewTap
+	// Nixpkg is an uploadable nix package.
+	Nixpkg
+	// WingetInstaller winget installer file.
+	WingetInstaller
+	// WingetDefaultLocale winget default locale file.
+	WingetDefaultLocale
+	// WingetVersion winget version file.
+	WingetVersion
 	// PkgBuild is an Arch Linux AUR PKGBUILD file.
 	PkgBuild
 	// SrcInfo is an Arch Linux AUR .SRCINFO file.
@@ -122,6 +133,10 @@ func (t Type) String() string {
 		return "C Archive Library"
 	case CShared:
 		return "C Shared Library"
+	case WingetInstaller, WingetDefaultLocale, WingetVersion:
+		return "Winget Manifest"
+	case Nixpkg:
+		return "Nixpkg"
 	default:
 		return "unknown"
 	}
@@ -131,13 +146,13 @@ const (
 	ExtraID        = "ID"
 	ExtraBinary    = "Binary"
 	ExtraExt       = "Ext"
-	ExtraBuilds    = "Builds"
 	ExtraFormat    = "Format"
 	ExtraWrappedIn = "WrappedIn"
 	ExtraBinaries  = "Binaries"
 	ExtraRefresh   = "Refresh"
 	ExtraReplaces  = "Replaces"
 	ExtraDigest    = "Digest"
+	ExtraSize      = "Size"
 )
 
 // Extras represents the extra fields in an artifact.
@@ -278,22 +293,22 @@ type Artifacts struct {
 }
 
 // New return a new list of artifacts.
-func New() Artifacts {
-	return Artifacts{
+func New() *Artifacts {
+	return &Artifacts{
 		items: []*Artifact{},
 		lock:  &sync.Mutex{},
 	}
 }
 
 // List return the actual list of artifacts.
-func (artifacts Artifacts) List() []*Artifact {
+func (artifacts *Artifacts) List() []*Artifact {
 	artifacts.lock.Lock()
 	defer artifacts.lock.Unlock()
 	return artifacts.items
 }
 
 // GroupByID groups the artifacts by their ID.
-func (artifacts Artifacts) GroupByID() map[string][]*Artifact {
+func (artifacts *Artifacts) GroupByID() map[string][]*Artifact {
 	result := map[string][]*Artifact{}
 	for _, a := range artifacts.List() {
 		id := a.ID()
@@ -306,7 +321,7 @@ func (artifacts Artifacts) GroupByID() map[string][]*Artifact {
 }
 
 // GroupByPlatform groups the artifacts by their platform.
-func (artifacts Artifacts) GroupByPlatform() map[string][]*Artifact {
+func (artifacts *Artifacts) GroupByPlatform() map[string][]*Artifact {
 	result := map[string][]*Artifact{}
 	for _, a := range artifacts.List() {
 		plat := a.Goos + a.Goarch + a.Goarm + a.Gomips + a.Goamd64
@@ -315,15 +330,41 @@ func (artifacts Artifacts) GroupByPlatform() map[string][]*Artifact {
 	return result
 }
 
+func relPath(a *Artifact) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(a.Path, cwd) {
+		return "", nil
+	}
+	return filepath.Rel(cwd, a.Path)
+}
+
+func shouldRelPath(a *Artifact) bool {
+	switch a.Type {
+	case DockerImage, DockerManifest, PublishableDockerImage:
+		return false
+	default:
+		return filepath.IsAbs(a.Path)
+	}
+}
+
 // Add safely adds a new artifact to an artifact list.
 func (artifacts *Artifacts) Add(a *Artifact) {
 	artifacts.lock.Lock()
 	defer artifacts.lock.Unlock()
-	log.WithFields(log.Fields{
-		"name": a.Name,
-		"path": a.Path,
-		"type": a.Type,
-	}).Debug("added new artifact")
+	if shouldRelPath(a) {
+		rel, err := relPath(a)
+		if rel != "" && err == nil {
+			a.Path = rel
+		}
+	}
+	a.Path = filepath.ToSlash(a.Path)
+	log.WithField("name", a.Name).
+		WithField("type", a.Type).
+		WithField("path", a.Path).
+		Debug("added new artifact")
 	artifacts.items = append(artifacts.items, a)
 }
 
@@ -339,11 +380,10 @@ func (artifacts *Artifacts) Remove(filter Filter) error {
 	result := New()
 	for _, a := range artifacts.items {
 		if filter(a) {
-			log.WithFields(log.Fields{
-				"name": a.Name,
-				"path": a.Path,
-				"type": a.Type,
-			}).Debug("removing")
+			log.WithField("name", a.Name).
+				WithField("type", a.Type).
+				WithField("path", a.Path).
+				Debug("removing")
 		} else {
 			result.items = append(result.items, a)
 		}
@@ -442,7 +482,7 @@ func ByExt(exts ...string) Filter {
 // deduplicating artifacts by path (preferring UploadableBinary over all others). Note: this filter is unique in the
 // sense that it cannot act in isolation of the state of other artifacts; the filter requires the whole list of
 // artifacts in advance to perform deduplication.
-func ByBinaryLikeArtifacts(arts Artifacts) Filter {
+func ByBinaryLikeArtifacts(arts *Artifacts) Filter {
 	// find all of the paths for any uploadable binary artifacts
 	uploadableBins := arts.Filter(ByType(UploadableBinary)).List()
 	uploadableBinPaths := map[string]struct{}{}
@@ -500,9 +540,9 @@ func And(filters ...Filter) Filter {
 // There are some pre-defined filters but anything of the Type Filter
 // is accepted.
 // You can compose filters by using the And and Or filters.
-func (artifacts *Artifacts) Filter(filter Filter) Artifacts {
+func (artifacts *Artifacts) Filter(filter Filter) *Artifacts {
 	if filter == nil {
-		return *artifacts
+		return artifacts
 	}
 
 	result := New()
@@ -515,7 +555,7 @@ func (artifacts *Artifacts) Filter(filter Filter) Artifacts {
 }
 
 // Paths returns the artifact.Path of the current artifact list.
-func (artifacts Artifacts) Paths() []string {
+func (artifacts *Artifacts) Paths() []string {
 	var result []string
 	for _, artifact := range artifacts.List() {
 		result = append(result, artifact.Path)
@@ -527,7 +567,7 @@ func (artifacts Artifacts) Paths() []string {
 type VisitFn func(a *Artifact) error
 
 // Visit executes the given function for each artifact in the list.
-func (artifacts Artifacts) Visit(fn VisitFn) error {
+func (artifacts *Artifacts) Visit(fn VisitFn) error {
 	for _, artifact := range artifacts.List() {
 		if err := fn(artifact); err != nil {
 			return err

@@ -2,17 +2,20 @@ package universalbinary
 
 import (
 	"debug/macho"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/skips"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,14 +25,12 @@ func TestDescription(t *testing.T) {
 
 func TestDefault(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		ctx := &context.Context{
-			Config: config.Project{
-				ProjectName: "proj",
-				UniversalBinaries: []config.UniversalBinary{
-					{},
-				},
+		ctx := testctx.NewWithCfg(config.Project{
+			ProjectName: "proj",
+			UniversalBinaries: []config.UniversalBinary{
+				{},
 			},
-		}
+		})
 		require.NoError(t, Pipe{}.Default(ctx))
 		require.Equal(t, config.UniversalBinary{
 			ID:           "proj",
@@ -39,14 +40,12 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("given ids", func(t *testing.T) {
-		ctx := &context.Context{
-			Config: config.Project{
-				ProjectName: "proj",
-				UniversalBinaries: []config.UniversalBinary{
-					{IDs: []string{"foo"}},
-				},
+		ctx := testctx.NewWithCfg(config.Project{
+			ProjectName: "proj",
+			UniversalBinaries: []config.UniversalBinary{
+				{IDs: []string{"foo"}},
 			},
-		}
+		})
 		require.NoError(t, Pipe{}.Default(ctx))
 		require.Equal(t, config.UniversalBinary{
 			ID:           "proj",
@@ -56,14 +55,12 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("given id", func(t *testing.T) {
-		ctx := &context.Context{
-			Config: config.Project{
-				ProjectName: "proj",
-				UniversalBinaries: []config.UniversalBinary{
-					{ID: "foo"},
-				},
+		ctx := testctx.NewWithCfg(config.Project{
+			ProjectName: "proj",
+			UniversalBinaries: []config.UniversalBinary{
+				{ID: "foo"},
 			},
-		}
+		})
 		require.NoError(t, Pipe{}.Default(ctx))
 		require.Equal(t, config.UniversalBinary{
 			ID:           "foo",
@@ -73,14 +70,12 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("given name", func(t *testing.T) {
-		ctx := &context.Context{
-			Config: config.Project{
-				ProjectName: "proj",
-				UniversalBinaries: []config.UniversalBinary{
-					{NameTemplate: "foo"},
-				},
+		ctx := testctx.NewWithCfg(config.Project{
+			ProjectName: "proj",
+			UniversalBinaries: []config.UniversalBinary{
+				{NameTemplate: "foo"},
 			},
-		}
+		})
 		require.NoError(t, Pipe{}.Default(ctx))
 		require.Equal(t, config.UniversalBinary{
 			ID:           "proj",
@@ -90,26 +85,24 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("duplicated ids", func(t *testing.T) {
-		ctx := &context.Context{
-			Config: config.Project{
-				ProjectName: "proj",
-				UniversalBinaries: []config.UniversalBinary{
-					{ID: "foo"},
-					{ID: "foo"},
-				},
+		ctx := testctx.NewWithCfg(config.Project{
+			ProjectName: "proj",
+			UniversalBinaries: []config.UniversalBinary{
+				{ID: "foo"},
+				{ID: "foo"},
 			},
-		}
+		})
 		require.EqualError(t, Pipe{}.Default(ctx), `found 2 universal_binaries with the ID 'foo', please fix your config`)
 	})
 }
 
 func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
-		require.True(t, Pipe{}.Skip(context.New(config.Project{})))
+		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			UniversalBinaries: []config.UniversalBinary{{}},
 		})
 		require.False(t, Pipe{}.Skip(ctx))
@@ -138,9 +131,9 @@ func TestRun(t *testing.T) {
 			},
 		},
 	}
-	ctx1 := context.New(cfg)
+	ctx1 := testctx.NewWithCfg(cfg)
 
-	ctx2 := context.New(config.Project{
+	ctx2 := testctx.NewWithCfg(config.Project{
 		Dist: dist,
 		UniversalBinaries: []config.UniversalBinary{
 			{
@@ -151,7 +144,7 @@ func TestRun(t *testing.T) {
 		},
 	})
 
-	ctx3 := context.New(config.Project{
+	ctx3 := testctx.NewWithCfg(config.Project{
 		Dist: dist,
 		UniversalBinaries: []config.UniversalBinary{
 			{
@@ -162,7 +155,7 @@ func TestRun(t *testing.T) {
 		},
 	})
 
-	ctx4 := context.New(config.Project{
+	ctx4 := testctx.NewWithCfg(config.Project{
 		Dist: dist,
 		UniversalBinaries: []config.UniversalBinary{
 			{
@@ -173,7 +166,7 @@ func TestRun(t *testing.T) {
 		},
 	})
 
-	ctx5 := context.New(config.Project{
+	ctx5 := testctx.NewWithCfg(config.Project{
 		Dist: dist,
 		UniversalBinaries: []config.UniversalBinary{
 			{
@@ -193,13 +186,35 @@ func TestRun(t *testing.T) {
 		},
 	})
 
-	ctx6 := context.New(config.Project{
+	ctx6 := testctx.NewWithCfg(config.Project{
 		Dist: dist,
 		UniversalBinaries: []config.UniversalBinary{
 			{
 				ID:           "foobar",
 				IDs:          []string{"foo"},
 				NameTemplate: "foo",
+			},
+		},
+	})
+
+	modTime := time.Now().AddDate(-1, 0, 0).Round(1 * time.Second).UTC()
+	ctx7 := testctx.NewWithCfg(config.Project{
+		Dist: dist,
+		UniversalBinaries: []config.UniversalBinary{
+			{
+				ID:           "foo",
+				IDs:          []string{"foo"},
+				NameTemplate: "foo",
+				ModTimestamp: fmt.Sprintf("%d", modTime.Unix()),
+				Hooks: config.BuildHookConfig{
+					Pre: []config.Hook{
+						{Cmd: "touch " + pre},
+					},
+					Post: []config.Hook{
+						{Cmd: "touch " + post},
+						{Cmd: `sh -c 'echo "{{ .Name }} {{ .Os }} {{ .Arch }} {{ .Arm }} {{ .Target }} {{ .Ext }}" > {{ .Path }}.post'`, Output: true},
+					},
+				},
 			},
 		},
 	})
@@ -228,6 +243,7 @@ func TestRun(t *testing.T) {
 		ctx2.Artifacts.Add(&art)
 		ctx5.Artifacts.Add(&art)
 		ctx6.Artifacts.Add(&art)
+		ctx7.Artifacts.Add(&art)
 		ctx4.Artifacts.Add(&artifact.Artifact{
 			Name:   "fake",
 			Path:   path + "wrong",
@@ -268,7 +284,7 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("bad template", func(t *testing.T) {
-		testlib.RequireTemplateError(t, Pipe{}.Run(context.New(config.Project{
+		testlib.RequireTemplateError(t, Pipe{}.Run(testctx.NewWithCfg(config.Project{
 			UniversalBinaries: []config.UniversalBinary{
 				{
 					NameTemplate: "{{.Name}",
@@ -300,18 +316,38 @@ func TestRun(t *testing.T) {
 		ctx := ctx5
 		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{Cmd: "exit 1"}}
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "echo post"}}
-		require.EqualError(t, Pipe{}.Run(ctx), "pre hook failed: failed to run 'exit 1': exec: \"exit\": executable file not found in $PATH")
+		err := Pipe{}.Run(ctx)
+		require.ErrorIs(t, err, exec.ErrNotFound)
+		require.Contains(t, err.Error(), "pre hook failed")
 	})
 
 	t.Run("failing post-hook", func(t *testing.T) {
 		ctx := ctx5
 		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{Cmd: "echo pre"}}
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "exit 1"}}
-		require.EqualError(t, Pipe{}.Run(ctx), "post hook failed: failed to run 'exit 1': exec: \"exit\": executable file not found in $PATH")
+		err := Pipe{}.Run(ctx)
+		require.ErrorIs(t, err, exec.ErrNotFound)
+		require.Contains(t, err.Error(), "post hook failed")
+	})
+
+	t.Run("skipping post-hook", func(t *testing.T) {
+		ctx := ctx5
+		skips.Set(ctx, skips.PostBuildHooks)
+		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "exit 1"}}
+		require.NoError(t, Pipe{}.Run(ctx))
+	})
+
+	t.Run("skipping pre-hook", func(t *testing.T) {
+		ctx := ctx5
+		skips.Set(ctx, skips.PreBuildHooks)
+		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{Cmd: "exit 1"}}
+		require.NoError(t, Pipe{}.Run(ctx))
 	})
 
 	t.Run("hook with env tmpl", func(t *testing.T) {
 		ctx := ctx5
+		ctx.Skips[string(skips.PostBuildHooks)] = false
+		ctx.Skips[string(skips.PreBuildHooks)] = false
 		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{
 			Cmd: "echo {{.Env.FOO}}",
 			Env: []string{"FOO=foo-{{.Tag}}"},
@@ -322,6 +358,8 @@ func TestRun(t *testing.T) {
 
 	t.Run("hook with bad env tmpl", func(t *testing.T) {
 		ctx := ctx5
+		ctx.Skips[string(skips.PostBuildHooks)] = false
+		ctx.Skips[string(skips.PreBuildHooks)] = false
 		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{{
 			Cmd: "echo blah",
 			Env: []string{"FOO=foo-{{.Tag}"},
@@ -347,6 +385,24 @@ func TestRun(t *testing.T) {
 		}}
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{}
 		testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
+	})
+
+	t.Run("mod timestamp", func(t *testing.T) {
+		ctx := ctx7
+		require.NoError(t, Pipe{}.Run(ctx))
+		unibins := ctx.Artifacts.Filter(artifact.ByType(artifact.UniversalBinary)).List()
+		require.Len(t, unibins, 1)
+		stat, err := os.Stat(unibins[0].Path)
+		require.NoError(t, err)
+		require.Equal(t, modTime.Unix(), stat.ModTime().Unix())
+	})
+
+	t.Run("bad mod timestamp", func(t *testing.T) {
+		ctx := ctx5
+		ctx.Config.UniversalBinaries[0].ModTimestamp = "not a number"
+		ctx.Config.UniversalBinaries[0].Hooks.Pre = []config.Hook{}
+		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{}
+		require.ErrorIs(t, Pipe{}.Run(ctx), strconv.ErrSyntax)
 	})
 }
 

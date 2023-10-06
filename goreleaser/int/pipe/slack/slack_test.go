@@ -2,12 +2,12 @@ package slack
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
+	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/slack-go/slack"
 	"github.com/stretchr/testify/require"
 )
@@ -17,24 +17,24 @@ func TestStringer(t *testing.T) {
 }
 
 func TestDefault(t *testing.T) {
-	ctx := context.New(config.Project{})
+	ctx := testctx.New()
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, ctx.Config.Announce.Slack.MessageTemplate, defaultMessageTemplate)
 }
 
 func TestAnnounceInvalidTemplate(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Announce: config.Announce{
 			Slack: config.Slack{
 				MessageTemplate: "{{ .Foo }",
 			},
 		},
 	})
-	require.EqualError(t, Pipe{}.Announce(ctx), `slack: template: tmpl:1: unexpected "}" in operand`)
+	testlib.RequireTemplateError(t, Pipe{}.Announce(ctx))
 }
 
 func TestAnnounceMissingEnv(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Announce: config.Announce{
 			Slack: config.Slack{},
 		},
@@ -45,11 +45,11 @@ func TestAnnounceMissingEnv(t *testing.T) {
 
 func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
-		require.True(t, Pipe{}.Skip(context.New(config.Project{})))
+		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			Announce: config.Announce{
 				Slack: config.Slack{
 					Enabled: true,
@@ -67,29 +67,20 @@ func TestParseRichText(t *testing.T) {
 
 	t.Run("parse only - full slack config with blocks and attachments", func(t *testing.T) {
 		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(goodRichSlackConf(), &project))
-
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		blocks, attachments, err := parseAdvancedFormatting(ctx)
 		require.NoError(t, err)
-
 		require.Len(t, blocks.BlockSet, 4)
 		require.Len(t, attachments, 2)
 	})
 
 	t.Run("parse only - slack config with bad blocks", func(t *testing.T) {
 		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(badBlocksSlackConf(), &project))
-
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		_, _, err := parseAdvancedFormatting(ctx)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "json")
@@ -97,13 +88,9 @@ func TestParseRichText(t *testing.T) {
 
 	t.Run("parse only - slack config with bad attachments", func(t *testing.T) {
 		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(badAttachmentsSlackConf(), &project))
-
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		_, _, err := parseAdvancedFormatting(ctx)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "json")
@@ -111,31 +98,20 @@ func TestParseRichText(t *testing.T) {
 }
 
 func TestRichText(t *testing.T) {
-	t.Parallel()
-	os.Setenv("SLACK_WEBHOOK", slackTestHook())
+	t.Setenv("SLACK_WEBHOOK", slackTestHook())
 
 	t.Run("e2e - full slack config with blocks and attachments", func(t *testing.T) {
 		t.SkipNow() // requires a valid webhook for integration testing
-		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(goodRichSlackConf(), &project))
-
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		require.NoError(t, Pipe{}.Announce(ctx))
 	})
 
 	t.Run("slack config with bad blocks", func(t *testing.T) {
-		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(badBlocksSlackConf(), &project))
-
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		err := Pipe{}.Announce(ctx)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "json")
@@ -147,35 +123,25 @@ func TestUnmarshall(t *testing.T) {
 
 	t.Run("happy unmarshal", func(t *testing.T) {
 		t.Parallel()
-
-		ctx := context.New(config.Project{})
-		ctx.Version = testVersion
-
+		ctx := testctx.New(testctx.WithVersion(testVersion))
 		var blocks slack.Blocks
 		require.NoError(t, unmarshal(ctx, []interface{}{map[string]interface{}{"type": "divider"}}, &blocks))
 	})
 
 	t.Run("unmarshal fails on MarshalJSON", func(t *testing.T) {
 		t.Parallel()
-
-		ctx := context.New(config.Project{})
-		ctx.Version = testVersion
-
+		ctx := testctx.New(testctx.WithVersion(testVersion))
 		var blocks slack.Blocks
 		require.Error(t, unmarshal(ctx, []interface{}{map[string]interface{}{"type": func() {}}}, &blocks))
 	})
 
 	t.Run("unmarshal happy to resolve template", func(t *testing.T) {
 		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(goodTemplateSlackConf(), &project))
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		var blocks slack.Blocks
 		require.NoError(t, unmarshal(ctx, ctx.Config.Announce.Slack.Blocks, &blocks))
-
 		require.Len(t, blocks.BlockSet, 1)
 		header, ok := blocks.BlockSet[0].(*slack.HeaderBlock)
 		require.True(t, ok)
@@ -184,19 +150,16 @@ func TestUnmarshall(t *testing.T) {
 
 	t.Run("unmarshal fails on resolve template", func(t *testing.T) {
 		t.Parallel()
-
 		var project config.Project
 		require.NoError(t, yaml.Unmarshal(badTemplateSlackConf(), &project))
-		ctx := context.New(project)
-		ctx.Version = testVersion
-
+		ctx := testctx.NewWithCfg(project, testctx.WithVersion(testVersion))
 		var blocks slack.Blocks
 		require.Error(t, unmarshal(ctx, ctx.Config.Announce.Slack.Blocks, &blocks))
 	})
 }
 
 func slackTestHook() string {
-	// redacted: replace this by a real Slack Web Incoming Hook to test the featue end to end.
+	// redacted: replace this by a real Slack Web Incoming Hook to test the feature end to end.
 	const hook = "https://hooks.slack.com/services/*********/***********/************************"
 
 	return hook

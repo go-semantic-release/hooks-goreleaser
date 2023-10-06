@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
+	"github.com/goreleaser/goreleaser/int/logext"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	homedir "github.com/mitchellh/go-homedir"
@@ -69,18 +71,34 @@ func (Pipe) Run(ctx *context.Context) error {
 	gitlabToken, gitlabTokenErr := loadEnv("GITLAB_TOKEN", ctx.Config.EnvFiles.GitLabToken)
 	giteaToken, giteaTokenErr := loadEnv("GITEA_TOKEN", ctx.Config.EnvFiles.GiteaToken)
 
-	var tokens []string
-	if githubToken != "" {
-		tokens = append(tokens, "GITHUB_TOKEN")
+	forceToken := ctx.Config.ForceToken
+	if forceToken == "" {
+		forceToken = os.Getenv("GORELEASER_FORCE_TOKEN")
 	}
-	if gitlabToken != "" {
-		tokens = append(tokens, "GITLAB_TOKEN")
-	}
-	if giteaToken != "" {
-		tokens = append(tokens, "GITEA_TOKEN")
-	}
-	if len(tokens) > 1 {
-		return ErrMultipleTokens{tokens}
+	switch strings.ToLower(forceToken) {
+	case "github":
+		gitlabToken = ""
+		giteaToken = ""
+	case "gitlab":
+		githubToken = ""
+		giteaToken = ""
+	case "gitea":
+		githubToken = ""
+		gitlabToken = ""
+	default:
+		var tokens []string
+		if githubToken != "" {
+			tokens = append(tokens, "GITHUB_TOKEN")
+		}
+		if gitlabToken != "" {
+			tokens = append(tokens, "GITLAB_TOKEN")
+		}
+		if giteaToken != "" {
+			tokens = append(tokens, "GITEA_TOKEN")
+		}
+		if len(tokens) > 1 {
+			return ErrMultipleTokens{tokens}
+		}
 	}
 
 	noTokens := githubToken == "" && gitlabToken == "" && giteaToken == ""
@@ -115,7 +133,7 @@ func (Pipe) Run(ctx *context.Context) error {
 }
 
 func checkErrors(ctx *context.Context, noTokens, noTokenErrs bool, gitlabTokenErr, githubTokenErr, giteaTokenErr error) error {
-	if ctx.SkipTokenCheck || ctx.SkipPublish {
+	if ctx.SkipTokenCheck || skips.Any(ctx, skips.Publish) {
 		return nil
 	}
 	if b, err := tmpl.New(ctx).Bool(ctx.Config.Release.Disable); err != nil || b {
@@ -143,7 +161,7 @@ func checkErrors(ctx *context.Context, noTokens, noTokenErrs bool, gitlabTokenEr
 func loadEnv(env, path string) (string, error) {
 	val := os.Getenv(env)
 	if val != "" {
-		log.Infof("using token from %q", "$"+env)
+		log.Infof("using token from %s", logext.Keyword("$"+env))
 		return val, nil
 	}
 	path, err := homedir.Expand(path)
@@ -158,7 +176,7 @@ func loadEnv(env, path string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	log.Infof("using token from %q", path)
+	log.Infof("using token from %s", logext.Keyword(path))
 	bts, _, err := bufio.NewReader(f).ReadLine()
 	return string(bts), err
 }

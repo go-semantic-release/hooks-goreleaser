@@ -12,6 +12,8 @@ import (
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/skips"
+	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
@@ -41,9 +43,23 @@ func (Pipe) Run(ctx *context.Context) error {
 		return err
 	}
 	ctx.Git = info
-	log.WithField("commit", info.Commit).WithField("latest tag", info.CurrentTag).Info("building...")
+	log.WithField("commit", info.Commit).
+		WithField("branch", info.Branch).
+		WithField("current_tag", info.CurrentTag).
+		WithField("previous_tag", firstNonEmpty(info.PreviousTag, "<unknown>")).
+		WithField("dirty", info.Dirty).
+		Info("git state")
 	ctx.Version = strings.TrimPrefix(ctx.Git.CurrentTag, "v")
 	return validate(ctx)
+}
+
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // nolint: gochecknoglobals
@@ -114,7 +130,17 @@ func getGitInfo(ctx *context.Context) (context.GitInfo, error) {
 		gitURL = u.String()
 	}
 
-	tag, err := getTag(ctx)
+	var excluding []string
+	tpl := tmpl.New(ctx)
+	for _, exclude := range ctx.Config.Git.IgnoreTags {
+		tag, err := tpl.Apply(exclude)
+		if err != nil {
+			return context.GitInfo{}, err
+		}
+		excluding = append(excluding, tag)
+	}
+
+	tag, err := getTag(ctx, excluding)
 	if err != nil {
 		return context.GitInfo{
 			Branch:      branch,
@@ -144,9 +170,9 @@ func getGitInfo(ctx *context.Context) (context.GitInfo, error) {
 		return context.GitInfo{}, fmt.Errorf("couldn't get tag content body: %w", err)
 	}
 
-	previous, err := getPreviousTag(ctx, tag)
+	previous, err := getPreviousTag(ctx, tag, excluding)
 	if err != nil {
-		// shouldn't error, will only affect templates
+		// shouldn't error, will only affect templates and changelog
 		log.Warnf("couldn't find any tags before %q", tag)
 	}
 
@@ -164,6 +190,7 @@ func getGitInfo(ctx *context.Context) (context.GitInfo, error) {
 		TagSubject:  subject,
 		TagContents: contents,
 		TagBody:     body,
+		Dirty:       CheckDirty(ctx) != nil,
 	}, nil
 }
 
@@ -171,7 +198,7 @@ func validate(ctx *context.Context) error {
 	if ctx.Snapshot {
 		return pipe.ErrSnapshotEnabled
 	}
-	if ctx.SkipValidate {
+	if skips.Any(ctx, skips.Validate) {
 		return pipe.ErrSkipValidateEnabled
 	}
 	if _, err := os.Stat(".git/shallow"); err == nil {
@@ -240,7 +267,7 @@ func getTagWithFormat(ctx *context.Context, tag, format string) (string, error) 
 	return strings.TrimSpace(strings.TrimSuffix(strings.ReplaceAll(out, "'", ""), "\n\n")), err
 }
 
-func getTag(ctx *context.Context) (string, error) {
+func getTag(ctx *context.Context, excluding []string) (string, error) {
 	for _, fn := range []func() ([]string, error){
 		getFromEnv("GORELEASER_CURRENT_TAG"),
 		func() ([]string, error) {
@@ -249,26 +276,26 @@ func getTag(ctx *context.Context) (string, error) {
 		func() ([]string, error) {
 			// this will get the last tag, even if it wasn't made against the
 			// last commit...
-			return git.CleanAllLines(gitDescribe(ctx, "HEAD"))
+			return git.CleanAllLines(gitDescribe(ctx, "HEAD", excluding))
 		},
 	} {
 		tags, err := fn()
-		if len(tags) > 0 {
-			return tags[0], err
-		}
 		if err != nil {
 			return "", err
+		}
+		if tag := filterOut(tags, excluding); tag != "" {
+			return tag, err
 		}
 	}
 
 	return "", nil
 }
 
-func getPreviousTag(ctx *context.Context, current string) (string, error) {
+func getPreviousTag(ctx *context.Context, current string, excluding []string) (string, error) {
 	for _, fn := range []func() ([]string, error){
 		getFromEnv("GORELEASER_PREVIOUS_TAG"),
 		func() ([]string, error) {
-			sha, err := previousTagSha(ctx, current)
+			sha, err := previousTagSha(ctx, current, excluding)
 			if err != nil {
 				return nil, err
 			}
@@ -276,11 +303,11 @@ func getPreviousTag(ctx *context.Context, current string) (string, error) {
 		},
 	} {
 		tags, err := fn()
-		if len(tags) > 0 {
-			return tags[0], err
-		}
 		if err != nil {
 			return "", err
+		}
+		if tag := filterOut(tags, excluding); tag != "" {
+			return tag, nil
 		}
 	}
 
@@ -288,28 +315,40 @@ func getPreviousTag(ctx *context.Context, current string) (string, error) {
 }
 
 func gitTagsPointingAt(ctx *context.Context, ref string) ([]string, error) {
-	return git.CleanAllLines(git.Run(
-		ctx,
+	args := []string{}
+	if ctx.Config.Git.PrereleaseSuffix != "" {
+		args = append(
+			args,
+			"-c",
+			"versionsort.suffix="+ctx.Config.Git.PrereleaseSuffix,
+		)
+	}
+	args = append(
+		args,
 		"tag",
 		"--points-at",
 		ref,
 		"--sort",
 		ctx.Config.Git.TagSort,
-	))
+	)
+	return git.CleanAllLines(git.Run(ctx, args...))
 }
 
-func gitDescribe(ctx *context.Context, ref string) (string, error) {
-	return git.Clean(git.Run(
-		ctx,
+func gitDescribe(ctx *context.Context, ref string, excluding []string) (string, error) {
+	args := []string{
 		"describe",
 		"--tags",
 		"--abbrev=0",
 		ref,
-	))
+	}
+	for _, exclude := range excluding {
+		args = append(args, "--exclude="+exclude)
+	}
+	return git.Clean(git.Run(ctx, args...))
 }
 
-func previousTagSha(ctx *context.Context, current string) (string, error) {
-	tag, err := gitDescribe(ctx, fmt.Sprintf("tags/%s^", current))
+func previousTagSha(ctx *context.Context, current string, excluding []string) (string, error) {
+	tag, err := gitDescribe(ctx, fmt.Sprintf("tags/%s^", current), excluding)
 	if err != nil {
 		return "", err
 	}
@@ -327,4 +366,18 @@ func getFromEnv(s string) func() ([]string, error) {
 		}
 		return nil, nil
 	}
+}
+
+func filterOut(tags []string, exclude []string) string {
+	if len(exclude) == 0 && len(tags) > 0 {
+		return tags[0]
+	}
+	for _, tag := range tags {
+		for _, exl := range exclude {
+			if exl != tag {
+				return tag
+			}
+		}
+	}
+	return ""
 }

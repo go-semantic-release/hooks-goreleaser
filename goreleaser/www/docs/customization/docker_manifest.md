@@ -32,34 +32,34 @@ docker_manifests:
   # custom publishers).
   id: myimg
 
-  # Name template for the manifest.
-  # Defaults to empty.
+  # Name for the manifest.
+  #
+  # Templates: allowed
   name_template: "foo/bar:{{ .Version }}"
 
-  # Image name templates to be added to this manifest.
-  # Defaults to empty.
+  # Image name to be added to this manifest.
+  #
+  # Templates: allowed
   image_templates:
   - "foo/bar:{{ .Version }}-amd64"
   - "foo/bar:{{ .Version }}-arm64v8"
 
   # Extra flags to be passed down to the manifest create command.
-  # Defaults to empty.
   create_flags:
   - --insecure
 
   # Extra flags to be passed down to the manifest push command.
-  # Defaults to empty.
   push_flags:
   - --insecure
 
   # Skips the Docker manifest.
-  # If you set this to `false` or `auto` on your source Docker configs,
+  # If you set this to `false` or `auto` on your source Docker configuration,
   #  you'll probably want to do the same here.
   #
   # If set to `auto`, the manifest will not be created in case there is an
   #  indicator of a prerelease in the tag, e.g. v1.0.0-rc1.
   #
-  # Defaults to false.
+  # Templates: allowed (since v1.19)
   skip_push: false
 
   # Set the "backend" for the Docker manifest pipe.
@@ -67,10 +67,10 @@ docker_manifests:
   #
   # Relevant notes:
   # 1. podman is a GoReleaser Pro feature and is only available on Linux;
-  # 2. if you set podman here, the respective docker configs need to use podman
-  #    too.
+  # 2. if you set podman here, the respective docker configuration need to use
+  #     podman too.
   #
-  # Defaults to docker.
+  # Default: 'docker'
   use: docker
 ```
 

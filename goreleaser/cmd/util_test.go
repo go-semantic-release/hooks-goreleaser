@@ -32,7 +32,7 @@ func setup(tb testing.TB) string {
 	folder := tb.TempDir()
 	require.NoError(tb, os.Chdir(folder))
 
-	createGoreleaserYaml(tb)
+	createGoReleaserYaml(tb)
 	createMainGo(tb)
 	goModInit(tb)
 	testlib.GitInit(tb)
@@ -62,11 +62,11 @@ func goModInit(tb testing.TB) {
 	tb.Helper()
 	createFile(tb, "go.mod", `module foo
 
-go 1.20
+go 1.21
 `)
 }
 
-func createGoreleaserYaml(tb testing.TB) {
+func createGoReleaserYaml(tb testing.TB) {
 	tb.Helper()
 	yaml := `build:
   binary: fake

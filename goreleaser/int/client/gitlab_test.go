@@ -13,8 +13,8 @@ import (
 	"text/template"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,7 +66,7 @@ func TestGitLabReleaseURLTemplate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			Env: []string{
 				"GORELEASER_TEST_GITLAB_URLS_DOWNLOAD=https://gitlab.mycompany.com",
 			},
@@ -77,7 +77,7 @@ func TestGitLabReleaseURLTemplate(t *testing.T) {
 				GitLab: tt.repo,
 			},
 		})
-		client, err := NewGitLab(ctx, ctx.Token)
+		client, err := newGitLab(ctx, ctx.Token)
 		require.NoError(t, err)
 
 		urlTpl, err := client.ReleaseURLTemplate(ctx)
@@ -118,40 +118,36 @@ func TestGitLabURLsAPITemplate(t *testing.T) {
 				gitlabURLs.API = "{{ .Env.GORELEASER_TEST_GITLAB_URLS_API }}"
 			}
 
-			ctx := context.New(config.Project{
+			ctx := testctx.NewWithCfg(config.Project{
 				Env:        envs,
 				GitLabURLs: gitlabURLs,
 			})
 
-			client, err := NewGitLab(ctx, ctx.Token)
+			client, err := newGitLab(ctx, ctx.Token)
 			require.NoError(t, err)
-
-			gitlabClient, ok := client.(*gitlabClient)
-			require.True(t, ok)
-
-			require.Equal(t, tt.wantHost, gitlabClient.client.BaseURL().Host)
+			require.Equal(t, tt.wantHost, client.client.BaseURL().Host)
 		})
 	}
 
 	t.Run("no_env_specified", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			GitLabURLs: config.GitLabURLs{
 				API: "{{ .Env.GORELEASER_NOT_EXISTS }}",
 			},
 		})
 
-		_, err := NewGitLab(ctx, ctx.Token)
+		_, err := newGitLab(ctx, ctx.Token)
 		require.ErrorAs(t, err, &template.ExecError{})
 	})
 
 	t.Run("invalid_template", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			GitLabURLs: config.GitLabURLs{
 				API: "{{.dddddddddd",
 			},
 		})
 
-		_, err := NewGitLab(ctx, ctx.Token)
+		_, err := newGitLab(ctx, ctx.Token)
 		require.Error(t, err)
 	})
 }
@@ -190,7 +186,7 @@ func TestGitLabURLsDownloadTemplate(t *testing.T) {
 		},
 		{
 			name:               "url_registry",
-			wantURL:            "/api/v4/projects/test%2Ftest/packages/generic/projectname/v1%2E0%2E0/test",
+			wantURL:            "/api/v4/projects/test%2Ftest/packages/generic/projectname/1%2E0%2E0/test",
 			usePackageRegistry: true,
 		},
 	}
@@ -219,7 +215,7 @@ func TestGitLabURLsDownloadTemplate(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			ctx := context.New(config.Project{
+			ctx := testctx.NewWithCfg(config.Project{
 				ProjectName: "projectname",
 				Env: []string{
 					"GORELEASER_TEST_GITLAB_URLS_DOWNLOAD=https://gitlab.mycompany.com",
@@ -235,14 +231,12 @@ func TestGitLabURLsDownloadTemplate(t *testing.T) {
 					Download:           tt.downloadURL,
 					UsePackageRegistry: tt.usePackageRegistry,
 				},
-			})
-
-			ctx.Version = "v1.0.0"
+			}, testctx.WithVersion("1.0.0"))
 
 			tmpFile, err := os.CreateTemp(t.TempDir(), "")
 			require.NoError(t, err)
 
-			client, err := NewGitLab(ctx, ctx.Token)
+			client, err := newGitLab(ctx, ctx.Token)
 			require.NoError(t, err)
 
 			err = client.Upload(ctx, "1234", &artifact.Artifact{Name: "test", Path: "some-path"}, tmpFile)
@@ -255,8 +249,8 @@ func TestGitLabURLsDownloadTemplate(t *testing.T) {
 	}
 }
 
-func TestGitLabCreateReleaseUknownHost(t *testing.T) {
-	ctx := context.New(config.Project{
+func TestGitLabCreateReleaseUnknownHost(t *testing.T) {
+	ctx := testctx.NewWithCfg(config.Project{
 		Release: config.Release{
 			GitLab: config.Repo{
 				Owner: "owner",
@@ -267,7 +261,7 @@ func TestGitLabCreateReleaseUknownHost(t *testing.T) {
 			API: "http://goreleaser-notexists",
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 
 	_, err = client.CreateRelease(ctx, "body")
@@ -298,7 +292,7 @@ func TestGitLabCreateReleaseReleaseNotExists(t *testing.T) {
 					return
 				}
 
-				// Create release if it doens't exists
+				// Create release if it doesn't exist
 				if r.Method == http.MethodPost {
 					createdRelease = true
 					w.WriteHeader(http.StatusOK)
@@ -310,18 +304,18 @@ func TestGitLabCreateReleaseReleaseNotExists(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			ctx := context.New(config.Project{
+			ctx := testctx.NewWithCfg(config.Project{
 				GitLabURLs: config.GitLabURLs{
 					API: srv.URL,
 				},
 			})
-			client, err := NewGitLab(ctx, "test-token")
+			client, err := newGitLab(ctx, "test-token")
 			require.NoError(t, err)
 
 			_, err = client.CreateRelease(ctx, "body")
 			require.NoError(t, err)
 			require.True(t, createdRelease)
-			require.Equal(t, 3, totalRequests)
+			require.Equal(t, 2, totalRequests)
 		})
 	}
 }
@@ -363,7 +357,7 @@ func TestGitLabCreateReleaseReleaseExists(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
@@ -371,16 +365,16 @@ func TestGitLabCreateReleaseReleaseExists(t *testing.T) {
 			ReleaseNotesMode: config.ReleaseNotesModeKeepExisting,
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 
 	_, err = client.CreateRelease(ctx, "body")
 	require.NoError(t, err)
 	require.True(t, createdRelease)
-	require.Equal(t, 3, totalRequests)
+	require.Equal(t, 2, totalRequests)
 }
 
-func TestGitLabCreateReleaseUnkownHTTPError(t *testing.T) {
+func TestGitLabCreateReleaseUnknownHTTPError(t *testing.T) {
 	totalRequests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		totalRequests++
@@ -391,20 +385,20 @@ func TestGitLabCreateReleaseUnkownHTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 
 	_, err = client.CreateRelease(ctx, "body")
 	require.Error(t, err)
-	require.Equal(t, 2, totalRequests)
+	require.Equal(t, 1, totalRequests)
 }
 
-func TestGitlabGetDefaultBranch(t *testing.T) {
+func TestGitLabGetDefaultBranch(t *testing.T) {
 	totalRequests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		totalRequests++
@@ -416,12 +410,12 @@ func TestGitlabGetDefaultBranch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 	repo := Repo{
 		Owner:  "someone",
@@ -429,12 +423,12 @@ func TestGitlabGetDefaultBranch(t *testing.T) {
 		Branch: "somebranch",
 	}
 
-	_, err = client.GetDefaultBranch(ctx, repo)
+	_, err = client.getDefaultBranch(ctx, repo)
 	require.NoError(t, err)
-	require.Equal(t, 2, totalRequests)
+	require.Equal(t, 1, totalRequests)
 }
 
-func TestGitlabGetDefaultBranchErr(t *testing.T) {
+func TestGitLabGetDefaultBranchErr(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
@@ -444,12 +438,12 @@ func TestGitlabGetDefaultBranchErr(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 	repo := Repo{
 		Owner:  "someone",
@@ -457,11 +451,11 @@ func TestGitlabGetDefaultBranchErr(t *testing.T) {
 		Branch: "somebranch",
 	}
 
-	_, err = client.GetDefaultBranch(ctx, repo)
+	_, err = client.getDefaultBranch(ctx, repo)
 	require.Error(t, err)
 }
 
-func TestGitlabChangelog(t *testing.T) {
+func TestGitLabChangelog(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/compare") {
 			r, err := os.Open("testdata/gitlab/compare.json")
@@ -474,12 +468,12 @@ func TestGitlabChangelog(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 	repo := Repo{
 		Owner:  "someone",
@@ -492,7 +486,7 @@ func TestGitlabChangelog(t *testing.T) {
 	require.Equal(t, "6dcb09b5: Fix all the bugs (Joey User <joey@user.edu>)", log)
 }
 
-func TestGitlabCreateFile(t *testing.T) {
+func TestGitLabCreateFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Handle the test where we know the branch
 		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/files/newfile.txt") {
@@ -521,13 +515,13 @@ func TestGitlabCreateFile(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
 	})
 
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 
 	// Test using an arbitrary branch
@@ -561,7 +555,7 @@ func TestGitlabCreateFile(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCloseMileston(t *testing.T) {
+func TestGitLabCloseMileston(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "projects/someone/something/milestones") {
 			r, err := os.Open("testdata/gitlab/milestones.json")
@@ -580,12 +574,12 @@ func TestCloseMileston(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		GitLabURLs: config.GitLabURLs{
 			API: srv.URL,
 		},
 	})
-	client, err := NewGitLab(ctx, "test-token")
+	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 
 	repo := Repo{
@@ -601,7 +595,7 @@ func TestCloseMileston(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCheckUseJobToken(t *testing.T) {
+func TestGitLabCheckUseJobToken(t *testing.T) {
 	tests := []struct {
 		useJobToken bool
 		token       string
@@ -646,7 +640,7 @@ func TestCheckUseJobToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("CI_JOB_TOKEN", tt.ciToken)
-			ctx := context.New(config.Project{
+			ctx := testctx.NewWithCfg(config.Project{
 				GitLabURLs: config.GitLabURLs{
 					UseJobToken: tt.useJobToken,
 				},

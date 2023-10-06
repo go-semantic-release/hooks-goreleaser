@@ -8,18 +8,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
+	"dario.cat/mergo"
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/builders/buildtarget"
+	"github.com/goreleaser/goreleaser/int/gio"
+	"github.com/goreleaser/goreleaser/int/logext"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	api "github.com/goreleaser/goreleaser/pkg/build"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
-	"github.com/imdario/mergo"
 )
 
 // Default builder instance.
@@ -51,6 +51,8 @@ func (*Builder) WithDefaults(build config.Build) (config.Build, error) {
 	if len(build.Ldflags) == 0 {
 		build.Ldflags = []string{"-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser"}
 	}
+
+	_ = warnIfTargetsAndOtherOptionTogether(build)
 	if len(build.Targets) == 0 {
 		if len(build.Goos) == 0 {
 			build.Goos = []string{"linux", "darwin", "windows"}
@@ -102,6 +104,29 @@ func (*Builder) WithDefaults(build config.Build) (config.Build, error) {
 		build.Targets = keys(targets)
 	}
 	return build, nil
+}
+
+func warnIfTargetsAndOtherOptionTogether(build config.Build) bool {
+	if len(build.Targets) == 0 {
+		return false
+	}
+
+	res := false
+	for k, v := range map[string]int{
+		"goos":    len(build.Goos),
+		"goarch":  len(build.Goarch),
+		"goarm":   len(build.Goarm),
+		"gomips":  len(build.Gomips),
+		"goamd64": len(build.Goamd64),
+		"ignore":  len(build.Ignore),
+	} {
+		if v == 0 {
+			continue
+		}
+		log.Warnf(logext.Keyword("builds."+k) + " is ignored when " + logext.Keyword("builds.targets") + " is set")
+		res = true
+	}
+	return res
 }
 
 func keys(m map[string]bool) []string {
@@ -205,20 +230,12 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		return fmt.Errorf("failed to build for %s: %w", options.Target, err)
 	}
 
-	if build.ModTimestamp != "" {
-		modTimestamp, err := tmpl.New(ctx).WithEnvS(env).WithArtifact(a).Apply(build.ModTimestamp)
-		if err != nil {
-			return err
-		}
-		modUnix, err := strconv.ParseInt(modTimestamp, 10, 64)
-		if err != nil {
-			return err
-		}
-		modTime := time.Unix(modUnix, 0)
-		err = os.Chtimes(options.Path, modTime, modTime)
-		if err != nil {
-			return fmt.Errorf("failed to change times for %s: %w", options.Target, err)
-		}
+	modTimestamp, err := tmpl.New(ctx).WithEnvS(env).WithArtifact(a).Apply(build.ModTimestamp)
+	if err != nil {
+		return err
+	}
+	if err := gio.Chtimes(options.Path, modTimestamp); err != nil {
+		return err
 	}
 
 	ctx.Artifacts.Add(a)
@@ -344,9 +361,11 @@ func run(ctx *context.Context, command, env []string, dir string) error {
 	cmd.Env = env
 	cmd.Dir = dir
 	log.Debug("running")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		return fmt.Errorf("%w: %s", err, string(out))
 	}
+	log.Debug(string(out))
 	return nil
 }
 

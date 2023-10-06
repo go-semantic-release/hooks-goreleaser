@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/env/v9"
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -68,7 +68,7 @@ func (p Pipe) Announce(ctx *context.Context) error {
 
 	msg, err := tmpl.New(ctx).Apply(ctx.Config.Announce.Webhook.MessageTemplate)
 	if err != nil {
-		return fmt.Errorf("webhook: %s", err)
+		return fmt.Errorf("webhook: %w", err)
 	}
 
 	log.Infof("posting: '%s'", msg)

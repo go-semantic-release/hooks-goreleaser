@@ -12,10 +12,12 @@ import (
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/gio"
+	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/logext"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -24,16 +26,35 @@ import (
 // Pipe that signs common artifacts.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "signing artifacts" }
-func (Pipe) Skip(ctx *context.Context) bool { return ctx.SkipSign || len(ctx.Config.Signs) == 0 }
+func (Pipe) String() string { return "signing artifacts" }
+
+func (Pipe) Skip(ctx *context.Context) bool {
+	return skips.Any(ctx, skips.Sign) || len(ctx.Config.Signs) == 0
+}
+
+func (Pipe) Dependencies(ctx *context.Context) []string {
+	var cmds []string
+	for _, s := range ctx.Config.Signs {
+		cmds = append(cmds, s.Cmd)
+	}
+	return cmds
+}
+
+const defaultGpg = "gpg"
 
 // Default sets the Pipes defaults.
 func (Pipe) Default(ctx *context.Context) error {
+	gpgPath, _ := git.Clean(git.Run(ctx, "config", "gpg.program"))
+	if gpgPath == "" {
+		gpgPath = defaultGpg
+	}
+
 	ids := ids.New("signs")
 	for i := range ctx.Config.Signs {
 		cfg := &ctx.Config.Signs[i]
 		if cfg.Cmd == "" {
-			cfg.Cmd = "gpg"
+			// gpgPath is either "gpg" (default) or the user's git config gpg.program value
+			cfg.Cmd = gpgPath
 		}
 		if cfg.Signature == "" {
 			cfg.Signature = "${artifact}.sig"
@@ -111,6 +132,10 @@ func (Pipe) Run(ctx *context.Context) error {
 }
 
 func sign(ctx *context.Context, cfg config.Sign, artifacts []*artifact.Artifact) error {
+	if len(artifacts) == 0 {
+		log.Warn("no artifacts matching the given filters found")
+		return nil
+	}
 	for _, a := range artifacts {
 		if err := a.Refresh(); err != nil {
 			return err
@@ -204,12 +229,12 @@ func signone(ctx *context.Context, cfg config.Sign, art *artifact.Artifact) ([]*
 		stdin = f
 	}
 
-	fields := log.Fields{"cmd": cfg.Cmd, "artifact": art.Name}
+	log := log.WithField("cmd", cfg.Cmd).WithField("artifact", art.Name)
 	if name != "" {
-		fields["signature"] = name
+		log = log.WithField("signature", name)
 	}
 	if cert != "" {
-		fields["certificate"] = cert
+		log = log.WithField("certificate", cert)
 	}
 
 	// The GoASTScanner flags this as a security risk.
@@ -225,7 +250,7 @@ func signone(ctx *context.Context, cfg config.Sign, art *artifact.Artifact) ([]*
 		cmd.Stdin = stdin
 	}
 	cmd.Env = env.Strings()
-	log.WithFields(fields).Info("signing")
+	log.Info("signing")
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("sign: %s failed: %w: %s", cfg.Cmd, err, b.String())
 	}
