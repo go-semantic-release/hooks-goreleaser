@@ -8,20 +8,26 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/awslabs/amazon-ecr-credential-helper/ecr-login"
 	"github.com/chrismellard/docker-credential-acr-env/pkg/credhelper"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/authn/github"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/ko/pkg/build"
 	"github.com/google/ko/pkg/commands/options"
 	"github.com/google/ko/pkg/publish"
+	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -50,7 +56,7 @@ type Pipe struct{}
 
 func (Pipe) String() string { return "ko" }
 func (Pipe) Skip(ctx *context.Context) bool {
-	return ctx.SkipKo || len(ctx.Config.Kos) == 0
+	return skips.Any(ctx, skips.Ko) || len(ctx.Config.Kos) == 0
 }
 
 // Default sets the Pipes defaults.
@@ -138,7 +144,10 @@ type buildOptions struct {
 	workingDir          string
 	platforms           []string
 	baseImage           string
+	labels              map[string]string
 	tags                []string
+	creationTime        *v1.Time
+	koDataCreationTime  *v1.Time
 	sbom                string
 	ldflags             []string
 	bare                bool
@@ -187,6 +196,15 @@ func (o *buildOptions) makeBuilder(ctx *context.Context) (*build.Caching, error)
 			return nil, nil, fmt.Errorf("unexpected base image media type: %s", desc.MediaType)
 		}),
 	}
+	if o.creationTime != nil {
+		buildOptions = append(buildOptions, build.WithCreationTime(*o.creationTime))
+	}
+	if o.koDataCreationTime != nil {
+		buildOptions = append(buildOptions, build.WithKoDataCreationTime(*o.koDataCreationTime))
+	}
+	for k, v := range o.labels {
+		buildOptions = append(buildOptions, build.WithLabel(k, v))
+	}
 	switch o.sbom {
 	case "spdx":
 		buildOptions = append(buildOptions, build.WithSPDX("devel"))
@@ -195,7 +213,7 @@ func (o *buildOptions) makeBuilder(ctx *context.Context) (*build.Caching, error)
 	case "go.version-m":
 		buildOptions = append(buildOptions, build.WithGoVersionSBOM())
 	case "none":
-		// don't do anything.
+		buildOptions = append(buildOptions, build.WithDisabledSBOM())
 	default:
 		return nil, fmt.Errorf("unknown sbom type: %q", o.sbom)
 	}
@@ -236,12 +254,27 @@ func doBuild(ctx *context.Context, ko config.Ko) func() error {
 			return fmt.Errorf("newDefault: %w", err)
 		}
 		defer func() { _ = p.Close() }()
-		if _, err = p.Publish(ctx, r, opts.importPath); err != nil {
+		ref, err := p.Publish(ctx, r, opts.importPath)
+		if err != nil {
 			return fmt.Errorf("publish: %w", err)
 		}
 		if err := p.Close(); err != nil {
 			return fmt.Errorf("close: %w", err)
 		}
+
+		art := &artifact.Artifact{
+			Type:  artifact.DockerManifest,
+			Name:  ref.Name(),
+			Path:  ref.Name(),
+			Extra: map[string]interface{}{},
+		}
+		if ko.ID != "" {
+			art.Extra[artifact.ExtraID] = ko.ID
+		}
+		if digest := ref.Context().Digest(ref.Identifier()).DigestStr(); digest != "" {
+			art.Extra[artifact.ExtraDigest] = digest
+		}
+		ctx.Artifacts.Add(art)
 		return nil
 	}
 }
@@ -297,7 +330,34 @@ func buildBuildOptions(ctx *context.Context, cfg config.Ko) (*buildOptions, erro
 	if err != nil {
 		return nil, err
 	}
-	opts.tags = tags
+	opts.tags = removeEmpty(tags)
+
+	if cfg.CreationTime != "" {
+		creationTime, err := getTimeFromTemplate(ctx, cfg.CreationTime)
+		if err != nil {
+			return nil, err
+		}
+		opts.creationTime = creationTime
+	}
+
+	if cfg.KoDataCreationTime != "" {
+		koDataCreationTime, err := getTimeFromTemplate(ctx, cfg.KoDataCreationTime)
+		if err != nil {
+			return nil, err
+		}
+		opts.koDataCreationTime = koDataCreationTime
+	}
+
+	if len(cfg.Labels) > 0 {
+		opts.labels = make(map[string]string, len(cfg.Labels))
+		for k, v := range cfg.Labels {
+			tv, err := tmpl.New(ctx).Apply(v)
+			if err != nil {
+				return nil, err
+			}
+			opts.labels[k] = tv
+		}
+	}
 
 	if len(cfg.Env) > 0 {
 		env, err := applyTemplate(ctx, cfg.Env)
@@ -325,6 +385,17 @@ func buildBuildOptions(ctx *context.Context, cfg config.Ko) (*buildOptions, erro
 	return opts, nil
 }
 
+func removeEmpty(strs []string) []string {
+	var res []string
+	for _, s := range strs {
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		res = append(res, s)
+	}
+	return res
+}
+
 func applyTemplate(ctx *context.Context, templateable []string) ([]string, error) {
 	var templated []string
 	for _, t := range templateable {
@@ -335,4 +406,17 @@ func applyTemplate(ctx *context.Context, templateable []string) ([]string, error
 		templated = append(templated, tlf)
 	}
 	return templated, nil
+}
+
+func getTimeFromTemplate(ctx *context.Context, t string) (*v1.Time, error) {
+	epoch, err := tmpl.New(ctx).Apply(t)
+	if err != nil {
+		return nil, err
+	}
+
+	seconds, err := strconv.ParseInt(epoch, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.Time{Time: time.Unix(seconds, 0)}, nil
 }

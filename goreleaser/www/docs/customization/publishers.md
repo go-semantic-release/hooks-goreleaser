@@ -40,7 +40,6 @@ Environment variables that are kept:
 - `TEMP`
 - `PATH`
 
-
 You can however use `.Env.NAME` templating syntax, which enables
 more explicit inheritance.
 
@@ -70,14 +69,14 @@ publishers:
       - TOKEN={{ .Env.CUSTOM_PUBLISHER_TOKEN }}
 ```
 
-so the above example will execute:
+So the above example will execute:
 
 ```bash
 custom-publisher -product=goreleaser -version=1.0.0 goreleaser_1.0.0_linux_amd64.zip
 ```
-in `/path/to/dist` with
-`TOKEN=token`, assuming that GoReleaser is executed with
-`CUSTOM_PUBLISHER_TOKEN=token`.
+
+In `/path/to/dist` with `TOKEN=token`, assuming that GoReleaser is executed
+with `CUSTOM_PUBLISHER_TOKEN=token`.
 
 Supported variables:
 
@@ -97,19 +96,19 @@ Of course, you can customize a lot of things:
 ```yaml
 # .goreleaser.yaml
 publishers:
-  -
+  - #
     # Unique name of your publisher. Used for identification
     name: "custom"
 
     # IDs of the artifacts you want to publish
     ids:
-     - foo
-     - bar
+      - foo
+      - bar
 
-    # Publish checksums (defaults to false)
+    # Publish checksums.
     checksum: true
 
-    # Publish signatures (defaults to false)
+    # Publish signatures.
     signature: true
 
     # Working directory in which to execute the command
@@ -122,18 +121,34 @@ publishers:
     env:
       - API_TOKEN=secret-token
 
+    # Whether to disable this particular upload configuration.
+    #
+    # Since: v1.20
+    # Templates: allowed
+    disable: "{{ if .IsNightly }}true{{ end }}"
+
     # You can publish extra pre-existing files.
     # The filename published will be the last part of the path (base).
     # If another file with the same name exists, the last one found will be used.
-    # These globs can also include templates.
     #
-    # Defaults to empty.
+    # Templates: allowed
     extra_files:
       - glob: ./path/to/file.txt
       - glob: ./glob/**/to/**/file/**/*
       - glob: ./glob/foo/to/bar/file/foobar/override_from_previous
       - glob: ./single_file.txt
         name_template: file.txt # note that this only works if glob matches 1 file only
+
+    # Additional templated extra files to published.
+    # Those files will have their contents pass through the template engine,
+    # and its results will be published.
+    #
+    # Since: v1.17 (pro)
+    # This feature is only available in GoReleaser Pro.
+    # Templates: allowed
+    templated_extra_files:
+      - src: LICENSE.tpl
+        dst: LICENSE.txt
 ```
 
 These settings should allow you to push your artifacts to any number of
@@ -141,4 +156,5 @@ endpoints, which may require non-trivial authentication or has otherwise complex
 requirements.
 
 !!! tip
+
     Learn more about the [name template engine](/customization/templates/).

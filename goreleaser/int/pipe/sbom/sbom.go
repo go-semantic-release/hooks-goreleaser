@@ -15,20 +15,29 @@ import (
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/logext"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
 // Environment variables to pass through to exec
-var passthroughEnvVars = []string{"HOME", "USER", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "PATH"}
+var passthroughEnvVars = []string{"HOME", "USER", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "PATH", "LOCALAPPDATA"}
 
 // Pipe that catalogs common artifacts as an SBOM.
 type Pipe struct{}
 
 func (Pipe) String() string { return "cataloging artifacts" }
 func (Pipe) Skip(ctx *context.Context) bool {
-	return ctx.SkipSBOMCataloging || len(ctx.Config.SBOMs) == 0
+	return skips.Any(ctx, skips.SBOM) || len(ctx.Config.SBOMs) == 0
+}
+
+func (Pipe) Dependencies(ctx *context.Context) []string {
+	var cmds []string
+	for _, s := range ctx.Config.SBOMs {
+		cmds = append(cmds, s.Cmd)
+	}
+	return cmds
 }
 
 // Default sets the Pipes defaults.
@@ -140,6 +149,8 @@ func catalog(ctx *context.Context, cfg config.SBOM, artifacts []*artifact.Artifa
 }
 
 func subprocessDistPath(distDir string, pathRelativeToCwd string) (string, error) {
+	distDir = filepath.Clean(distDir)
+	pathRelativeToCwd = filepath.Clean(pathRelativeToCwd)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -173,8 +184,6 @@ func catalogArtifact(ctx *context.Context, cfg config.SBOM, a *artifact.Artifact
 		names = append(names, filepath.Base(p))
 	}
 
-	fields := log.Fields{"cmd": cfg.Cmd, "artifact": artifactDisplayName, "sboms": strings.Join(names, ", ")}
-
 	// The GoASTScanner flags this as a security risk.
 	// However, this works as intended. The nosec annotation
 	// tells the scanner to ignore this.
@@ -189,12 +198,20 @@ func catalogArtifact(ctx *context.Context, cfg config.SBOM, a *artifact.Artifact
 	cmd.Env = append(cmd.Env, envs...)
 	cmd.Dir = ctx.Config.Dist
 
+	log.WithField("env", cmd.Env).
+		WithField("dir", cmd.Dir).
+		WithField("cmd", cmd.Args).
+		Debug("running")
+
 	var b bytes.Buffer
 	w := gio.Safe(&b)
 	cmd.Stderr = io.MultiWriter(logext.NewWriter(), w)
 	cmd.Stdout = io.MultiWriter(logext.NewWriter(), w)
 
-	log.WithFields(fields).Info("cataloging")
+	log.WithField("cmd", cfg.Cmd).
+		WithField("artifact", artifactDisplayName).
+		WithField("sbom", names).
+		Info("cataloging")
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("cataloging artifacts: %s failed: %w: %s", cfg.Cmd, err, b.String())
 	}

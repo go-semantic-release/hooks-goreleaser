@@ -9,18 +9,21 @@ Available options:
 # .goreleaser.yaml
 nfpms:
   # note that this is an array of nfpm configs
-  -
+  - #
     # ID of the nfpm config, must be unique.
-    # Defaults to "default".
+    #
+    # Default: 'default'
     id: foo
 
     # Name of the package.
-    # Defaults to `ProjectName`.
+    # Default: ProjectName
+    # Templates: allowed. (since v1.18)
     package_name: foo
 
     # You can change the file name of the package.
     #
-    # Default:`{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}`
+    # Default: '{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
+    # Templates: allowed.
     file_name_template: "{{ .ConventionalFileName }}"
 
     # Build IDs for the builds you want to create NFPM packages for.
@@ -30,25 +33,20 @@ nfpms:
       - bar
 
     # Your app's vendor.
-    # Default is empty.
     vendor: Drum Roll Inc.
 
-    # Template to your app's homepage.
-    # Default is empty.
+    # Your app's homepage.
     homepage: https://example.com/
 
     # Your app's maintainer (probably you).
-    # Default is empty.
     maintainer: Drummer <drum-roll@example.com>
 
-    # Template to your app's description.
-    # Default is empty.
+    # Your app's description.
     description: |-
       Drum rolls installer package.
       Software to create fast and easy drum rolls.
 
     # Your app's license.
-    # Default is empty.
     license: Apache 2.0
 
     # Formats to be generated.
@@ -56,8 +54,14 @@ nfpms:
       - apk
       - deb
       - rpm
-      - termux.deb # Since GoReleaser v1.11.
-      - archlinux  # Since GoReleaser v1.13.
+      - termux.deb # Since: v1.11
+      - archlinux # Since: v1.13
+
+    # Umask to be used on files without explicit mode set. (overridable)
+    #
+    # Default: 0o002 (will remove world-writable permissions)
+    # Since: v1.19
+    umask: 0o002
 
     # Packages your package depends on. (overridable)
     dependencies:
@@ -65,7 +69,8 @@ nfpms:
       - zsh
 
     # Packages it provides. (overridable)
-    # Since: v1.11.
+    #
+    # Since: v1.11
     provides:
       - bar
 
@@ -88,22 +93,23 @@ nfpms:
     replaces:
       - fish
 
-    # Template to the path that the binaries should be installed.
-    # Defaults to `/usr/bin`.
+    # Path that the binaries should be installed.
+    # Default: '/usr/bin'
     bindir: /usr/bin
 
     # Version Epoch.
-    # Default is extracted from `version` if it is semver compatible.
+    # Default: extracted from `version` if it is semver compatible
     epoch: 2
 
     # Version Prerelease.
-    # Default is extracted from `version` if it is semver compatible.
+    # Default: extracted from `version` if it is semver compatible
     prerelease: beta1
 
     # Version Metadata (previously deb.metadata).
-    # Default is extracted from `version` if it is semver compatible.
     # Setting metadata might interfere with version comparisons depending on the
     # packager.
+    #
+    # Default: extracted from `version` if it is semver compatible
     version_metadata: git
 
     # Version Release.
@@ -118,7 +124,6 @@ nfpms:
     # Makes a meta package - an empty package that contains only supporting
     # files and dependencies.
     # When set to `true`, the `builds` option is ignored.
-    # Defaults to false.
     meta: true
 
     # Changelog YAML file, see: https://github.com/goreleaser/chglog
@@ -129,8 +134,7 @@ nfpms:
     # formats (deb and rpm at the moment).
     #
     # Experimental.
-    # Default: empty.
-    # Since: v1.11.
+    # Since: v1.11
     changelog: ./foo.yml
 
     # Contents to add to the package.
@@ -139,6 +143,21 @@ nfpms:
       # Basic file that applies to all packagers
       - src: path/to/foo
         dst: /usr/bin/foo
+
+      # This will add all files in some/directory or in subdirectories at the
+      # same level under the directory /etc. This means the tree structure in
+      # some/directory will not be replicated.
+      - src: some/directory/
+        dst: /etc
+
+      # This will replicate the directory structure under some/directory at
+      # /etc, using the "tree" type.
+      #
+      # Since: v1.17
+      # Templates: allowed.
+      - src: some/directory/
+        dst: /etc
+        type: tree
 
       # Simple config file
       - src: path/to/foo.conf
@@ -160,6 +179,18 @@ nfpms:
       # The src and dst attributes also supports name templates
       - src: path/{{ .Os }}-{{ .Arch }}/bar.conf
         dst: /etc/foo/bar-{{ .ProjectName }}.conf
+
+    # Additional templated contents to add to the archive.
+    # Those files will have their contents pass through the template engine,
+    # and its results will be added to the package.
+    #
+    # Since: v1.17 (pro)
+    # This feature is only available in GoReleaser Pro.
+    # Templates: allowed.
+    templated_contents:
+      # a more complete example, check the globbing deep dive below
+      - src: "LICENSE.md.tpl"
+        dst: LICENSE.md
 
       # These files are not actually present in the package, but the file names
       # are added to the package header. From the RPM directives documentation:
@@ -228,7 +259,23 @@ nfpms:
     #
     # Keys are the possible targets during the installation process
     # Values are the paths to the scripts which will be executed.
+    #
+    # Templates: allowed (since v1.20)
     scripts:
+      preinstall: "scripts/preinstall.sh"
+      postinstall: "scripts/postinstall.sh"
+      preremove: "scripts/preremove.sh"
+      postremove: "scripts/postremove.sh"
+
+    # Templated scripts to execute during the installation of the package. (overridable)
+    #
+    # Keys are the possible targets during the installation process
+    # Values are the paths to the scripts which will be executed.
+    #
+    # Since: v1.20 (pro)
+    # This feature is only available in GoReleaser Pro.
+    # Templates: allowed.
+    templated_scripts:
       preinstall: "scripts/preinstall.sh"
       postinstall: "scripts/postinstall.sh"
       preremove: "scripts/preremove.sh"
@@ -262,13 +309,14 @@ nfpms:
         # The posttrans script runs after all RPM package transactions / stages.
         posttrans: ./scripts/posttrans.sh
 
-      # The package summary. This is, by default, the first line of the
-      # description, but can be explicitly provided here.
-      # Defaults to the first line of the description.
+      # The package summary.
+      #
+      # Default: first line of the description
       summary: Explicit Summary for Sample Package
 
-      # The package group. This option is deprecated by most distros
-      # but required by old distros like CentOS 5 / EL 5 and earlier.
+      # The package group.
+      # This option is deprecated by most distros but required by old distros
+      # like CentOS 5 / EL 5 and earlier.
       group: Unspecified
 
       # The packager is used to identify the organization that actually packaged
@@ -280,16 +328,24 @@ nfpms:
       # Compression algorithm (gzip (default), lzma or xz).
       compression: lzma
 
+      # Prefixes for relocatable packages.
+      #
+      # Since: v1.20.
+      prefixes:
+        - /usr/bin
+
       # The package is signed if a key_file is set
       signature:
-        # Template to the PGP secret key file path (can also be ASCII-armored).
+        # PGP secret key file path (can also be ASCII-armored).
         # The passphrase is taken from the environment variable
         # `$NFPM_ID_RPM_PASSPHRASE` with a fallback to `$NFPM_ID_PASSPHRASE`,
         # where ID is the id of the current nfpm config.
         # The id will be transformed to uppercase.
         # E.g. If your nfpm id is 'default' then the rpm-specific passphrase
         # should be set as `$NFPM_DEFAULT_RPM_PASSPHRASE`
-        key_file: '{{ .Env.GPG_KEY_PATH }}'
+        #
+        # Templates: allowed.
+        key_file: "{{ .Env.GPG_KEY_PATH }}"
 
     # Custom configuration applied only to the Deb packager.
     deb:
@@ -324,17 +380,21 @@ nfpms:
 
       # The package is signed if a key_file is set
       signature:
-        # Template to the PGP secret key file path (can also be ASCII-armored).
+        # PGP secret key file path (can also be ASCII-armored).
         # The passphrase is taken from the environment variable
         # `$NFPM_ID_DEB_PASSPHRASE` with a fallback to `$NFPM_ID_PASSPHRASE`,
         # where ID is the id of the current nfpm config.
         # The id will be transformed to uppercase.
         # E.g. If your nfpm id is 'default' then the deb-specific passphrase
         # should be set as `$NFPM_DEFAULT_DEB_PASSPHRASE`
-        key_file: '{{ .Env.GPG_KEY_PATH }}'
+        #
+        # Templates: allowed.
+        key_file: "{{ .Env.GPG_KEY_PATH }}"
 
         # The type describes the signers role, possible values are "origin",
-        # "maint" and "archive". If unset, the type defaults to "origin".
+        # "maint" and "archive".
+        #
+        # Default: 'origin'
         type: origin
 
     apk:
@@ -347,20 +407,22 @@ nfpms:
 
       # The package is signed if a key_file is set
       signature:
-        # Template to the PGP secret key file path (can also be ASCII-armored).
+        # PGP secret key file path (can also be ASCII-armored).
         # The passphrase is taken from the environment variable
         # `$NFPM_ID_APK_PASSPHRASE` with a fallback to `$NFPM_ID_PASSPHRASE`,
         # where ID is the id of the current nfpm config.
         # The id will be transformed to uppercase.
         # E.g. If your nfpm id is 'default' then the apk-specific passphrase
         # should be set as `$NFPM_DEFAULT_APK_PASSPHRASE`
-        key_file: '{{ .Env.GPG_KEY_PATH }}'
+        #
+        # Templates: allowed.
+        key_file: "{{ .Env.GPG_KEY_PATH }}"
 
         # The name of the signing key. When verifying a package, the signature
         # is matched to the public key store in /etc/apk/keys/<key_name>.rsa.pub.
-        # If unset, it defaults to the maintainer email address.
         #
-        # Templateable. (since v1.15)
+        # Default: maintainer's email address
+        # Templates: allowed. (since v1.15)
         key_name: origin
 
     archlinux:
@@ -378,18 +440,19 @@ nfpms:
       # The packager refers to the organization packaging the software, not to be confused
       # with the maintainer, which is the person who maintains the software.
       packager: GoReleaser <staff@goreleaser.com>
-
 ```
 
 !!! tip
+
     Learn more about the [name template engine](/customization/templates/).
 
 !!! info
-    Fields marked with "overridable" can be overriden for any format.
+
+    Fields marked with "overridable" can be overridden for any format.
 
 ## A note about Termux
 
 Termux is the same format as `deb`, the differences are:
+
 - it uses a different `bindir` (prefixed with `/data/data/com.termux/files/`)
 - it uses slightly different architecture names than Debian
-

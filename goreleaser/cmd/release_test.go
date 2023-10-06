@@ -4,7 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/int/skips"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
@@ -56,7 +57,7 @@ func TestReleaseBrokenProject(t *testing.T) {
 func TestReleaseFlags(t *testing.T) {
 	setup := func(tb testing.TB, opts releaseOpts) *context.Context {
 		tb.Helper()
-		ctx := context.New(config.Project{})
+		ctx := testctx.New()
 		setupReleaseContext(ctx, opts)
 		return ctx
 	}
@@ -66,21 +67,29 @@ func TestReleaseFlags(t *testing.T) {
 			snapshot: true,
 		})
 		require.True(t, ctx.Snapshot)
-		require.True(t, ctx.SkipPublish)
-		require.True(t, ctx.SkipValidate)
-		require.True(t, ctx.SkipAnnounce)
+		requireAll(t, ctx, skips.Publish, skips.Validate, skips.Announce)
 	})
 
-	t.Run("skips", func(t *testing.T) {
+	t.Run("skips (old)", func(t *testing.T) {
 		ctx := setup(t, releaseOpts{
 			skipPublish:  true,
 			skipSign:     true,
 			skipValidate: true,
 		})
-		require.True(t, ctx.SkipSign)
-		require.True(t, ctx.SkipPublish)
-		require.True(t, ctx.SkipValidate)
-		require.True(t, ctx.SkipAnnounce)
+
+		requireAll(t, ctx, skips.Sign, skips.Publish, skips.Validate, skips.Announce)
+	})
+
+	t.Run("skips", func(t *testing.T) {
+		ctx := setup(t, releaseOpts{
+			skips: []string{
+				string(skips.Publish),
+				string(skips.Sign),
+				string(skips.Validate),
+			},
+		})
+
+		requireAll(t, ctx, skips.Sign, skips.Publish, skips.Validate, skips.Announce)
 	})
 
 	t.Run("parallelism", func(t *testing.T) {

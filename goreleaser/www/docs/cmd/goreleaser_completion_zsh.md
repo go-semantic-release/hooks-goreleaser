@@ -13,7 +13,7 @@ to enable it.  You can execute the following once:
 
 To load completions in your current shell session:
 
-	source <(goreleaser completion zsh); compdef _goreleaser goreleaser
+	source <(goreleaser completion zsh)
 
 To load completions for every new session, execute once:
 
@@ -42,7 +42,8 @@ goreleaser completion zsh [flags]
 ## Options inherited from parent commands
 
 ```
-      --debug   Enable debug mode
+      --debug     Enable verbose mode (deprecated)
+      --verbose   Enable verbose mode
 ```
 
 ## See also

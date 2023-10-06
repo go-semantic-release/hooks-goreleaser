@@ -1,12 +1,12 @@
 package sourcearchive
 
 import (
-	"archive/zip"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -20,67 +20,138 @@ func TestArchive(t *testing.T) {
 			require.NoError(t, os.Mkdir("dist", 0o744))
 
 			testlib.GitInit(t)
-			require.NoError(t, os.WriteFile("code.txt", []byte("not really code"), 0o655))
+			require.NoError(t, os.WriteFile("code.rb", []byte("not really code"), 0o655))
 			require.NoError(t, os.WriteFile("code.py", []byte("print 1"), 0o655))
 			require.NoError(t, os.WriteFile("README.md", []byte("# my dope fake project"), 0o655))
+			require.NoError(t, os.WriteFile("ملف.go", []byte("محتوى عربي"), 0o655))
+			require.NoError(t, os.WriteFile("🤔.patch", []byte("thinking"), 0o655))
+			require.NoError(t, os.WriteFile(".gitignore", []byte(`
+added-later.txt
+ignored.txt
+code.txt
+subfolder/
+			`), 0o655))
+
+			require.NoError(t, os.WriteFile(".gitattributes", []byte(`
+.VERSION export-subst
+			`), 0o655))
+			require.NoError(t, os.WriteFile(".VERSION", []byte("$Format:%d$"), 0o655))
 			testlib.GitAdd(t)
 			testlib.GitCommit(t, "feat: first")
+			testlib.GitTag(t, "v1.0.0")
 			require.NoError(t, os.WriteFile("added-later.txt", []byte("this file was added later"), 0o655))
 			require.NoError(t, os.WriteFile("ignored.md", []byte("never added"), 0o655))
+			require.NoError(t, os.WriteFile("code.txt", []byte("not really code"), 0o655))
+			require.NoError(t, os.WriteFile("ملف.txt", []byte("محتوى عربي"), 0o655))
+			require.NoError(t, os.WriteFile("🤝", []byte("it works"), 0o655))
 			require.NoError(t, os.MkdirAll("subfolder", 0o755))
 			require.NoError(t, os.WriteFile("subfolder/file.md", []byte("a file within a folder, added later"), 0o655))
 
-			ctx := context.New(config.Project{
-				ProjectName: "foo",
-				Dist:        "dist",
-				Source: config.Source{
-					Format:         format,
-					Enabled:        true,
-					PrefixTemplate: "{{ .ProjectName }}-{{ .Version }}/",
-					Files: []config.File{
-						{Source: "*.txt"},
-						{Source: "subfolder/*"},
+			t.Run("with extra files", func(t *testing.T) {
+				doVerifyTestArchive(
+					t,
+					testctx.NewWithCfg(
+						config.Project{
+							ProjectName: "foo",
+							Dist:        "dist",
+							Source: config.Source{
+								Format:         format,
+								Enabled:        true,
+								PrefixTemplate: "{{ .ProjectName }}-{{ .Version }}/",
+								Files: []config.File{
+									{Source: "*.txt"},
+									{Source: "subfolder/*"},
+								},
+							},
+						},
+						testctx.WithCommit("HEAD"),
+						testctx.WithVersion("1.0.0"),
+						testctx.WithCurrentTag("v1.0.0"),
+					),
+					tmp,
+					format,
+					[]string{
+						"foo-1.0.0/",
+						"foo-1.0.0/.VERSION",
+						"foo-1.0.0/.gitattributes",
+						"foo-1.0.0/.gitignore",
+						"foo-1.0.0/README.md",
+						"foo-1.0.0/added-later.txt",
+						"foo-1.0.0/code.py",
+						"foo-1.0.0/code.rb",
+						"foo-1.0.0/code.txt",
+						"foo-1.0.0/subfolder/file.md",
+						"foo-1.0.0/ملف.go",
+						"foo-1.0.0/ملف.txt",
+						"foo-1.0.0/🤔.patch",
 					},
-				},
+				)
 			})
-			ctx.Git.FullCommit = "HEAD"
-			ctx.Version = "1.0.0"
 
-			require.NoError(t, Pipe{}.Default(ctx))
-			require.NoError(t, Pipe{}.Run(ctx))
-
-			artifacts := ctx.Artifacts.List()
-			require.Len(t, artifacts, 1)
-			require.Equal(t, artifact.Artifact{
-				Type: artifact.UploadableSourceArchive,
-				Name: "foo-1.0.0." + format,
-				Path: "dist/foo-1.0.0." + format,
-				Extra: map[string]interface{}{
-					artifact.ExtraFormat: format,
-				},
-			}, *artifacts[0])
-			path := filepath.Join(tmp, "dist", "foo-1.0.0."+format)
-			stat, err := os.Stat(path)
-			require.NoError(t, err)
-			require.Greater(t, stat.Size(), int64(100))
-
-			if format != "zip" {
-				return
-			}
-
-			require.ElementsMatch(t, []string{
-				"foo-1.0.0/README.md",
-				"foo-1.0.0/code.py",
-				"foo-1.0.0/code.txt",
-				"foo-1.0.0/added-later.txt",
-				"foo-1.0.0/subfolder/file.md",
-			}, lsZip(t, path))
+			t.Run("simple", func(t *testing.T) {
+				doVerifyTestArchive(
+					t,
+					testctx.NewWithCfg(
+						config.Project{
+							ProjectName: "foo",
+							Dist:        "dist",
+							Source: config.Source{
+								Format:         format,
+								Enabled:        true,
+								PrefixTemplate: "{{ .ProjectName }}-{{ .Version }}/",
+							},
+						},
+						testctx.WithCommit("HEAD"),
+						testctx.WithVersion("1.0.0"),
+						testctx.WithCurrentTag("v1.0.0"),
+					),
+					tmp,
+					format,
+					[]string{
+						"foo-1.0.0/",
+						"foo-1.0.0/.VERSION",
+						"foo-1.0.0/.gitattributes",
+						"foo-1.0.0/.gitignore",
+						"foo-1.0.0/README.md",
+						"foo-1.0.0/code.py",
+						"foo-1.0.0/code.rb",
+						"foo-1.0.0/ملف.go",
+						"foo-1.0.0/🤔.patch",
+					},
+				)
+			})
 		})
 	}
 }
 
+func doVerifyTestArchive(tb testing.TB, ctx *context.Context, tmp, format string, expected []string) {
+	tb.Helper()
+	require.NoError(tb, Pipe{}.Default(ctx))
+	require.NoError(tb, Pipe{}.Run(ctx))
+
+	artifacts := ctx.Artifacts.List()
+	require.Len(tb, artifacts, 1)
+	require.Equal(tb, artifact.Artifact{
+		Type: artifact.UploadableSourceArchive,
+		Name: "foo-1.0.0." + format,
+		Path: "dist/foo-1.0.0." + format,
+		Extra: map[string]interface{}{
+			artifact.ExtraFormat: format,
+		},
+	}, *artifacts[0])
+	path := filepath.Join(tmp, "dist", "foo-1.0.0."+format)
+	stat, err := os.Stat(path)
+	require.NoError(tb, err)
+	require.Greater(tb, stat.Size(), int64(100))
+
+	require.ElementsMatch(tb, expected, testlib.LsArchive(tb, path, format))
+
+	version := testlib.GetFileFromArchive(tb, path, format, "foo-1.0.0/.VERSION")
+	require.Equal(tb, " (HEAD -> main, tag: v1.0.0)", string(version))
+}
+
 func TestInvalidFormat(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist:        t.TempDir(),
 		ProjectName: "foo",
 		Source: config.Source{
@@ -90,11 +161,11 @@ func TestInvalidFormat(t *testing.T) {
 		},
 	})
 	require.NoError(t, Pipe{}.Default(ctx))
-	require.EqualError(t, Pipe{}.Run(ctx), "invalid archive format: 7z")
+	require.EqualError(t, Pipe{}.Run(ctx), "invalid source archive format: 7z")
 }
 
 func TestDefault(t *testing.T) {
-	ctx := context.New(config.Project{})
+	ctx := testctx.New()
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, config.Source{
 		NameTemplate: "{{ .ProjectName }}-{{ .Version }}",
@@ -103,12 +174,13 @@ func TestDefault(t *testing.T) {
 }
 
 func TestInvalidNameTemplate(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Source: config.Source{
 			Enabled:      true,
 			NameTemplate: "{{ .foo }-asdda",
 		},
 	})
+	require.NoError(t, Pipe{}.Default(ctx))
 	testlib.RequireTemplateError(t, Pipe{}.Run(ctx))
 }
 
@@ -121,7 +193,7 @@ func TestInvalidInvalidFileTemplate(t *testing.T) {
 	testlib.GitAdd(t)
 	testlib.GitCommit(t, "feat: first")
 
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		ProjectName: "foo",
 		Dist:        "dist",
 		Source: config.Source{
@@ -139,7 +211,7 @@ func TestInvalidInvalidFileTemplate(t *testing.T) {
 }
 
 func TestInvalidPrefixTemplate(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist: t.TempDir(),
 		Source: config.Source{
 			Enabled:        true,
@@ -151,16 +223,16 @@ func TestInvalidPrefixTemplate(t *testing.T) {
 }
 
 func TestDisabled(t *testing.T) {
-	require.True(t, Pipe{}.Skip(context.New(config.Project{})))
+	require.True(t, Pipe{}.Skip(testctx.New()))
 }
 
 func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
-		require.True(t, Pipe{}.Skip(context.New(config.Project{})))
+		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			Source: config.Source{
 				Enabled: true,
 			},
@@ -171,21 +243,4 @@ func TestSkip(t *testing.T) {
 
 func TestString(t *testing.T) {
 	require.NotEmpty(t, Pipe{}.String())
-}
-
-func lsZip(tb testing.TB, path string) []string {
-	tb.Helper()
-
-	stat, err := os.Stat(path)
-	require.NoError(tb, err)
-	f, err := os.Open(path)
-	require.NoError(tb, err)
-	z, err := zip.NewReader(f, stat.Size())
-	require.NoError(tb, err)
-
-	var paths []string
-	for _, zf := range z.File {
-		paths = append(paths, zf.Name)
-	}
-	return paths
 }

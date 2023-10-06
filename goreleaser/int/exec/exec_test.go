@@ -8,28 +8,23 @@ import (
 	"testing"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
 func TestExecute(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		ProjectName: "blah",
-		Archives: []config.Archive{
-			{
-				Replacements: map[string]string{
-					"linux": "Linux",
-				},
-			},
+		Env: []string{
+			"TEST_A_SECRET=x",
+			"TEST_A_USERNAME=u2",
 		},
-	})
-	ctx.Env["TEST_A_SECRET"] = "x"
-	ctx.Env["TEST_A_USERNAME"] = "u2"
-	ctx.Version = "2.1.0"
+	}, testctx.WithVersion("2.1.0"))
 
 	// Preload artifacts
-	ctx.Artifacts = artifact.New()
 	folder := t.TempDir()
 	for _, a := range []struct {
 		id  string
@@ -94,9 +89,10 @@ func TestExecute(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name       string
-		publishers []config.Publisher
-		expectErr  error
+		name        string
+		publishers  []config.Publisher
+		expectErr   error
+		expectErrAs any
 	}{
 		{
 			"filter by IDs",
@@ -115,13 +111,15 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			nil,
+			nil,
 		},
 		{
 			"no filter",
 			[]config.Publisher{
 				{
-					Name: "test",
-					Cmd:  MockCmd + " {{ .ArtifactName }}",
+					Name:    "test",
+					Cmd:     MockCmd + " {{ .ArtifactName }}",
+					Disable: "false",
 					Env: []string{
 						MarshalMockEnv(&MockData{
 							AnyOf: []MockCall{
@@ -136,6 +134,33 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			nil,
+			nil,
+		},
+		{
+			"disabled",
+			[]config.Publisher{
+				{
+					Name:    "test",
+					Cmd:     MockCmd + " {{ .ArtifactName }}",
+					Disable: "true",
+					Env:     []string{},
+				},
+			},
+			pipe.ErrSkip{},
+			nil,
+		},
+		{
+			"disabled invalid tmpl",
+			[]config.Publisher{
+				{
+					Name:    "test",
+					Cmd:     MockCmd + " {{ .ArtifactName }}",
+					Disable: "{{ .NOPE }}",
+					Env:     []string{},
+				},
+			},
+			nil,
+			&tmpl.Error{},
 		},
 		{
 			"include checksum",
@@ -158,6 +183,7 @@ func TestExecute(t *testing.T) {
 					},
 				},
 			},
+			nil,
 			nil,
 		},
 		{
@@ -183,6 +209,7 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			nil,
+			nil,
 		},
 		{
 			"docker",
@@ -201,6 +228,7 @@ func TestExecute(t *testing.T) {
 					},
 				},
 			},
+			nil,
 			nil,
 		},
 		{
@@ -226,6 +254,7 @@ func TestExecute(t *testing.T) {
 					},
 				},
 			},
+			nil,
 			nil,
 		},
 		{
@@ -255,6 +284,7 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			nil,
+			nil,
 		},
 		{
 			"try dir templating",
@@ -274,6 +304,7 @@ func TestExecute(t *testing.T) {
 					},
 				},
 			},
+			nil,
 			nil,
 		},
 		{
@@ -302,6 +333,7 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			nil,
+			nil,
 		},
 		{
 			"override path",
@@ -327,10 +359,14 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			nil,
+			nil,
 		},
 		{
 			"command error",
 			[]config.Publisher{
+				{
+					Disable: "true",
+				},
 				{
 					Name: "test",
 					IDs:  []string{"debpkg"},
@@ -351,18 +387,23 @@ func TestExecute(t *testing.T) {
 			},
 			// stderr is sent to output via logger
 			fmt.Errorf(`publishing: %s failed: exit status 1: test error`, MockCmd),
+			nil,
 		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.name), func(t *testing.T) {
 			err := Execute(ctx, tc.publishers)
-			if tc.expectErr == nil {
-				require.NoError(t, err)
+			if tc.expectErr != nil {
+				require.Error(t, err)
+				require.True(t, strings.HasPrefix(err.Error(), tc.expectErr.Error()), err.Error())
 				return
 			}
-			require.Error(t, err)
-			require.True(t, strings.HasPrefix(err.Error(), tc.expectErr.Error()))
+			if tc.expectErrAs != nil {
+				require.ErrorAs(t, err, tc.expectErrAs)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

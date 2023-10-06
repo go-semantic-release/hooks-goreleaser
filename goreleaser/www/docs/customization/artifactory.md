@@ -22,31 +22,36 @@ artifactories:
 Prerequisites:
 
 - A running Artifactory instances
-- A user + password / client x509 certificate / API key with grants to upload an artifact
+- A user + password / client x509 certificate / API key with grants to upload
+  an artifact
 
 ### Target
 
-The `target` is the URL to upload the artifacts to (_without_ the name of the artifact).
+The `target` is the URL to upload the artifacts to (_without_ the name of the
+artifact).
 
-An example configuration for `goreleaser` in upload mode `binary` with the target can look like
+An example configuration for `goreleaser` in upload mode `binary` with the
+target can look like
 
 ```yaml
 - mode: binary
-  target: 'http://artifacts.company.com:8081/artifactory/example-repo-local/{{ .ProjectName }}/{{ .Version }}/{{ .Os }}/{{ .Arch }}{{ if .Arm }}{{ .Arm }}{{ end }}'
+  target: "http://artifacts.company.com:8081/artifactory/example-repo-local/{{ .ProjectName }}/{{ .Version }}/{{ .Os }}/{{ .Arch }}{{ if .Arm }}{{ .Arm }}{{ end }}"
 ```
 
-and will result in a final deployment like `http://artifacts.company.com:8081/artifactory/example-repo-local/goreleaser/1.0.0/Darwin/x86_64/goreleaser`.
+And will result in a final deployment like
+`http://artifacts.company.com:8081/artifactory/example-repo-local/goreleaser/1.0.0/Darwin/x86_64/goreleaser`.
 
 Supported variables:
 
-- Version
-- Tag
-- ProjectName
-- Os
-- Arch
-- Arm
+- `Version`
+- `Tag`
+- `ProjectName`
+- `Os`
+- `Arch`
+- `Arm`
 
 !!! info
+
     Variables _Os_, _Arch_ and _Arm_ are only supported in upload mode `binary`.
 
 ### Username
@@ -69,7 +74,7 @@ environment variable is not used at all.
 
 ### Password / API Key
 
-The password or API key will be stored in a environment variable.
+The password or API key will be stored in an environment variable.
 The configured name of your Artifactory instance will be used.
 With this way we support auth for multiple instances.
 This also means that the `name` per configured instance needs to be unique
@@ -82,8 +87,9 @@ The name will be transformed to uppercase.
 
 ### Client authorization with x509 certificate (mTLS / mutual TLS)
 
-If your artifactory server supports authorization with mTLS (client certificates), you can provide them by specifying
-the location of an x509 certificate/key pair of pem-encode files.
+If your artifactory server supports authorization with mTLS (client
+certificates), you can provide them by specifying the location of an x509
+certificate/key pair of pem-encode files.
 
 ```yaml
 artifactories:
@@ -93,8 +99,8 @@ artifactories:
     client_x509_key: path/to/client.key.pem
 ```
 
-This will offer the client certificate during the TLS handshake, which your artifactory server may use to authenticate
-and authorize you to upload.
+This will offer the client certificate during the TLS handshake, which your
+artifactory server may use to authenticate and authorize you to upload.
 
 ### Server authentication
 
@@ -132,47 +138,65 @@ Of course, you can customize a lot of things:
 # .goreleaser.yaml
 artifactories:
   # You can have multiple Artifactory instances.
-  -
-    # Unique name of your artifactory instance. Used to identify the instance
+  - # Unique name of your artifactory instance. Used to identify the instance
     name: production
 
     # IDs of the artifacts you want to upload.
     ids:
-    - foo
-    - bar
+      - foo
+      - bar
 
     # File extensions to filter for.
     # This might be useful if you have multiple packages with different
     # extensions with the same ID, and need to upload each extension to
     # a different place (e.g. nFPM packages).
     #
-    # Default: empty.
-    # Since: v1.7.
+    # Since: v1.7
     exts:
-    - deb
-    - rpm
+      - deb
+      - rpm
+
+    # Matrix will run the upload for each possible combination of the given
+    # values.
+    # The keys will be available as template variables in the `target` and
+    # `custom_headers` fields.
+    #
+    # This feature is only available in GoReleaser Pro.
+    # Since: v1.20 (pro)
+    matrix:
+      foo: [bar zaz]
+      something: [foobar somethingelse anotherthing]
 
     # Upload mode. Valid options are `binary` and `archive`.
-    # If mode is `archive`, variables _Os_, _Arch_ and _Arm_ for target name are not supported.
-    # In that case these variables are empty.
-    # Default is `archive`.
+    #
+    # If mode is `archive`, variables _Os_, _Arch_ and _Arm_ for target name
+    #   are not supported. In that case these variables are empty.
+    #
+    # If mode is `binary`, you'll need to have the archives section setup with
+    #   format "binary" as well.
+    #
+    # Default: 'archive'
     mode: archive
 
     # URL of your Artifactory instance + path to deploy to
     target: http://artifacts.company.com:8081/artifactory/example-repo-local/{{ .ProjectName }}/{{ .Version }}/
 
+    # Tells goreleaer not to append the artifact name to the target URL. You must do this manually
+    custom_artifact_name: true
+
     # User that will be used for the deployment
     username: deployuser
 
     # Client certificate and key (when provided, added as client cert to TLS connections)
-    # Since: v1.11.
+    #
+    # Since: v1.11
     client_x509_cert: /path/to/client.cert.pem
     client_x509_key: /path/to/client.key.pem
 
-    # Upload checksums (defaults to false)
+    # Upload checksums.
     checksum: true
 
-    # Upload signatures (defaults to false)
+    # Upload signatures.
     signature: true
 
     # Certificate chain used to validate server certificates
@@ -184,7 +208,13 @@ artifactories:
       -----END CERTIFICATE-----
 ```
 
-These settings should allow you to push your artifacts into multiple Artifactories.
+!!! success "GoReleaser Pro"
+
+    Some options are only available in [GoReleaser Pro feature](/pro/).
+
+These settings should allow you to push your artifacts into multiple
+**Artifactory** instances.
 
 !!! tip
+
     Learn more about the [name template engine](/customization/templates/).

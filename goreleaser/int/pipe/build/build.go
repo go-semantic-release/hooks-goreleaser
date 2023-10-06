@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/caarlos0/go-shellwords"
 	"github.com/caarlos0/log"
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
 	"github.com/goreleaser/goreleaser/int/shell"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	builders "github.com/goreleaser/goreleaser/pkg/build"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -45,6 +48,10 @@ func (Pipe) Run(ctx *context.Context) error {
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {
+	if !reflect.DeepEqual(ctx.Config.SingleBuild, config.Build{}) {
+		deprecate.Notice(ctx, "build")
+	}
+
 	ids := ids.New("builds")
 	for i, build := range ctx.Config.Builds {
 		build, err := buildWithDefaults(ctx, build)
@@ -90,13 +97,15 @@ func runPipeOnBuild(ctx *context.Context, g semerrgroup.Group, build config.Buil
 				return err
 			}
 
-			if err := runHook(ctx, *opts, build.Env, build.Hooks.Pre); err != nil {
-				return fmt.Errorf("pre hook failed: %w", err)
+			if !skips.Any(ctx, skips.PreBuildHooks) {
+				if err := runHook(ctx, *opts, build.Env, build.Hooks.Pre); err != nil {
+					return fmt.Errorf("pre hook failed: %w", err)
+				}
 			}
 			if err := doBuild(ctx, build, *opts); err != nil {
 				return err
 			}
-			if !ctx.SkipPostBuildHooks {
+			if !skips.Any(ctx, skips.PostBuildHooks) {
 				if err := runHook(ctx, *opts, build.Env, build.Hooks.Post); err != nil {
 					return fmt.Errorf("post hook failed: %w", err)
 				}

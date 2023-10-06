@@ -6,8 +6,10 @@ import (
 	"runtime"
 	"testing"
 	"text/template"
+	"time"
 
 	"github.com/goreleaser/goreleaser/int/artifact"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
@@ -15,33 +17,41 @@ import (
 
 func TestWithArtifact(t *testing.T) {
 	t.Parallel()
-	ctx := context.New(config.Project{
-		ProjectName: "proj",
-	})
-	ctx.ModulePath = "github.com/goreleaser/goreleaser"
-	ctx.Env = map[string]string{
-		"FOO":       "bar",
-		"MULTILINE": "something with\nmultiple lines\nremove this\nto test things",
-	}
-	ctx.Version = "1.2.3"
-	ctx.Git.PreviousTag = "v1.2.2"
-	ctx.Git.CurrentTag = "v1.2.3"
-	ctx.Semver = context.Semver{
-		Major: 1,
-		Minor: 2,
-		Patch: 3,
-	}
-	ctx.Git.Branch = "test-branch"
-	ctx.Git.Commit = "commit"
-	ctx.Git.FullCommit = "fullcommit"
-	ctx.Git.ShortCommit = "shortcommit"
-	ctx.Git.TagSubject = "awesome release"
-	ctx.Git.TagContents = "awesome release\n\nanother line"
-	ctx.Git.TagBody = "another line"
-	ctx.ReleaseNotes = "test release notes"
+	ctx := testctx.NewWithCfg(
+		config.Project{
+			ProjectName: "proj",
+			Release: config.Release{
+				Draft: true,
+			},
+		},
+		testctx.WithVersion("1.2.3"),
+		testctx.WithGitInfo(context.GitInfo{
+			PreviousTag: "v1.2.2",
+			CurrentTag:  "v1.2.3",
+			Branch:      "test-branch",
+			Commit:      "commit",
+			FullCommit:  "fullcommit",
+			ShortCommit: "shortcommit",
+			TagSubject:  "awesome release",
+			TagContents: "awesome release\n\nanother line",
+			TagBody:     "another line",
+			Dirty:       true,
+		}),
+		testctx.WithEnv(map[string]string{
+			"FOO":       "bar",
+			"MULTILINE": "something with\nmultiple lines\nremove this\nto test things",
+		}),
+		testctx.WithSemver(1, 2, 3, ""),
+		testctx.Snapshot,
+		func(ctx *context.Context) {
+			ctx.ModulePath = "github.com/goreleaser/goreleaser"
+			ctx.ReleaseNotes = "test release notes"
+			ctx.Date = time.Unix(1678327562, 0)
+		},
+	)
 	for expect, tmpl := range map[string]string{
 		"bar":                              "{{.Env.FOO}}",
-		"Linux":                            "{{.Os}}",
+		"linux":                            "{{.Os}}",
 		"amd64":                            "{{.Arch}}",
 		"6":                                "{{.Arm}}",
 		"softfloat":                        "{{.Mips}}",
@@ -72,15 +82,29 @@ func TestWithArtifact(t *testing.T) {
 		"artifact name: not-this-binary":   "artifact name: {{ .ArtifactName }}",
 		"artifact ext: .exe":               "artifact ext: {{ .ArtifactExt }}",
 		"artifact path: /tmp/foo.exe":      "artifact path: {{ .ArtifactPath }}",
+		"artifact basename: foo.exe":       "artifact basename: {{ base .ArtifactPath }}",
+		"artifact dir: /tmp":               "artifact dir: {{ dir .ArtifactPath }}",
+		"2023":                             `{{ .Now.Format "2006" }}`,
+		"2023-03-09T02:06:02Z":             `{{ .Date }}`,
+		"1678327562":                       `{{ .Timestamp }}`,
+		"snapshot true":                    `snapshot {{.IsSnapshot}}`,
+		"nightly false":                    `nightly {{.IsNightly}}`,
+		"draft true":                       `draft {{.IsDraft}}`,
+		"dirty true":                       `dirty {{.IsGitDirty}}`,
+		"env bar: barrrrr":                 `env bar: {{ envOrDefault "BAR" "barrrrr" }}`,
+		"env foo: bar":                     `env foo: {{ envOrDefault "FOO" "barrrrr" }}`,
 
 		"remove this": "{{ filter .Env.MULTILINE \".*remove.*\" }}",
 		"something with\nmultiple lines\nto test things": "{{ reverseFilter .Env.MULTILINE \".*remove.*\" }}",
+
+		// maps
+		"123": `{{ $m := map "a" "1" "b" "2" }}{{ index $m "a" }}{{ indexOrDefault $m "b" "10" }}{{ indexOrDefault $m "c" "3" }}{{ index $m "z" }}`,
 	} {
 		tmpl := tmpl
 		expect := expect
 		t.Run(expect, func(t *testing.T) {
 			t.Parallel()
-			result, err := New(ctx).WithArtifactReplacements(
+			result, err := New(ctx).WithArtifact(
 				&artifact.Artifact{
 					Name:    "not-this-binary",
 					Path:    "/tmp/foo.exe",
@@ -94,7 +118,6 @@ func TestWithArtifact(t *testing.T) {
 						artifact.ExtraExt:    ".exe",
 					},
 				},
-				map[string]string{"linux": "Linux"},
 			).Apply(tmpl)
 			require.NoError(t, err)
 			require.Equal(t, expect, result)
@@ -103,13 +126,13 @@ func TestWithArtifact(t *testing.T) {
 
 	t.Run("artifact without binary name", func(t *testing.T) {
 		t.Parallel()
-		result, err := New(ctx).WithArtifactReplacements(
+		result, err := New(ctx).WithArtifact(
 			&artifact.Artifact{
 				Name:   "another-binary",
 				Goarch: "amd64",
 				Goos:   "linux",
 				Goarm:  "6",
-			}, map[string]string{},
+			},
 		).Apply("{{ .Binary }}")
 		require.NoError(t, err)
 		require.Equal(t, ctx.Config.ProjectName, result)
@@ -118,7 +141,8 @@ func TestWithArtifact(t *testing.T) {
 	t.Run("template using artifact Fields with no artifact", func(t *testing.T) {
 		t.Parallel()
 		result, err := New(ctx).Apply("{{ .Os }}")
-		require.EqualError(t, err, `template: tmpl:1:3: executing "tmpl" at <.Os>: map has no entry for key "Os"`)
+		require.ErrorAs(t, err, &Error{})
+		require.EqualError(t, err, `template: failed to apply "{{ .Os }}": map has no entry for key "Os"`)
 		require.Empty(t, result)
 	})
 }
@@ -140,11 +164,10 @@ func TestEnv(t *testing.T) {
 			out:  "",
 		},
 	}
-	ctx := context.New(config.Project{})
-	ctx.Env = map[string]string{
-		"FOO": "BAR",
-	}
-	ctx.Git.CurrentTag = "v1.2.3"
+	ctx := testctx.New(
+		testctx.WithEnv(map[string]string{"FOO": "BAR"}),
+		testctx.WithCurrentTag("v1.2.3"),
+	)
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
 			out, _ := New(ctx).Apply(tC.in)
@@ -154,11 +177,10 @@ func TestEnv(t *testing.T) {
 }
 
 func TestWithEnv(t *testing.T) {
-	ctx := context.New(config.Project{})
-	ctx.Env = map[string]string{
-		"FOO": "BAR",
-	}
-	ctx.Git.CurrentTag = "v1.2.3"
+	ctx := testctx.New(
+		testctx.WithEnv(map[string]string{"FOO": "BAR"}),
+		testctx.WithCurrentTag("v1.2.3"),
+	)
 	tpl := New(ctx).WithEnvS([]string{
 		"FOO=foo",
 		"BAR=bar",
@@ -177,7 +199,7 @@ func TestWithEnv(t *testing.T) {
 }
 
 func TestFuncMap(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		ProjectName: "proj",
 		Env: []string{
 			"FOO=bar",
@@ -273,7 +295,7 @@ func TestFuncMap(t *testing.T) {
 }
 
 func TestApplySingleEnvOnly(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Env: []string{
 			"FOO=value",
 			"BAR=another",
@@ -339,22 +361,22 @@ func TestApplySingleEnvOnly(t *testing.T) {
 }
 
 func TestInvalidTemplate(t *testing.T) {
-	ctx := context.New(config.Project{})
-	ctx.Git.CurrentTag = "v1.1.1"
+	ctx := testctx.New()
 	_, err := New(ctx).Apply("{{{.Foo}")
-	require.EqualError(t, err, "template: tmpl:1: unexpected \"{\" in command")
+	require.ErrorAs(t, err, &Error{})
+	require.EqualError(t, err, `template: failed to apply "{{{.Foo}": unexpected "{" in command`)
 }
 
 func TestEnvNotFound(t *testing.T) {
-	ctx := context.New(config.Project{})
-	ctx.Git.CurrentTag = "v1.2.4"
+	ctx := testctx.New(testctx.WithCurrentTag("v1.2.4"))
 	result, err := New(ctx).Apply("{{.Env.FOO}}")
 	require.Empty(t, result)
-	require.EqualError(t, err, `template: tmpl:1:6: executing "tmpl" at <.Env.FOO>: map has no entry for key "FOO"`)
+	require.ErrorAs(t, err, &Error{})
+	require.EqualError(t, err, `template: failed to apply "{{.Env.FOO}}": map has no entry for key "FOO"`)
 }
 
 func TestWithExtraFields(t *testing.T) {
-	ctx := context.New(config.Project{})
+	ctx := testctx.New()
 	out, _ := New(ctx).WithExtraFields(Fields{
 		"MyCustomField": "foo",
 	}).Apply("{{ .MyCustomField }}")
@@ -369,7 +391,7 @@ func TestBool(t *testing.T) {
 			"TRUE",
 		} {
 			t.Run(v, func(t *testing.T) {
-				ctx := context.New(config.Project{
+				ctx := testctx.NewWithCfg(config.Project{
 					Env: []string{"FOO=" + v},
 				})
 				b, err := New(ctx).Bool("{{.Env.FOO}}")
@@ -386,7 +408,7 @@ func TestBool(t *testing.T) {
 			"yada yada",
 		} {
 			t.Run(v, func(t *testing.T) {
-				ctx := context.New(config.Project{
+				ctx := testctx.NewWithCfg(config.Project{
 					Env: []string{"FOO=" + v},
 				})
 				b, err := New(ctx).Bool("{{.Env.FOO}}")
@@ -395,4 +417,16 @@ func TestBool(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestMdv2Escape(t *testing.T) {
+	require.Equal(
+		t,
+		"aaa\\_\\*\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!",
+		mdv2Escape("aaa_*[]()~`>#+-=|{}.!"))
+}
+
+func TestInvalidMap(t *testing.T) {
+	_, err := New(testctx.New()).Apply(`{{ $m := map "a" }}`)
+	require.ErrorContains(t, err, "map expects even number of arguments, got 1")
 }

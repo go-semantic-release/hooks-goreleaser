@@ -11,9 +11,10 @@ Here is a commented `builds` section with all fields specified:
 # .goreleaser.yaml
 builds:
   # You can have multiple builds defined as a yaml list
-  -
+  - #
     # ID of the build.
-    # Defaults to the binary name.
+    #
+    # Default: Binary name
     id: "my-build"
 
     # Path to main.go file or main package.
@@ -24,29 +25,35 @@ builds:
 
     # Binary name.
     # Can be a path (e.g. `bin/app`) to wrap the binary in a directory.
-    # Default is the name of the project directory.
+    #
+    # Default: Project directory name
     binary: program
 
-    # Custom flags templates.
-    # Default is empty.
+    # Custom flags.
+    #
+    # Templates: allowed
     flags:
       - -tags=dev
       - -v
 
-    # Custom asmflags templates.
-    # Default is empty.
+    # Custom asmflags.
+    #
+    # Templates: allowed
     asmflags:
       - -D mysymbol
       - all=-trimpath={{.Env.GOPATH}}
 
-    # Custom gcflags templates.
-    # Default is empty.
+    # Custom gcflags.
+    #
+    # Templates: allowed
     gcflags:
       - all=-trimpath={{.Env.GOPATH}}
       - ./dontoptimizeme=-N
 
-    # Custom ldflags templates.
-    # Default is `-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser`.
+    # Custom ldflags.
+    #
+    # Default: '-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser'
+    # Templates: allowed
     ldflags:
       - -s -w -X main.build={{.Version}}
       - ./usemsan=-msan
@@ -57,12 +64,10 @@ builds:
     # - `c-shared`
     # - `c-archive`
     #
-    # Since GoReleaser v1.13.
-    # Default is empty.
+    # Since: v1.13
     buildmode: c-shared
 
     # Custom build tags templates.
-    # Default is empty.
     tags:
       - osusergo
       - netgo
@@ -70,12 +75,10 @@ builds:
       - feature
 
     # Custom environment variables to be set during the builds.
-    #
-    # This field is templateable. Since v1.14.
-    #
     # Invalid environment variables will be ignored.
     #
-    # Default: `os.Environ()` merged with what you set the root `env` section.
+    # Default: os.Environ() ++ env config section
+    # Templates: allowed (since v1.14)
     env:
       - CGO_ENABLED=0
       # complex, templated envs (v1.14+):
@@ -90,14 +93,16 @@ builds:
 
     # GOOS list to build for.
     # For more info refer to: https://golang.org/doc/install/source#environment
-    # Defaults are darwin, linux, and windows.
+    #
+    # Default: [ 'darwin', 'linux', 'windows' ]
     goos:
       - freebsd
       - windows
 
     # GOARCH to build for.
     # For more info refer to: https://golang.org/doc/install/source#environment
-    # Defaults are 386, amd64 and arm64.
+    #
+    # Default: [ '386', 'amd64', 'arm64' ]
     goarch:
       - amd64
       - arm
@@ -105,27 +110,29 @@ builds:
 
     # GOARM to build for when GOARCH is arm.
     # For more info refer to: https://golang.org/doc/install/source#environment
-    # Default is only 6.
+    #
+    # Default: [ 6 ]
     goarm:
       - 6
       - 7
 
     # GOAMD64 to build when GOARCH is amd64.
     # For more info refer to: https://golang.org/doc/install/source#environment
-    # Default is only v1.
+    #
+    # Default: [ 'v1' ]
     goamd64:
       - v2
       - v3
 
     # GOMIPS and GOMIPS64 to build when GOARCH is mips, mips64, mipsle or mips64le.
     # For more info refer to: https://golang.org/doc/install/source#environment
-    # Default is only hardfloat.
+    #
+    # Default: [ 'hardfloat' ]
     gomips:
       - hardfloat
       - softfloat
 
     # List of combinations of GOOS + GOARCH + GOARM to ignore.
-    # Default is empty.
     ignore:
       - goos: darwin
         goarch: 386
@@ -144,15 +151,15 @@ builds:
     #
     # Special values:
     # - go_118_first_class: evaluates to the first-class ports of go1.18.
-    #   Since GoReleaser v1.9.
     # - go_first_class: evaluates to latest stable go first-class ports,
     #   currently same as 1.18.
-    #   Since GoReleaser v1.9.
     #
     # This overrides `goos`, `goarch`, `goarm`, `gomips`, `goamd64` and
     # `ignores`.
     targets:
+      # Since: v1.9
       - go_first_class
+      # Since: v1.9
       - go_118_first_class
       - linux_amd64_v1
       - darwin_arm64
@@ -170,30 +177,30 @@ builds:
     # It is safe to ignore this option in most cases.
     #
     # Default: build.
-    # Since: v1.9.
+    # Since: v1.9
     command: test
 
     # Set the modified timestamp on the output binary, typically
     # you would do this to ensure a build was reproducible. Pass
     # empty string to skip modifying the output.
-    # Default is empty string, which will be the compile time.
-    mod_timestamp: '{{ .CommitTimestamp }}'
+    #
+    # Templates: allowed.
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
     # Hooks can be used to customize the final binary,
     # for example, to run generators.
-    # Those fields allow templates.
-    # Default is both hooks empty.
+    #
+    # Templates: allowed
     hooks:
       pre: rice embed-go
       post: ./script.sh {{ .Path }}
 
     # If true, skip the build.
     # Useful for library projects.
-    # Default is false
     skip: false
 
     # By default, GoReleaser will create your binaries inside
-    # `dist/${BuildID}_${BuildTarget}`, which is an unique directory per build
+    # `dist/${BuildID}_${BuildTarget}`, which is a unique directory per build
     # target in the matrix.
     # You can set subdirs within that folder using the `binary` property.
     #
@@ -201,8 +208,6 @@ builds:
     # created, you can set this property.
     # If you do, you are responsible for keeping different builds from
     # overriding each other.
-    #
-    # Defaults to `false`.
     no_unique_dist_dir: true
 
     # By default, GoReleaser will check if the main filepath has a main
@@ -210,8 +215,7 @@ builds:
     # This can be used to skip that check, in case you're building tests, for
     # example.
     #
-    # Default: false.
-    # Since: v1.9.
+    # Since: v1.9
     no_main_check: true
 
     # Path to project's (sub)directory containing Go code.
@@ -219,27 +223,28 @@ builds:
     # If dir does not contain a `go.mod` file, and you are using `gomod.proxy`,
     # produced binaries will be invalid.
     # You would likely want to use `main` instead of this.
-    # Default is `.`.
+    #
+    # Default: '.'
     dir: go
 
     # Builder allows you to use a different build implementation.
     # This is a GoReleaser Pro feature.
     # Valid options are: `go` and `prebuilt`.
-    # Defaults to `go`.
+    #
+    # Default: 'go'
     builder: prebuilt
 
     # Overrides allows to override some fields for specific targets.
     # This can be specially useful when using CGO.
     # Note: it'll only match if the full target matches.
     #
-    # Default: empty.
-    # Since: v1.5.
+    # Since: v1.5
     overrides:
       - goos: darwin
         goarch: arm64
         goamd64: v1
-        goarm: ''
-        gomips: ''
+        goarm: ""
+        gomips: ""
         ldflags:
           - foo
         tags:
@@ -253,9 +258,11 @@ builds:
 ```
 
 !!! tip
+
     Learn more about the [name template engine](/customization/templates/).
 
 !!! info
+
     First-class build targets are gathered by running:
     ```sh
     go tool dist list -json | jq -r '.[] | select(.FirstClass) | [.GOOS, .GOARCH] | @tsv'
@@ -297,13 +304,13 @@ following build details are exposed:
 
 <!-- to format the tables, use: https://tabletomarkdown.com/format-markdown-table/ -->
 
-Key    |Description
--------|---------------------------------
-.Os    |`GOOS`
-.Arch  |`GOARCH`
-.Arm   |`GOARM`
-.Ext   |Extension, e.g. `.exe`
-.Target|Build target, e.g. `darwin_amd64`
+| Key     | Description                       |
+| ------- | --------------------------------- |
+| .Os     | `GOOS`                            |
+| .Arch   | `GOARCH`                          |
+| .Arm    | `GOARM`                           |
+| .Ext    | Extension, e.g. `.exe`            |
+| .Target | Build target, e.g. `darwin_amd64` |
 
 ## Passing environment variables to ldflags
 
@@ -336,18 +343,17 @@ environments.
 ```yaml
 # .goreleaser.yaml
 builds:
-  -
-    id: "with-hooks"
+  - id: "with-hooks"
     targets:
-     - "darwin_amd64"
-     - "windows_amd64"
+      - "darwin_amd64"
+      - "windows_amd64"
     hooks:
       pre:
-       - first-script.sh
-       - second-script.sh
+        - first-script.sh
+        - second-script.sh
       post:
-       - upx "{{ .Path }}"
-       - codesign -project="{{ .ProjectName }}" "{{ .Path }}"
+        - upx "{{ .Path }}"
+        - codesign -project="{{ .ProjectName }}" "{{ .Path }}"
 ```
 
 Each hook can also have its own work directory and environment variables:
@@ -355,19 +361,21 @@ Each hook can also have its own work directory and environment variables:
 ```yaml
 # .goreleaser.yaml
 builds:
-  -
-    id: "with-hooks"
+  - id: "with-hooks"
     targets:
-     - "darwin_amd64"
-     - "windows_amd64"
+      - "darwin_amd64"
+      - "windows_amd64"
     hooks:
       pre:
-       - cmd: first-script.sh
-         dir: "{{ dir .Dist}}"
-         output: true # always print command output, otherwise only visible in debug mode. Since GoReleaser v1.5.
-         env:
-          - HOOK_SPECIFIC_VAR={{ .Env.GLOBAL_VAR }}
-       - second-script.sh
+        - cmd: first-script.sh
+          dir:
+            "{{ dir .Dist}}"
+            # Always print command output, otherwise only visible in debug mode.
+            # Since: v1.5
+          output: true
+          env:
+            - HOOK_SPECIFIC_VAR={{ .Env.GLOBAL_VAR }}
+        - second-script.sh
 ```
 
 All properties of a hook (`cmd`, `dir` and `env`) support
@@ -376,40 +384,39 @@ available (as these run _after_ the build).
 Additionally the following build details are exposed to both `pre` and `post`
 hooks:
 
-
 <!-- to format the tables, use: https://tabletomarkdown.com/format-markdown-table/ -->
 
-Key    |Description
--------|--------------------------------------
-.Name  |Filename of the binary, e.g. `bin.exe`
-.Ext   |Extension, e.g. `.exe`
-.Path  |Absolute path to the binary
-.Target|Build target, e.g. `darwin_amd64`
+| Key     | Description                            |
+| ------- | -------------------------------------- |
+| .Name   | Filename of the binary, e.g. `bin.exe` |
+| .Ext    | Extension, e.g. `.exe`                 |
+| .Path   | Absolute path to the binary            |
+| .Target | Build target, e.g. `darwin_amd64`      |
 
 Environment variables are inherited and overridden in the following order:
 
- - global (`env`)
- - build (`builds[].env`)
- - hook (`builds[].hooks.pre[].env` and `builds[].hooks.post[].env`)
+- global (`env`)
+- build (`builds[].env`)
+- hook (`builds[].hooks.pre[].env` and `builds[].hooks.post[].env`)
 
 ## Go Modules
 
- If you use Go 1.11+ with go modules or vgo, when GoReleaser runs it may try to
- download the dependencies. Since several builds run in parallel, it is very
- likely to fail.
+If you use Go 1.11+ with go modules or vgo, when GoReleaser runs it may try to
+download the dependencies. Since several builds run in parallel, it is very
+likely to fail.
 
- You can solve this by running `go mod tidy` before calling `goreleaser` or
- by adding a [hook][] doing that on your `.goreleaser.yaml` file:
+You can solve this by running `go mod tidy` before calling `goreleaser` or
+by adding a [hook][] doing that on your `.goreleaser.yaml` file:
 
- ```yaml
- # .goreleaser.yaml
- before:
-   hooks:
-   - go mod tidy
- # rest of the file...
- ```
+```yaml
+# .goreleaser.yaml
+before:
+  hooks:
+    - go mod tidy
+# rest of the file...
+```
 
- [hook]: /customization/hooks
+[hook]: /customization/hooks
 
 ## Define Build Tag
 
@@ -423,24 +430,24 @@ To make your releases, checksums and signatures reproducible, you will need to
 make some (if not all) of the following modifications to the build defaults in
 GoReleaser:
 
-* Modify `ldflags`: by default `main.Date` is set to the time GoReleaser is run
+- Modify `ldflags`: by default `main.Date` is set to the time GoReleaser is run
   (`{{.Date}}`), you can set this to `{{.CommitDate}}` or just not pass the
   variable.
-* Modify `mod_timestamp`: by default this is empty string — which means it'll be
+- Modify `mod_timestamp`: by default this is empty string — which means it'll be
   the compilation time, set to `{{.CommitTimestamp}}` or a constant value
   instead.
-* If you do not run your builds from a consistent directory structure, pass
+- If you do not run your builds from a consistent directory structure, pass
   `-trimpath` to `flags`.
-* Remove uses of the `time` template function. This function returns a new value
+- Remove uses of the `time` template function. This function returns a new value
   on every call and is not deterministic.
 
 ## Import pre-built binaries
 
 !!! success "GoReleaser Pro"
+
     The prebuilt builder is a [GoReleaser Pro feature](/pro/).
 
-Since GoReleaser Pro v0.179.0, it is possible to import pre-built binaries into
-the GoReleaser lifecycle.
+It is also possible to import pre-built binaries into the GoReleaser lifecycle.
 
 Reasons you might want to do that include:
 
@@ -454,34 +461,42 @@ In any case, its pretty easy to do that now:
 ```yaml
 # .goreleaser.yaml
 builds:
--
-  # Set the builder to prebuilt
-  builder: prebuilt
+  - # Set the builder to prebuilt
+    builder: prebuilt
 
-  # When builder is `prebuilt` there are no defaults for goos, goarch,
-  # goarm, gomips, goamd64 and targets, so you always have to specify them:
-  goos:
-    - linux
-    - darwin
-  goarch:
-    - amd64
-    - arm64
-  goamd64:
-    - v1
+    # When builder is `prebuilt` there are no defaults for goos, goarch,
+    # goarm, gomips, goamd64 and targets, so you always have to specify them:
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goamd64:
+      - v1
 
-  # prebuilt specific options
-  prebuilt:
-    # Path must be the template path to the binaries.
-    # GoReleaser removes the `dist` folder before running, so you will likely
-    # want to put the binaries elsewhere.
-    # This field is required when using the `prebuilt` builder.
-    path: output/mybin_{{ .Os }}_{{ .Arch }}_{{ with .Amd64 }}_{{ . }}{{ end }}/mybin
+    # prebuilt specific options
+    prebuilt:
+      # Path must be the template path to the binaries.
+      # GoReleaser removes the `dist` folder before running, so you will likely
+      # want to put the binaries elsewhere.
+      # This field is required when using the `prebuilt` builder.
+      path: output/mybin_{{ .Os }}_{{ .Arch }}{{ with .Amd64 }}_{{ . }}{{ end }}/mybin
+
+    # Use 'binary' to set the final name of your binary.
+    # This is the name that will be used in archives et al.
+    binary: bin/mybin
 ```
+
+!!! tip
+
+    You can think of `prebuilt.path` as being the "external path" and the
+    `binary` as being the "internal path to binary".
 
 This example config will import into your release pipeline the following
 binaries:
 
-- `output/mybin_linux_amd64`
+- `output/mybin_linux_amd64_v1`
 - `output/mybin_linux_arm64`
 - `output/mybin_darwin_amd64_v1`
 - `output/mybin_darwin_arm64`
@@ -491,6 +506,7 @@ itself.
 There is no difference in how the binaries are handled.
 
 !!! tip
+
     A cool tip here, specially when using CGO, is that you can have one
     `.goreleaser.yaml` file just for the builds, build each in its own machine
     with [`goreleaser build --single-target`](/cmd/goreleaser_build/) and
@@ -500,11 +516,13 @@ There is no difference in how the binaries are handled.
     builds in different machines in parallel.
 
 !!! warning
+
     GoReleaser will try to stat the final path, if any error happens while
     doing that (e.g. file does not exist or permission issues),
     GoReleaser will fail.
 
 !!! warning
+
     When using the `prebuilt` binary, there are no defaults for `goos`,
     `goarch`, `goarm`, `gomips` and `goamd64`.
     You'll need to either provide them or the final `targets` matrix.
@@ -514,7 +532,7 @@ If you'd like to see this in action, check [this example on GitHub](https://gith
 ## A note about folder names inside `dist`
 
 By default, GoReleaser will create your binaries inside
-`dist/${BuildID}_${BuildTarget}`, which is an unique directory per build target
+`dist/${BuildID}_${BuildTarget}`, which is a unique directory per build target
 in the matrix.
 
 Those names have no guarantees of remaining the same from one version to
@@ -544,7 +562,7 @@ You can read more about it
 
 ## Building shared or static libraries
 
-> Since: v1.13.0
+> Since: v1.13
 
 GoReleaser supports compiling and releasing C shared or static libraries, by
 configuring the [Go build mode](https://pkg.go.dev/cmd/go#hdr-Build_modes).
@@ -556,84 +574,83 @@ attempt to configure any additional logic.
 
 GoReleaser will:
 
-* set the correct file extension for the target OS.
-* package the generated header file (`.h`) in the release bundle.
+- set the correct file extension for the target OS.
+- package the generated header file (`.h`) in the release bundle.
 
 Example usage:
 
 ```yaml
 # .goreleaser.yaml
 builds:
-  -
-    id: "my-library"
+  - id: "my-library"
 
     # Configure the buildmode flag to output a shared library
-    buildmode: "c-shared"  # or "c-archive" for a static library
+    buildmode: "c-shared" # or "c-archive" for a static library
 ```
 
-## Complex templated environment variables
+## Complex template environment variables
 
-> Since v1.14.0.
+> Since v1.14
 
-Builds environment variables are templateable.
+Builds environment variables accept templates.
 
 You can leverage that to have a single build configuration with different
 environment variables for each platform, for example.
 
-A common example of this is the variables `CC` and `CCX`.
+A common example of this is the variables `CC` and `CXX`.
 
 Here are two different examples:
 
 ### Using multiple envs
 
-This example creates once `CC_` and `CCX_` variable for each platform, and then
-set `CC` and `CCX` to the right one:
+This example creates once `CC_` and `CXX_` variable for each platform, and then
+set `CC` and `CXX` to the right one:
 
 ```yaml
 # .goreleaser.yml
 builds:
-- id: mybin
-  binary: mybin
-  main: .
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - amd64
-    - arm64
-  env:
-    - CGO_ENABLED=0
-    - CC_darwin_amd64=o64-clang
-    - CCX_darwin_amd64=o64-clang+
-    - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
-    - CCX_darwin_arm64=aarch64-apple-darwin20.2-clang++
-    - CC_windows_amd64=x86_64-w64-mingw32-gc
-    - CCX_windows_amd64=x86_64-w64-mingw32-g++
-    - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
-    - 'CCX={{ index .Env (print "CCX_" .Os "_" .Arch) }}'
+  - id: mybin
+    binary: mybin
+    main: .
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+      - CC_darwin_amd64=o64-clang
+      - CXX_darwin_amd64=o64-clang+
+      - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
+      - CXX_darwin_arm64=aarch64-apple-darwin20.2-clang++
+      - CC_windows_amd64=x86_64-w64-mingw32-gc
+      - CXX_windows_amd64=x86_64-w64-mingw32-g++
+      - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
+      - 'CXX={{ index .Env (print "CXX_" .Os "_" .Arch) }}'
 ```
 
 ### Using `if` statements
 
-This example uses `if` statements to set `CC` and `CCX`:
+This example uses `if` statements to set `CC` and `CXX`:
 
 ```yaml
 # .goreleaser.yml
 builds:
-- id: mybin
-  binary: mybin
-  main: .
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - amd64
-    - arm64
-  env:
-    - CGO_ENABLED=0
-    - >-
+  - id: mybin
+    binary: mybin
+    main: .
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+      - >-
         {{- if eq .Os "darwin" }}
           {{- if eq .Arch "amd64"}}CC=o64-clang{{- end }}
           {{- if eq .Arch "arm64"}}CC=aarch64-apple-darwin20.2-clang{{- end }}
@@ -641,7 +658,7 @@ builds:
         {{- if eq .Os "windows" }}
           {{- if eq .Arch "amd64" }}CC=x86_64-w64-mingw32-gcc{{- end }}
         {{- end }}
-    - >-
+      - >-
         {{- if eq .Os "darwin" }}
           {{- if eq .Arch "amd64"}}CXX=o64-clang+{{- end }}
           {{- if eq .Arch "arm64"}}CXX=aarch64-apple-darwin20.2-clang++{{- end }}

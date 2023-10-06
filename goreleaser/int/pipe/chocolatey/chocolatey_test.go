@@ -9,33 +9,35 @@ import (
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
+func TestContinueOnError(t *testing.T) {
+	require.True(t, Pipe{}.ContinueOnError())
+}
+
 func TestDescription(t *testing.T) {
 	require.NotEmpty(t, Pipe{}.String())
 }
 
 func TestSkip(t *testing.T) {
-	ctx := context.New(config.Project{})
+	ctx := testctx.New()
 	require.True(t, Pipe{}.Skip(ctx))
 }
 
 func TestDefault(t *testing.T) {
 	testlib.Mktmp(t)
 
-	ctx := &context.Context{
-		TokenType: context.TokenTypeGitHub,
-		Config: config.Project{
-			ProjectName: "myproject",
-			Chocolateys: []config.Chocolatey{
-				{},
-			},
+	ctx := testctx.NewWithCfg(config.Project{
+		ProjectName: "myproject",
+		Chocolateys: []config.Chocolatey{
+			{},
 		},
-	}
+	}, testctx.GitHubTokenType)
 
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, ctx.Config.ProjectName, ctx.Config.Chocolateys[0].Name)
@@ -51,7 +53,7 @@ func Test_doRun(t *testing.T) {
 	tests := []struct {
 		name      string
 		choco     config.Chocolatey
-		exec      func() ([]byte, error)
+		exec      func(cmd string, args ...string) ([]byte, error)
 		published int
 		err       string
 	}{
@@ -70,7 +72,7 @@ func Test_doRun(t *testing.T) {
 				Name:    "app",
 				Goamd64: "v1",
 			},
-			exec: func() ([]byte, error) {
+			exec: func(_ string, _ ...string) ([]byte, error) {
 				return nil, errors.New(`exec: "choco.exe": executable file not found in $PATH`)
 			},
 			err: `failed to generate chocolatey package: exec: "choco.exe": executable file not found in $PATH: `,
@@ -82,7 +84,8 @@ func Test_doRun(t *testing.T) {
 				Goamd64:     "v1",
 				SkipPublish: true,
 			},
-			exec: func() ([]byte, error) {
+			exec: func(cmd string, args ...string) ([]byte, error) {
+				checkPackCmd(t, cmd, args...)
 				return []byte("success"), nil
 			},
 		},
@@ -92,7 +95,8 @@ func Test_doRun(t *testing.T) {
 				Name:    "app",
 				Goamd64: "v1",
 			},
-			exec: func() ([]byte, error) {
+			exec: func(cmd string, args ...string) ([]byte, error) {
+				checkPackCmd(t, cmd, args...)
 				return []byte("success"), nil
 			},
 			published: 1,
@@ -106,17 +110,14 @@ func Test_doRun(t *testing.T) {
 				cmd = stdCmd{}
 			})
 
-			ctx := &context.Context{
-				Git: context.GitInfo{
-					CurrentTag: "v1.0.1",
-				},
-				Version:   "1.0.1",
-				Artifacts: artifact.New(),
-				Config: config.Project{
+			ctx := testctx.NewWithCfg(
+				config.Project{
 					Dist:        folder,
 					ProjectName: "run-all",
 				},
-			}
+				testctx.WithCurrentTag("v1.0.1"),
+				testctx.WithVersion("1.0.1"),
+			)
 
 			ctx.Artifacts.Add(&artifact.Artifact{
 				Name:    "app_1.0.1_windows_amd64.zip",
@@ -149,9 +150,7 @@ func Test_doRun(t *testing.T) {
 }
 
 func Test_buildNuspec(t *testing.T) {
-	ctx := &context.Context{
-		Version: "1.12.3",
-	}
+	ctx := testctx.New(testctx.WithVersion("1.12.3"))
 	choco := config.Chocolatey{
 		Name:        "goreleaser",
 		IDs:         []string{},
@@ -176,14 +175,7 @@ func Test_buildTemplate(t *testing.T) {
 	folder := t.TempDir()
 	file := filepath.Join(folder, "archive")
 	require.NoError(t, os.WriteFile(file, []byte("lorem ipsum"), 0o644))
-
-	ctx := &context.Context{
-		Version: "1.0.0",
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.0",
-		},
-	}
-
+	ctx := testctx.New(testctx.WithVersion("1.0.0"), testctx.WithCurrentTag("v1.0.0"))
 	artifacts := []*artifact.Artifact{
 		{
 			Name:    "app_1.0.0_windows_386.zip",
@@ -223,18 +215,16 @@ func TestPublish(t *testing.T) {
 	file := filepath.Join(folder, "archive")
 	require.NoError(t, os.WriteFile(file, []byte("lorem ipsum"), 0o644))
 
+	fakenu := filepath.Join(t.TempDir(), "foo.nupkg")
+	require.NoError(t, os.WriteFile(fakenu, []byte("fake nupkg"), 0o644))
+
 	tests := []struct {
 		name      string
 		artifacts []artifact.Artifact
-		exec      func() ([]byte, error)
+		exec      func(cmd string, args ...string) ([]byte, error)
 		skip      bool
 		err       string
 	}{
-		{
-			name: "skip publish",
-			skip: true,
-			err:  "publishing is disabled",
-		},
 		{
 			name: "no artifacts",
 		},
@@ -265,7 +255,7 @@ func TestPublish(t *testing.T) {
 					},
 				},
 			},
-			exec: func() ([]byte, error) {
+			exec: func(cmd string, args ...string) ([]byte, error) {
 				return nil, errors.New(`unable to push`)
 			},
 			err: "failed to push chocolatey package: unable to push: ",
@@ -276,15 +266,18 @@ func TestPublish(t *testing.T) {
 				{
 					Type: artifact.PublishableChocolatey,
 					Name: "app.1.0.1.nupkg",
+					Path: fakenu,
 					Extra: map[string]interface{}{
 						artifact.ExtraFormat: nupkgFormat,
 						chocoConfigExtra: config.Chocolatey{
-							APIKey: "abcd",
+							APIKey:     "abcd",
+							SourceRepo: "abc",
 						},
 					},
 				},
 			},
-			exec: func() ([]byte, error) {
+			exec: func(cmd string, args ...string) ([]byte, error) {
+				checkPushCmd(t, cmd, args...)
 				return []byte("success"), nil
 			},
 		},
@@ -297,11 +290,7 @@ func TestPublish(t *testing.T) {
 				cmd = stdCmd{}
 			})
 
-			ctx := &context.Context{
-				SkipPublish: tt.skip,
-				Artifacts:   artifact.New(),
-			}
-
+			ctx := testctx.New()
 			for _, artifact := range tt.artifacts {
 				ctx.Artifacts.Add(&artifact)
 			}
@@ -319,12 +308,33 @@ func TestPublish(t *testing.T) {
 	}
 }
 
+func TestDependencies(t *testing.T) {
+	require.Equal(t, []string{"choco"}, Pipe{}.Dependencies(nil))
+}
+
 type fakeCmd struct {
-	execFn func() ([]byte, error)
+	execFn func(cmd string, args ...string) ([]byte, error)
 }
 
 var _ cmder = fakeCmd{}
 
-func (f fakeCmd) Exec(ctx *context.Context, name string, args ...string) ([]byte, error) {
-	return f.execFn()
+func (f fakeCmd) Exec(_ *context.Context, cmd string, args ...string) ([]byte, error) {
+	return f.execFn(cmd, args...)
+}
+
+func checkPushCmd(tb testing.TB, cmd string, args ...string) {
+	tb.Helper()
+	tb.Log("would have run:", cmd, args)
+	require.Len(tb, args, 6)
+	require.Equal(tb, cmd, "choco")
+	require.FileExists(tb, args[5])
+}
+
+func checkPackCmd(tb testing.TB, cmd string, args ...string) {
+	tb.Helper()
+	tb.Log("would have run:", cmd, args)
+	require.Len(tb, args, 4)
+	require.Equal(tb, cmd, "choco")
+	require.FileExists(tb, args[1])
+	require.DirExists(tb, args[3])
 }

@@ -45,13 +45,17 @@ const (
 	tagContents     = "TagContents"
 	tagBody         = "TagBody"
 	releaseURL      = "ReleaseURL"
+	isGitDirty      = "IsGitDirty"
 	major           = "Major"
 	minor           = "Minor"
 	patch           = "Patch"
 	prerelease      = "Prerelease"
 	isSnapshot      = "IsSnapshot"
+	isNightly       = "IsNightly"
+	isDraft         = "IsDraft"
 	env             = "Env"
 	date            = "Date"
+	now             = "Now"
 	timestamp       = "Timestamp"
 	modulePath      = "ModulePath"
 	releaseNotes    = "ReleaseNotes"
@@ -80,37 +84,46 @@ func New(ctx *context.Context) *Template {
 	sv := ctx.Semver
 	rawVersionV := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
 
+	fields := map[string]interface{}{}
+	for k, v := range map[string]interface{}{
+		projectName:     ctx.Config.ProjectName,
+		modulePath:      ctx.ModulePath,
+		version:         ctx.Version,
+		rawVersion:      rawVersionV,
+		summary:         ctx.Git.Summary,
+		tag:             ctx.Git.CurrentTag,
+		previousTag:     ctx.Git.PreviousTag,
+		branch:          ctx.Git.Branch,
+		commit:          ctx.Git.Commit,
+		shortCommit:     ctx.Git.ShortCommit,
+		fullCommit:      ctx.Git.FullCommit,
+		commitDate:      ctx.Git.CommitDate.UTC().Format(time.RFC3339),
+		commitTimestamp: ctx.Git.CommitDate.UTC().Unix(),
+		gitURL:          ctx.Git.URL,
+		isGitDirty:      ctx.Git.Dirty,
+		env:             ctx.Env,
+		date:            ctx.Date.UTC().Format(time.RFC3339),
+		timestamp:       ctx.Date.UTC().Unix(),
+		now:             ctx.Date.UTC(),
+		major:           ctx.Semver.Major,
+		minor:           ctx.Semver.Minor,
+		patch:           ctx.Semver.Patch,
+		prerelease:      ctx.Semver.Prerelease,
+		isSnapshot:      ctx.Snapshot,
+		isNightly:       false,
+		isDraft:         ctx.Config.Release.Draft,
+		releaseNotes:    ctx.ReleaseNotes,
+		releaseURL:      ctx.ReleaseURL,
+		tagSubject:      ctx.Git.TagSubject,
+		tagContents:     ctx.Git.TagContents,
+		tagBody:         ctx.Git.TagBody,
+		runtimeK:        ctx.Runtime,
+	} {
+		fields[k] = v
+	}
+
 	return &Template{
-		fields: Fields{
-			projectName:     ctx.Config.ProjectName,
-			modulePath:      ctx.ModulePath,
-			version:         ctx.Version,
-			rawVersion:      rawVersionV,
-			tag:             ctx.Git.CurrentTag,
-			previousTag:     ctx.Git.PreviousTag,
-			branch:          ctx.Git.Branch,
-			commit:          ctx.Git.Commit,
-			shortCommit:     ctx.Git.ShortCommit,
-			fullCommit:      ctx.Git.FullCommit,
-			commitDate:      ctx.Git.CommitDate.UTC().Format(time.RFC3339),
-			commitTimestamp: ctx.Git.CommitDate.UTC().Unix(),
-			gitURL:          ctx.Git.URL,
-			summary:         ctx.Git.Summary,
-			tagSubject:      ctx.Git.TagSubject,
-			tagContents:     ctx.Git.TagContents,
-			tagBody:         ctx.Git.TagBody,
-			releaseURL:      ctx.ReleaseURL,
-			env:             ctx.Env,
-			date:            ctx.Date.UTC().Format(time.RFC3339),
-			timestamp:       ctx.Date.UTC().Unix(),
-			major:           ctx.Semver.Major,
-			minor:           ctx.Semver.Minor,
-			patch:           ctx.Semver.Patch,
-			prerelease:      ctx.Semver.Prerelease,
-			isSnapshot:      ctx.Snapshot,
-			releaseNotes:    ctx.ReleaseNotes,
-			runtimeK:        ctx.Runtime,
-		},
+		fields: fields,
 	}
 }
 
@@ -140,22 +153,6 @@ func (t *Template) WithExtraFields(f Fields) *Template {
 	for k, v := range f {
 		t.fields[k] = v
 	}
-	return t
-}
-
-// WithArtifactReplacements populates Fields from the artifact and replacements.
-//
-// Deprecated: use WithArtifact instead.
-func (t *Template) WithArtifactReplacements(a *artifact.Artifact, replacements map[string]string) *Template {
-	t.fields[osKey] = replace(replacements, a.Goos)
-	t.fields[arch] = replace(replacements, a.Goarch)
-	t.fields[arm] = replace(replacements, a.Goarm)
-	t.fields[mips] = replace(replacements, a.Gomips)
-	t.fields[amd64] = replace(replacements, a.Goamd64)
-	t.fields[binary] = artifact.ExtraOr(*a, binary, t.fields[projectName].(string))
-	t.fields[artifactName] = a.Name
-	t.fields[artifactExt] = artifact.ExtraOr(*a, artifact.ExtraExt, "")
-	t.fields[artifactPath] = a.Path
 	return t
 }
 
@@ -207,27 +204,54 @@ func (t *Template) Apply(s string) (string, error) {
 			"time": func(s string) string {
 				return time.Now().UTC().Format(s)
 			},
-			"tolower":       strings.ToLower,
-			"toupper":       strings.ToUpper,
-			"trim":          strings.TrimSpace,
-			"trimprefix":    strings.TrimPrefix,
-			"trimsuffix":    strings.TrimSuffix,
-			"title":         cases.Title(language.English).String,
-			"dir":           filepath.Dir,
-			"abs":           filepath.Abs,
-			"incmajor":      incMajor,
-			"incminor":      incMinor,
-			"incpatch":      incPatch,
-			"filter":        filter(false),
-			"reverseFilter": filter(true),
+			"tolower":        strings.ToLower,
+			"toupper":        strings.ToUpper,
+			"trim":           strings.TrimSpace,
+			"trimprefix":     strings.TrimPrefix,
+			"trimsuffix":     strings.TrimSuffix,
+			"title":          cases.Title(language.English).String,
+			"dir":            filepath.Dir,
+			"base":           filepath.Base,
+			"abs":            filepath.Abs,
+			"incmajor":       incMajor,
+			"incminor":       incMinor,
+			"incpatch":       incPatch,
+			"filter":         filter(false),
+			"reverseFilter":  filter(true),
+			"mdv2escape":     mdv2Escape,
+			"envOrDefault":   t.envOrDefault,
+			"map":            makemap,
+			"indexOrDefault": indexOrDefault,
 		}).
 		Parse(s)
 	if err != nil {
-		return "", err
+		return "", newTmplError(s, err)
 	}
 
 	err = tmpl.Execute(&out, t.fields)
-	return out.String(), err
+	return out.String(), newTmplError(s, err)
+}
+
+// ApplyAll applies all the given strings against the Fields stored in the
+// template. Application stops as soon as an error is encountered.
+func (t *Template) ApplyAll(sps ...*string) error {
+	for _, sp := range sps {
+		s := *sp
+		result, err := t.Apply(s)
+		if err != nil {
+			return newTmplError(s, err)
+		}
+		*sp = result
+	}
+	return nil
+}
+
+func (t *Template) envOrDefault(name, value string) string {
+	s, ok := t.fields[env].(context.Env)[name]
+	if !ok {
+		return value
+	}
+	return s
 }
 
 type ExpectedSingleEnvErr struct{}
@@ -265,15 +289,6 @@ func (t *Template) ApplySingleEnvOnly(s string) (string, error) {
 	return out.String(), err
 }
 
-// deprecated: will be removed soon.
-func replace(replacements map[string]string, original string) string {
-	result := replacements[original]
-	if result == "" {
-		return original
-	}
-	return result
-}
-
 func incMajor(v string) string {
 	return prefix(v) + semver.MustParse(v).IncMajor().String()
 }
@@ -309,4 +324,46 @@ func filter(reverse bool) func(content, exp string) string {
 
 		return strings.Join(lines, "\n")
 	}
+}
+
+func mdv2Escape(s string) string {
+	return strings.NewReplacer(
+		"_", "\\_",
+		"*", "\\*",
+		"[", "\\[",
+		"]", "\\]",
+		"(", "\\(",
+		")", "\\)",
+		"~", "\\~",
+		"`", "\\`",
+		">", "\\>",
+		"#", "\\#",
+		"+", "\\+",
+		"-", "\\-",
+		"=", "\\=",
+		"|", "\\|",
+		"{", "\\{",
+		"}", "\\}",
+		".", "\\.",
+		"!", "\\!",
+	).Replace(s)
+}
+
+func makemap(kvs ...string) (map[string]string, error) {
+	if len(kvs)%2 != 0 {
+		return nil, fmt.Errorf("map expects even number of arguments, got %d", len(kvs))
+	}
+	m := make(map[string]string)
+	for i := 0; i < len(kvs); i += 2 {
+		m[kvs[i]] = kvs[i+1]
+	}
+	return m, nil
+}
+
+func indexOrDefault(m map[string]string, name, value string) string {
+	s, ok := m[name]
+	if ok {
+		return s
+	}
+	return value
 }

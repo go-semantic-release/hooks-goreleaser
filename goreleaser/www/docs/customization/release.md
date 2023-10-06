@@ -18,15 +18,15 @@ release:
     name: repo
 
   # IDs of the archives to use.
-  # Defaults to all.
+  # Empty means all IDs.
+  #
+  # Default: []
   ids:
     - foo
     - bar
 
   # If set to true, will not auto-publish the release.
   # Available only for GitHub and Gitea.
-  #
-  # Default is false.
   draft: true
 
   # Whether to remove existing draft releases with the same name before creating
@@ -34,8 +34,7 @@ release:
   # Only effective if `draft` is set to true.
   # Available only for GitHub.
   #
-  # Default: false.
-  # Since: v1.11.
+  # Since: v1.11
   replace_existing_draft: true
 
   # Useful if you want to delay the creation of the tag in the remote.
@@ -44,9 +43,20 @@ release:
   # value of this field.
   # Only works on GitHub.
   #
-  # Default: empty.
-  # Since: v1.11.
-  target_commitish: '{{ .Commit }}'
+  # Default: ''
+  # Since: v1.11
+  # Templates: allowed
+  target_commitish: "{{ .Commit }}"
+
+  # This allows to change which tag GitHub will create.
+  # Usually you'll use this together with `target_commitish`, or if you want to
+  # publish a binary from a monorepo into a public repository somewhere, without
+  # the tag prefix.
+  #
+  # Default: '{{ .PrefixedCurrentTag }}'
+  # Since: v1.19 (pro)
+  # Templates: allowed
+  tag: "{{ .CurrentTag }}"
 
   # If set, will create a release discussion in the category specified.
   #
@@ -62,6 +72,16 @@ release:
   # Default is false.
   prerelease: auto
 
+  # If set to false, will NOT mark the release as "latest".
+  # This prevents it from being shown at the top of the release list,
+  # and from being returned when calling https://api.github.com/repos/OWNER/REPO/releases/latest.
+  #
+  # Available only for GitHub.
+  #
+  # Default is true.
+  # Since: v1.20.
+  make_latest: true
+
   # What to do with the release notes in case there the release already exists.
   #
   # Valid options are:
@@ -73,57 +93,110 @@ release:
   # Default is `keep-existing`.
   mode: append
 
-  # Header template for the release body.
-  # Defaults to empty.
+  # Header for the release body.
+  #
+  # Templates: allowed
   header: |
     ## Some title ({{ .Date }})
 
     Welcome to this new release!
 
-  # Footer template for the release body.
-  # Defaults to empty.
+  # Header for the release body.
+  #
+  # This feature is only available in GoReleaser Pro.
+  # Since v1.20 (pro)
+  header:
+    # Loads from an URL.
+    from_url:
+      # Templates: allowed
+      url: https://foo.bar/header.md
+      headers:
+        x-api-token: "${MYCOMPANY_TOKEN}"
+
+    # Loads from a local file.
+    # Overrides `from_url`.
+    from_file:
+      # Templates: allowed
+      path: ./header.md
+
+  # Footer for the release body.
+  #
+  # Templates: allowed
   footer: |
-    ## Thanks!
+    ## Thanks
 
     Those were the changes on {{ .Tag }}!
 
+  # Footer for the release body.
+  #
+  # This feature is only available in GoReleaser Pro.
+  # Since v1.20 (pro)
+  footer:
+    # Loads from an URL.
+    from_url:
+      # Templates: allowed
+      url: https://foo.bar/footer.md
+      footers:
+        x-api-token: "${MYCOMPANY_TOKEN}"
+
+    # Loads from a local file.
+    # Overrides `from_url`.
+    from_file:
+      # Templates: allowed
+      path: ./footer.md
+
   # You can change the name of the release.
-  # Default is `{{.Tag}}` on OSS and `{{.PrefixedTag}}` on Pro.
+  #
+  # Default: '{{.Tag}}' ('{{.PrefixedTag}}' on Pro)
+  # Templates: allowed
   name_template: "{{.ProjectName}}-v{{.Version}} {{.Env.USER}}"
 
   # You can disable this pipe in order to not create the release on any SCM.
   # Keep in mind that this might also break things that depend on the release
   # URL, for instance, homebrew taps.
   #
-  # Defaults to false.
-  # Templateable since: v1.15.
+  # Templates: allowed (since v1.15)
   disable: true
 
   # Set this to true if you want to disable just the artifact upload to the SCM.
   # If this is true, GoReleaser will still create the release with the
   # changelog, but won't upload anything to it.
   #
-  # Default: false.
-  # Since: v1.11.
-  # Templateable since: v1.15.
+  # Since: v1.11
+  # Templates: allowed (since v1.15)
   skip_upload: true
 
   # You can add extra pre-existing files to the release.
   # The filename on the release will be the last part of the path (base).
   # If another file with the same name exists, the last one found will be used.
-  # These globs can also include templates.
   #
-  # Defaults to empty.
+  # Templates: allowed
   extra_files:
     - glob: ./path/to/file.txt
     - glob: ./glob/**/to/**/file/**/*
     - glob: ./glob/foo/to/bar/file/foobar/override_from_previous
     - glob: ./single_file.txt
       name_template: file.txt # note that this only works if glob matches 1 file only
+
+  # Additional templated extra files to add to the release.
+  # Those files will have their contents pass through the template engine,
+  # and its results will be added to the release.
+  #
+  # Since: v1.17 (pro)
+  # This feature is only available in GoReleaser Pro.
+  # Templates: allowed
+  templated_extra_files:
+    - src: LICENSE.tpl
+      dst: LICENSE.txt
 ```
 
 !!! tip
+
     [Learn how to set up an API token, GitHub Enterprise, etc](/scm/github/).
+
+!!! success "GoReleaser Pro"
+
+    Some options are exclusive [GoReleaser Pro features](/pro/).
 
 ## GitLab
 
@@ -141,17 +214,17 @@ release:
     name: repo
 
   # IDs of the archives to use.
-  # Defaults to all.
   ids:
     - foo
     - bar
 
   # You can change the name of the release.
-  # Default is `{{.Tag}}` on OSS and `{{.PrefixedTag}}` on Pro.
+  #
+  # Default: '{{.Tag}}' ('{{.PrefixedTag}}' on Pro)
+  # Templates: allowed
   name_template: "{{.ProjectName}}-v{{.Version}} {{.Env.USER}}"
 
   # You can disable this pipe in order to not upload any artifacts.
-  # Defaults to false.
   disable: true
 
   # What to do with the release notes in case there the release already exists.
@@ -162,15 +235,14 @@ release:
   # - `prepend`: prepend the current release notes to the existing notes
   # - `replace`: replace existing notes
   #
-  # Default is `keep-existing`.
+  # Default: 'keep-existing'
   mode: append
 
   # You can add extra pre-existing files to the release.
   # The filename on the release will be the last part of the path (base).
   # If another file with the same name exists, the last one found will be used.
-  # These globs can also include templates.
   #
-  # Defaults to empty.
+  # Templates: allowed
   extra_files:
     - glob: ./path/to/file.txt
     - glob: ./glob/**/to/**/file/**/*
@@ -180,13 +252,16 @@ release:
 ```
 
 !!! tip
+
     [Learn how to set up an API token, self-hosted GitLab, etc](/scm/gitlab/).
 
 !!! tip
+
     If you use GitLab subgroups, you need to specify it in the `owner` field,
     e.g. `mygroup/mysubgroup`.
 
 !!! warning
+
     Only GitLab `v12.9+` is supported for releases.
 
 ## Gitea
@@ -196,23 +271,22 @@ You can also configure the `release` section to upload to a [Gitea](https://gite
 ```yaml
 # .goreleaser.yaml
 release:
-  # Default is empty.
   gitea:
     owner: user
     name: repo
 
   # IDs of the artifacts to use.
-  # Defaults to all.
   ids:
     - foo
     - bar
 
   # You can change the name of the release.
-  # Default is `{{.Tag}}` on OSS and `{{.PrefixedTag}}` on Pro.
+  #
+  # Default: '{{.Tag}}' ('{{.PrefixedTag}}' on Pro)
+  # Templates: allowed
   name_template: "{{.ProjectName}}-v{{.Version}} {{.Env.USER}}"
 
   # You can disable this pipe in order to not upload any artifacts.
-  # Defaults to false.
   disable: true
 
   # What to do with the release notes in case there the release already exists.
@@ -223,15 +297,14 @@ release:
   # - `prepend`: prepend the current release notes to the existing notes
   # - `replace`: replace existing notes
   #
-  # Default is `keep-existing`.
+  # Default: 'keep-existing'
   mode: append
 
   # You can add extra pre-existing files to the release.
   # The filename on the release will be the last part of the path (base).
   # If another file with the same name exists, the last one found will be used.
-  # These globs can also include templates.
   #
-  # Defaults to empty.
+  # Templates: allowed
   extra_files:
     - glob: ./path/to/file.txt
     - glob: ./glob/**/to/**/file/**/*
@@ -249,17 +322,21 @@ ALLOWED_TYPES = application/gzip|application/x-gzip|application/x-gtar|applicati
 ```
 
 !!! tip
+
     [Learn how to set up an API token](/scm/gitea/).
 
 !!! tip
+
     Learn more about the [name template engine](/customization/templates/).
 
 !!! warning
+
     Gitea versions earlier than 1.9.2 do not support uploading `checksums.txt`
     files because of a [bug](https://github.com/go-gitea/gitea/issues/7882),
     so you will have to enable all file types with `*/*`.
 
 !!! warning
+
     `draft` and `prerelease` are only supported by GitHub and Gitea.
 
 ### Define Previous Tag
@@ -285,7 +362,7 @@ list all commits since the last tag, but skip ones starting with `Merge` or
 `docs`, you could run this command:
 
 ```sh
-goreleaser --release-notes <(some_changelog_generator)
+goreleaser release --release-notes <(some_changelog_generator)
 ```
 
 Some changelog generators you can use:
@@ -294,6 +371,7 @@ Some changelog generators you can use:
 - [miniscruff/changie](https://github.com/miniscruff/changie)
 
 !!! info
+
     If you create the release before running GoReleaser, and the said release
     has some text in its body, GoReleaser will not override it with its release
     notes.

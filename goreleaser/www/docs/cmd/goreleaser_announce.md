@@ -29,14 +29,15 @@ goreleaser announce [flags]
   -k, --key string         GoReleaser Pro license key [$GORELEASER_KEY]
       --merge              Merges multiple parts of a --split release
   -p, --parallelism int    Amount tasks to run concurrently (default: number of CPUs)
-      --skip-after         Skips global after hooks
+      --skip strings       Skip the given options (valid options are: after)
       --timeout duration   Timeout to the entire announce process (default 30m0s)
 ```
 
 ## Options inherited from parent commands
 
 ```
-      --debug   Enable debug mode
+      --debug     Enable verbose mode (deprecated)
+      --verbose   Enable verbose mode
 ```
 
 ## See also

@@ -1,6 +1,6 @@
 # Docker Images with Ko
 
-> Since v1.15.
+> Since v1.15
 
 You can also use [ko][] to build and publish Docker container images.
 
@@ -10,9 +10,9 @@ options as the [build][] pipe when possible, so the results will probably be
 cached.
 
 !!! warning
-    Ko only runs on the publish phase, so it might be a bit hard to test — you
-    might need to push to a fake repository (or a fake tag) when playing around
-    with its configuration.
+    Ko only runs on the publishing phase, so it might be a bit hard to test —
+    you might need to push to a fake repository (or a fake tag) when playing
+    around with its configuration.
 
 ```yaml
 # .goreleaser.yaml
@@ -26,79 +26,96 @@ kos:
 
   # Main path to build.
   #
-  # Defaults to the build's main.
+  # Default: build.main
   main: ./cmd/...
 
   # Working directory used to build.
   #
-  # Defaults to the build's dir.
+  # Default: build.dir
   working_dir: .
 
   # Base image to publish to use.
   #
-  # Defaults to cgr.dev/chainguard/static.
+  # Default: 'cgr.dev/chainguard/static'
   base_image: alpine
+
+  # Labels for the image.
+  #
+  # Since: v1.17
+  labels:
+    foo: bar
 
   # Repository to push to.
   #
-  # Defaults to the value of $KO_DOCKER_REPO.
+  # Default: $KO_DOCKER_REPO
   repository: ghcr.io/foo/bar
 
   # Platforms to build and publish.
   #
-  # Defaults to linux/amd64.
+  # Default: 'linux/amd64'
   platforms:
   - linux/amd64
   - linux/arm64
 
-  # Tag templates to build and push.
+  # Tag to build and push.
+  # Empty tags are ignored.
   #
-  # Defaults to `latest`.
+  # Default: 'latest'
+  # Templates: allowed
   tags:
   - latest
   - '{{.Tag}}'
+  - '{{if not .Prerelease}}stable{{end}}'
+
+  # Creation time given to the image
+  # in seconds since the Unix epoch as a string.
+  #
+  # Since: v1.17
+  # Templates: allowed
+  creation_time: '{{.CommitTimestamp}}'
+
+  # Creation time given to the files in the kodata directory
+  # in seconds since the Unix epoch as a string.
+  #
+  # Since: v1.17
+  # Templates: allowed
+  ko_data_creation_time: '{{.CommitTimestamp}}'
 
   # SBOM format to use.
   #
-  # Defaults to spdx.
+  # Default: 'spdx'
   # Valid options are: spdx, cyclonedx, go.version-m and none.
   sbom: none
 
   # Ldflags to use on build.
   #
-  # Defaults to the build's ldflags.
+  # Default: build.ldflags
   ldflags:
   - foo
   - bar
 
   # Flags to use on build.
   #
-  # Defaults to the build's flags.
+  # Default: build.flags
   flags:
   - foo
   - bar
 
   # Env to use on build.
   #
-  # Defaults to the build's env.
+  # Default: build.env
   env:
   - FOO=bar
   - SOMETHING=value
 
 
-  # Bare uses a tag on the KO_DOCKER_REPO without anything additional.
-  #
-  # Defaults to false.
+  # Bare uses a tag on the $KO_DOCKER_REPO without anything additional.
   bare: true
 
   # Whether to preserve the full import path after the repository name.
-  #
-  # Defaults to false.
   preserve_import_paths: true
 
   # Whether to use the base path without the MD5 hash after the repository name.
-  #
-  # Defaults to false.
   base_import_paths: true
 ```
 
@@ -139,6 +156,18 @@ kos:
 
 This will build the binaries for `linux/arm64`, `linux/amd64`, `darwin/amd64`
 and `darwin/arm64`, as well as the Docker images and manifest for Linux.
+
+# Signing KO manifests
+
+KO will add the built manifest to the artifact list, so you can sign them with
+`docker_signs`:
+
+```yaml
+# .goreleaser.yml
+docker_signs:
+  -
+    artifacts: manifests
+```
 
 [ko]: https://ko.build
 [build]: /customization/build/

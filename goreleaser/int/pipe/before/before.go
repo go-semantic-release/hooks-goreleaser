@@ -11,6 +11,7 @@ import (
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/gio"
 	"github.com/goreleaser/goreleaser/int/logext"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
@@ -19,8 +20,9 @@ import (
 type Pipe struct{}
 
 func (Pipe) String() string { return "running before hooks" }
+
 func (Pipe) Skip(ctx *context.Context) bool {
-	return len(ctx.Config.Before.Hooks) == 0 || ctx.SkipBefore
+	return len(ctx.Config.Before.Hooks) == 0 || skips.Any(ctx, skips.Before)
 }
 
 // Run executes the hooks.
@@ -42,11 +44,10 @@ func (Pipe) Run(ctx *context.Context) error {
 
 		var b bytes.Buffer
 		w := gio.Safe(&b)
-		fields := log.Fields{"hook": step}
 		cmd.Stderr = io.MultiWriter(logext.NewWriter(), w)
 		cmd.Stdout = io.MultiWriter(logext.NewWriter(), w)
 
-		log.WithFields(fields).Info("running")
+		log.WithField("hook", step).Info("running")
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("hook failed: %s: %w; output: %s", step, err, b.String())
 		}

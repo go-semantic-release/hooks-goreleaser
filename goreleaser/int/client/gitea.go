@@ -21,6 +21,8 @@ type giteaClient struct {
 	client *gitea.Client
 }
 
+var _ Client = &giteaClient{}
+
 func getInstanceURL(ctx *context.Context) (string, error) {
 	apiURL, err := tmpl.New(ctx).Apply(ctx.Config.GiteaURLs.API)
 	if err != nil {
@@ -34,13 +36,13 @@ func getInstanceURL(ctx *context.Context) (string, error) {
 	u.Path = ""
 	rawurl := u.String()
 	if rawurl == "" {
-		return "", fmt.Errorf("invalid URL: %v", apiURL)
+		return "", fmt.Errorf("invalid URL: %q", ctx.Config.GiteaURLs.API)
 	}
 	return rawurl, nil
 }
 
-// NewGitea returns a gitea client implementation.
-func NewGitea(ctx *context.Context, token string) (Client, error) {
+// newGitea returns a gitea client implementation.
+func newGitea(ctx *context.Context, token string) (*giteaClient, error) {
 	instanceURL, err := getInstanceURL(ctx)
 	if err != nil {
 		return nil, err
@@ -53,10 +55,13 @@ func NewGitea(ctx *context.Context, token string) (Client, error) {
 		},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client, err := gitea.NewClient(instanceURL,
-		gitea.SetToken(token),
+	options := []gitea.ClientOption{
 		gitea.SetHTTPClient(httpClient),
-	)
+	}
+	if token != "giteatoken" { // token used in tests
+		options = append(options, gitea.SetToken(token))
+	}
+	client, err := gitea.NewClient(instanceURL, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -68,12 +73,12 @@ func NewGitea(ctx *context.Context, token string) (Client, error) {
 	return &giteaClient{client: client}, nil
 }
 
-func (c *giteaClient) Changelog(ctx *context.Context, repo Repo, prev, current string) (string, error) {
+func (c *giteaClient) Changelog(_ *context.Context, _ Repo, _, _ string) (string, error) {
 	return "", ErrNotImplemented
 }
 
 // CloseMilestone closes a given milestone.
-func (c *giteaClient) CloseMilestone(ctx *context.Context, repo Repo, title string) error {
+func (c *giteaClient) CloseMilestone(_ *context.Context, repo Repo, title string) error {
 	closedState := gitea.StateClosed
 	opts := gitea.EditMilestoneOption{
 		State: &closedState,
@@ -87,15 +92,14 @@ func (c *giteaClient) CloseMilestone(ctx *context.Context, repo Repo, title stri
 	return err
 }
 
-func (c *giteaClient) GetDefaultBranch(ctx *context.Context, repo Repo) (string, error) {
+func (c *giteaClient) getDefaultBranch(_ *context.Context, repo Repo) (string, error) {
 	projectID := repo.String()
 	p, res, err := c.client.GetRepo(repo.Owner, repo.Name)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"projectID":  projectID,
-			"statusCode": res.StatusCode,
-			"err":        err.Error(),
-		}).Warn("error checking for default branch")
+		log.WithField("projectID", projectID).
+			WithField("statusCode", res.StatusCode).
+			WithError(err).
+			Warn("error checking for default branch")
 		return "", err
 	}
 	return p.DefaultBranch, nil
@@ -117,15 +121,14 @@ func (c *giteaClient) CreateFile(
 	if repo.Branch != "" {
 		branch = repo.Branch
 	} else {
-		branch, err = c.GetDefaultBranch(ctx, repo)
+		branch, err = c.getDefaultBranch(ctx, repo)
 		if err != nil {
 			// Fall back to 'master' 😭
-			log.WithFields(log.Fields{
-				"fileName":        path,
-				"projectID":       repo.String(),
-				"requestedBranch": branch,
-				"err":             err.Error(),
-			}).Warn("error checking for default branch, using master")
+			log.WithField("fileName", path).
+				WithField("projectID", repo.String()).
+				WithField("requestedBranch", branch).
+				WithError(err).
+				Warn("error checking for default branch, using master")
 		}
 
 	}
@@ -142,6 +145,12 @@ func (c *giteaClient) CreateFile(
 			Email: commitAuthor.Email,
 		},
 	}
+
+	log.
+		WithField("repository", repo.String()).
+		WithField("name", repo.Name).
+		WithField("name", repo.Name).
+		Info("pushing")
 
 	currentFile, resp, err := c.client.GetContents(repo.Owner, repo.Name, branch, path)
 	// file not exist, create it
@@ -181,9 +190,7 @@ func (c *giteaClient) createRelease(ctx *context.Context, title, body string) (*
 	}
 	release, _, err := c.client.CreateRelease(owner, repoName, opts)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err.Error(),
-		}).Debug("error creating Gitea release")
+		log.WithError(err).Debug("error creating Gitea release")
 		return nil, err
 	}
 	log.WithField("id", release.ID).Info("Gitea release created")
@@ -222,9 +229,7 @@ func (c *giteaClient) updateRelease(ctx *context.Context, title, body string, id
 
 	release, _, err := c.client.EditRelease(owner, repoName, id, opts)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err.Error(),
-		}).Debug("error updating Gitea release")
+		log.WithError(err).Debug("error updating Gitea release")
 		return nil, err
 	}
 	log.WithField("id", release.ID).Info("Gitea release updated")

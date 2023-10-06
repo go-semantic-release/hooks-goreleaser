@@ -45,22 +45,20 @@ type manifester interface {
 
 // nolint: unparam
 func runCommand(ctx *context.Context, dir, binary string, args ...string) error {
-	fields := log.Fields{
-		"cmd": append([]string{binary}, args[0]),
-		"cwd": dir,
-	}
-
 	/* #nosec */
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
-	cmd.Env = ctx.Env.Strings()
+	cmd.Env = append(ctx.Env.Strings(), cmd.Environ()...)
 
 	var b bytes.Buffer
 	w := gio.Safe(&b)
 	cmd.Stderr = io.MultiWriter(logext.NewWriter(), w)
 	cmd.Stdout = io.MultiWriter(logext.NewWriter(), w)
 
-	log.WithFields(fields).WithField("args", args[1:]).Debug("running")
+	log.
+		WithField("cmd", append([]string{binary}, args[0])).
+		WithField("cwd", dir).
+		WithField("args", args[1:]).Debug("running")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: %s", err, b.String())
 	}
@@ -68,21 +66,20 @@ func runCommand(ctx *context.Context, dir, binary string, args ...string) error 
 }
 
 func runCommandWithOutput(ctx *context.Context, dir, binary string, args ...string) ([]byte, error) {
-	fields := log.Fields{
-		"cmd": append([]string{binary}, args[0]),
-		"cwd": dir,
-	}
-
 	/* #nosec */
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
-	cmd.Env = ctx.Env.Strings()
+	cmd.Env = append(ctx.Env.Strings(), cmd.Environ()...)
 
 	var b bytes.Buffer
 	w := gio.Safe(&b)
 	cmd.Stderr = io.MultiWriter(logext.NewWriter(), w)
 
-	log.WithFields(fields).WithField("args", args[1:]).Debug("running")
+	log.
+		WithField("cmd", append([]string{binary}, args[0])).
+		WithField("cwd", dir).
+		WithField("args", args[1:]).
+		Debug("running")
 	out, err := cmd.Output()
 	if out != nil {
 		// regardless of command success, always print stdout for backward-compatibility with runCommand()

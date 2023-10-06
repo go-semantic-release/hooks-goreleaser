@@ -38,8 +38,13 @@ const (
 // Pipe for checksums.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "generating changelog" }
-func (Pipe) Skip(ctx *context.Context) bool { return ctx.Config.Changelog.Skip || ctx.Snapshot }
+func (Pipe) String() string { return "generating changelog" }
+func (Pipe) Skip(ctx *context.Context) (bool, error) {
+	if ctx.Snapshot {
+		return true, nil
+	}
+	return tmpl.New(ctx).Bool(ctx.Config.Changelog.Skip)
+}
 
 // Run the pipe.
 func (Pipe) Run(ctx *context.Context) error {
@@ -264,7 +269,19 @@ func buildChangelog(ctx *context.Context) ([]string, error) {
 }
 
 func filterEntries(ctx *context.Context, entries []string) ([]string, error) {
-	for _, filter := range ctx.Config.Changelog.Filters.Exclude {
+	filters := ctx.Config.Changelog.Filters
+	if len(filters.Include) > 0 {
+		var newEntries []string
+		for _, filter := range filters.Include {
+			r, err := regexp.Compile(filter)
+			if err != nil {
+				return entries, err
+			}
+			newEntries = append(newEntries, keep(r, entries)...)
+		}
+		return newEntries, nil
+	}
+	for _, filter := range filters.Exclude {
 		r, err := regexp.Compile(filter)
 		if err != nil {
 			return entries, err
@@ -289,6 +306,15 @@ func sortEntries(ctx *context.Context, entries []string) []string {
 		}
 		return strings.Compare(imsg, jmsg) > 0
 	})
+	return result
+}
+
+func keep(filter *regexp.Regexp, entries []string) (result []string) {
+	for _, entry := range entries {
+		if filter.MatchString(extractCommitInfo(entry)) {
+			result = append(result, entry)
+		}
+	}
 	return result
 }
 
@@ -323,7 +349,7 @@ func getChangeloger(ctx *context.Context) (changeloger, error) {
 }
 
 func newGithubChangeloger(ctx *context.Context) (changeloger, error) {
-	cli, err := client.NewGitHub(ctx, ctx.Token)
+	cli, err := client.NewGitHubReleaseNotesGenerator(ctx, ctx.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +446,7 @@ func (c *scmChangeloger) Log(ctx *context.Context) (string, error) {
 }
 
 type githubNativeChangeloger struct {
-	client client.GitHubClient
+	client client.ReleaseNotesGenerator
 	repo   client.Repo
 }
 

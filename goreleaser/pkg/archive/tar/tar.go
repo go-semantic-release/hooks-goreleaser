@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -12,14 +13,39 @@ import (
 
 // Archive as tar.
 type Archive struct {
-	tw *tar.Writer
+	tw    *tar.Writer
+	files map[string]bool
 }
 
 // New tar archive.
 func New(target io.Writer) Archive {
 	return Archive{
-		tw: tar.NewWriter(target),
+		tw:    tar.NewWriter(target),
+		files: map[string]bool{},
 	}
+}
+
+// Copying creates a new tar with the contents of the given tar.
+func Copying(source io.Reader, target io.Writer) (Archive, error) {
+	w := New(target)
+	r := tar.NewReader(source)
+	for {
+		header, err := r.Next()
+		if err == io.EOF || header == nil {
+			break
+		}
+		if err != nil {
+			return Archive{}, err
+		}
+		w.files[header.Name] = true
+		if err := w.tw.WriteHeader(header); err != nil {
+			return w, err
+		}
+		if _, err := io.Copy(w.tw, r); err != nil {
+			return w, err
+		}
+	}
+	return w, nil
 }
 
 // Close all closeables.
@@ -29,6 +55,10 @@ func (a Archive) Close() error {
 
 // Add file to the archive.
 func (a Archive) Add(f config.File) error {
+	if _, ok := a.files[f.Destination]; ok {
+		return &fs.PathError{Err: fs.ErrExist, Path: f.Destination, Op: "add"}
+	}
+	a.files[f.Destination] = true
 	info, err := os.Lstat(f.Source) // #nosec
 	if err != nil {
 		return fmt.Errorf("%s: %w", f.Source, err)

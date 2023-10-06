@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/archivefiles"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/deprecate"
+	"github.com/goreleaser/goreleaser/int/gio"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/archive"
-	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 
@@ -30,50 +29,81 @@ func (Pipe) Skip(ctx *context.Context) bool {
 }
 
 // Run the pipe.
-func (Pipe) Run(ctx *context.Context) (err error) {
+func (Pipe) Run(ctx *context.Context) error {
+	format := ctx.Config.Source.Format
+	if format != "zip" && format != "tar" && format != "tgz" && format != "tar.gz" {
+		return fmt.Errorf("invalid source archive format: %s", format)
+	}
 	name, err := tmpl.New(ctx).Apply(ctx.Config.Source.NameTemplate)
 	if err != nil {
 		return err
 	}
-	filename := name + "." + ctx.Config.Source.Format
+	filename := name + "." + format
 	path := filepath.Join(ctx.Config.Dist, filename)
 	log.WithField("file", filename).Info("creating source archive")
-
-	out, err := git.Run(ctx, "ls-files")
-	if err != nil {
-		return fmt.Errorf("could not list source files: %w", err)
+	args := []string{
+		"archive",
+		"-o", path,
 	}
 
-	prefix, err := tmpl.New(ctx).Apply(ctx.Config.Source.PrefixTemplate)
-	if err != nil {
+	prefix := ""
+	if ctx.Config.Source.PrefixTemplate != "" {
+		pt, err := tmpl.New(ctx).Apply(ctx.Config.Source.PrefixTemplate)
+		if err != nil {
+			return err
+		}
+		prefix = pt
+		args = append(args, "--prefix", prefix)
+	}
+	args = append(args, ctx.Git.FullCommit)
+
+	if _, err := git.Clean(git.Run(ctx, args...)); err != nil {
 		return err
 	}
 
-	af, err := os.Create(path)
+	if len(ctx.Config.Source.Files) > 0 {
+		if err := appendExtraFilesToArchive(ctx, prefix, path, format); err != nil {
+			return err
+		}
+	}
+
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Type: artifact.UploadableSourceArchive,
+		Name: filename,
+		Path: path,
+		Extra: map[string]interface{}{
+			artifact.ExtraFormat: format,
+		},
+	})
+	return err
+}
+
+func appendExtraFilesToArchive(ctx *context.Context, prefix, path, format string) error {
+	oldPath := path + ".bkp"
+	if err := gio.Copy(path, oldPath); err != nil {
+		return fmt.Errorf("failed make a backup of %q: %w", path, err)
+	}
+
+	// i could spend a lot of time trying to figure out how to append to a tar,
+	// tgz and zip file... but... this seems easy enough :)
+	of, err := os.Open(oldPath)
 	if err != nil {
-		return fmt.Errorf("could not create archive: %w", err)
+		return fmt.Errorf("could not open %q: %w", oldPath, err)
+	}
+	defer of.Close()
+
+	af, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("could not open archive: %w", err)
 	}
 	defer af.Close() //nolint:errcheck
 
-	arch, err := archive.New(af, ctx.Config.Source.Format)
+	arch, err := archive.Copying(of, af, format)
 	if err != nil {
 		return err
 	}
 
-	var ff []config.File
-	for _, f := range strings.Split(out, "\n") {
-		if strings.TrimSpace(f) == "" {
-			continue
-		}
-		ff = append(ff, config.File{
-			Source: f,
-		})
-	}
-	files, err := archivefiles.Eval(
-		tmpl.New(ctx),
-		ctx.Config.Source.RLCP,
-		append(ff, ctx.Config.Source.Files...),
-	)
+	files, err := archivefiles.Eval(tmpl.New(ctx), ctx.Config.Source.Files)
 	if err != nil {
 		return err
 	}
@@ -90,16 +120,7 @@ func (Pipe) Run(ctx *context.Context) (err error) {
 	if err := af.Close(); err != nil {
 		return fmt.Errorf("could not close archive file: %w", err)
 	}
-
-	ctx.Artifacts.Add(&artifact.Artifact{
-		Type: artifact.UploadableSourceArchive,
-		Name: filename,
-		Path: path,
-		Extra: map[string]interface{}{
-			artifact.ExtraFormat: ctx.Config.Source.Format,
-		},
-	})
-	return err
+	return nil
 }
 
 // Default sets the pipe defaults.
@@ -113,8 +134,8 @@ func (Pipe) Default(ctx *context.Context) error {
 		archive.NameTemplate = "{{ .ProjectName }}-{{ .Version }}"
 	}
 
-	if archive.Enabled && !archive.RLCP {
-		deprecate.NoticeCustom(ctx, "source.rlcp", "`{{ .Property }}` will be the default soon, check {{ .URL }} for more info")
+	if archive.Enabled && archive.RLCP != "" {
+		deprecate.Notice(ctx, "source.rlcp")
 	}
 	return nil
 }

@@ -9,14 +9,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/keygen"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
+	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
+
+func TestContinueOnError(t *testing.T) {
+	require.True(t, Pipe{}.ContinueOnError())
+}
 
 func TestDescription(t *testing.T) {
 	require.NotEmpty(t, Pipe{}.String())
@@ -128,79 +135,95 @@ func TestSimple(t *testing.T) {
 
 func TestFullPipe(t *testing.T) {
 	type testcase struct {
-		prepare              func(ctx *context.Context)
-		expectedRunError     string
-		expectedPublishError string
+		prepare                func(ctx *context.Context)
+		expectedRunError       string
+		expectedRunErrorAs     any
+		expectedPublishError   string
+		expectedPublishErrorAs any
 	}
 	for name, tt := range map[string]testcase{
 		"default": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Homepage = "https://github.com/goreleaser"
+			},
+		},
+		"git_remote": {
+			prepare: func(ctx *context.Context) {
+				ctx.TokenType = context.TokenTypeGitHub
+				ctx.Config.Krews[0].Homepage = "https://github.com/goreleaser"
+				ctx.Config.Krews[0].Repository = config.RepoRef{
+					Name:   "test",
+					Branch: "main",
+					Git: config.GitRepoRef{
+						URL:        testlib.GitMakeBareRepository(t),
+						PrivateKey: testlib.MakeNewSSHKey(t, keygen.Ed25519, ""),
+					},
+				}
 			},
 		},
 		"default_gitlab": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitLab
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Homepage = "https://gitlab.com/goreleaser"
 			},
 		},
 		"invalid_commit_template": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].CommitMessageTemplate = "{{ .Asdsa }"
 			},
-			expectedPublishError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedPublishErrorAs: &tmpl.Error{},
 		},
 		"invalid desc": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Description = "{{ .Asdsa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 		"invalid short desc": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].ShortDescription = "{{ .Asdsa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 		"invalid homepage": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Homepage = "{{ .Asdsa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 		"invalid name": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Name = "{{ .Asdsa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 		"invalid caveats": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Caveats = "{{ .Asdsa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 		"no short desc": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Description = "lalala"
 				ctx.Config.Krews[0].ShortDescription = ""
 			},
@@ -208,8 +231,8 @@ func TestFullPipe(t *testing.T) {
 		},
 		"no desc": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Krews[0].Index.Owner = "test"
-				ctx.Config.Krews[0].Index.Name = "test"
+				ctx.Config.Krews[0].Repository.Owner = "test"
+				ctx.Config.Krews[0].Repository.Name = "test"
 				ctx.Config.Krews[0].Description = ""
 				ctx.Config.Krews[0].ShortDescription = "lalala"
 			},
@@ -218,17 +241,9 @@ func TestFullPipe(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			folder := t.TempDir()
-			ctx := &context.Context{
-				Git: context.GitInfo{
-					CurrentTag: "v1.0.1",
-				},
-				Version:   "1.0.1",
-				Artifacts: artifact.New(),
-				Env: map[string]string{
-					"FOO": "foo_is_bar",
-					"BAR": "honk",
-				},
-				Config: config.Project{
+
+			ctx := testctx.NewWithCfg(
+				config.Project{
 					Dist:        folder,
 					ProjectName: name,
 					Krews: []config.Krew{
@@ -239,8 +254,11 @@ func TestFullPipe(t *testing.T) {
 							ShortDescription: "short desc {{.Env.BAR}}",
 						},
 					},
+					Env: []string{"FOO=foo_is_bar", "BAR=honk"},
 				},
-			}
+				testctx.WithCurrentTag("v1.0.1"),
+				testctx.WithVersion("1.0.1"),
+			)
 			tt.prepare(ctx)
 			ctx.Artifacts.Add(&artifact.Artifact{
 				Name:    "bar_bin.tar.gz",
@@ -286,12 +304,17 @@ func TestFullPipe(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
 			client := client.NewMock()
-			distFile := filepath.Join(folder, name+".yaml")
+			distFile := filepath.Join(folder, "krew", name+".yaml")
 
 			require.NoError(t, Pipe{}.Default(ctx))
+
 			err = runAll(ctx, client)
 			if tt.expectedRunError != "" {
 				require.EqualError(t, err, tt.expectedRunError)
+				return
+			}
+			if tt.expectedRunErrorAs != nil {
+				require.ErrorAs(t, err, tt.expectedRunErrorAs)
 				return
 			}
 			require.NoError(t, err)
@@ -301,28 +324,91 @@ func TestFullPipe(t *testing.T) {
 				require.EqualError(t, err, tt.expectedPublishError)
 				return
 			}
-
+			if tt.expectedPublishErrorAs != nil {
+				require.ErrorAs(t, err, tt.expectedPublishErrorAs)
+				return
+			}
 			require.NoError(t, err)
-			require.True(t, client.CreatedFile)
-			golden.RequireEqualYaml(t, []byte(client.Content))
+
+			content := []byte(client.Content)
+			if url := ctx.Config.Krews[0].Repository.Git.URL; url == "" {
+				require.True(t, client.CreatedFile, "should have created a file")
+			} else {
+				content = testlib.CatFileFromBareRepositoryOnBranch(
+					t, url,
+					ctx.Config.Krews[0].Repository.Branch,
+					"plugins/"+name+".yaml",
+				)
+			}
+
+			golden.RequireEqualYaml(t, content)
 			requireValidManifest(t)
 
 			distBts, err := os.ReadFile(distFile)
 			require.NoError(t, err)
-			require.Equal(t, client.Content, string(distBts))
+			require.Equal(t, string(content), string(distBts))
 		})
 	}
 }
 
+func TestRunPipePullRequest(t *testing.T) {
+	folder := t.TempDir()
+	ctx := testctx.NewWithCfg(
+		config.Project{
+			Dist:        folder,
+			ProjectName: "foo",
+			Krews: []config.Krew{
+				{
+					Name:             "foo",
+					Homepage:         "https://goreleaser.com",
+					ShortDescription: "test",
+					Description:      "Fake desc",
+					Repository: config.RepoRef{
+						Owner:  "foo",
+						Name:   "bar",
+						Branch: "update-{{.Version}}",
+						PullRequest: config.PullRequest{
+							Enabled: true,
+						},
+					},
+				},
+			},
+		},
+		testctx.WithVersion("1.2.1"),
+		testctx.WithCurrentTag("v1.2.1"),
+	)
+	path := filepath.Join(folder, "dist/foo_darwin_all/foo")
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Name:   "foo_macos.tar.gz",
+		Path:   path,
+		Goos:   "darwin",
+		Goarch: "all",
+		Type:   artifact.UploadableArchive,
+		Extra: map[string]interface{}{
+			artifact.ExtraID:       "foo",
+			artifact.ExtraFormat:   "tar.gz",
+			artifact.ExtraBinaries: []string{"foo"},
+		},
+	})
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	client := client.NewMock()
+	require.NoError(t, runAll(ctx, client))
+	require.NoError(t, publishAll(ctx, client))
+	require.True(t, client.CreatedFile)
+	require.True(t, client.OpenedPullRequest)
+	golden.RequireEqualYaml(t, []byte(client.Content))
+}
+
 func TestRunPipeUniversalBinary(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Config: config.Project{
+
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "unibin",
 			Krews: []config.Krew{
@@ -330,7 +416,7 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 					Name:             manifestName(t),
 					Description:      "Some desc",
 					ShortDescription: "Short desc",
-					Index: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "unibin",
 						Name:  "bar",
 					},
@@ -340,7 +426,10 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 				},
 			},
 		},
-	}
+		testctx.WithCurrentTag("v1.0.1"),
+		testctx.WithVersion("1.0.1"),
+	)
+
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:   "unibin.tar.gz",
@@ -360,7 +449,7 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	client := client.NewMock()
-	distFile := filepath.Join(folder, manifestName(t)+".yaml")
+	distFile := filepath.Join(folder, "krew", manifestName(t)+".yaml")
 
 	require.NoError(t, runAll(ctx, client))
 	require.NoError(t, publishAll(ctx, client))
@@ -374,13 +463,8 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 
 func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "unibin",
 			Krews: []config.Krew{
@@ -388,7 +472,7 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 					Name:             manifestName(t),
 					Description:      "Some desc",
 					ShortDescription: "Short desc",
-					Index: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "unibin",
 						Name:  "bar",
 					},
@@ -398,7 +482,9 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 				},
 			},
 		},
-	}
+		testctx.WithCurrentTag("v1.0.1"),
+		testctx.WithVersion("1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:    "unibin_amd64.tar.gz",
@@ -444,7 +530,7 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	client := client.NewMock()
-	distFile := filepath.Join(folder, manifestName(t)+".yaml")
+	distFile := filepath.Join(folder, "krew", manifestName(t)+".yaml")
 
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.NoError(t, runAll(ctx, client))
@@ -459,16 +545,8 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 
 func TestRunPipeNameTemplate(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Env: map[string]string{
-			"FOO_BAR": t.Name(),
-		},
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "foo",
 			Krews: []config.Krew{
@@ -476,7 +554,7 @@ func TestRunPipeNameTemplate(t *testing.T) {
 					Name:             "{{ .Env.FOO_BAR }}",
 					Description:      "Some desc",
 					ShortDescription: "Short desc",
-					Index: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -485,8 +563,11 @@ func TestRunPipeNameTemplate(t *testing.T) {
 					},
 				},
 			},
+			Env: []string{"FOO_BAR=" + t.Name()},
 		},
-	}
+		testctx.WithCurrentTag("v1.0.1"),
+		testctx.WithVersion("1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:    "bin.tar.gz",
@@ -506,7 +587,7 @@ func TestRunPipeNameTemplate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	client := client.NewMock()
-	distFile := filepath.Join(folder, t.Name()+".yaml")
+	distFile := filepath.Join(folder, "krew", t.Name()+".yaml")
 
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.NoError(t, runAll(ctx, client))
@@ -521,16 +602,8 @@ func TestRunPipeNameTemplate(t *testing.T) {
 
 func TestRunPipeMultipleKrewWithSkip(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Env: map[string]string{
-			"FOO_BAR": "is_bar",
-		},
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "foo",
 			Krews: []config.Krew{
@@ -538,7 +611,7 @@ func TestRunPipeMultipleKrewWithSkip(t *testing.T) {
 					Name:             "foo",
 					Description:      "Some desc",
 					ShortDescription: "Short desc",
-					Index: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -551,7 +624,7 @@ func TestRunPipeMultipleKrewWithSkip(t *testing.T) {
 					Name:             "bar",
 					Description:      "Some desc",
 					ShortDescription: "Short desc",
-					Index: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -563,7 +636,7 @@ func TestRunPipeMultipleKrewWithSkip(t *testing.T) {
 					Name:             "foobar",
 					Description:      "Some desc",
 					ShortDescription: "Short desc",
-					Index: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -573,8 +646,11 @@ func TestRunPipeMultipleKrewWithSkip(t *testing.T) {
 					SkipUpload: "true",
 				},
 			},
+			Env: []string{"FOO_BAR=is_bar"},
 		},
-	}
+		testctx.WithCurrentTag("v1.0.1"),
+		testctx.WithVersion("1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:    "bin.tar.gz",
@@ -601,7 +677,7 @@ func TestRunPipeMultipleKrewWithSkip(t *testing.T) {
 	require.True(t, cli.CreatedFile)
 
 	for _, manifest := range ctx.Config.Krews {
-		distFile := filepath.Join(folder, manifest.Name+".yaml")
+		distFile := filepath.Join(folder, "krew", manifest.Name+".yaml")
 		_, err := os.Stat(distFile)
 		require.NoError(t, err, "file should exist: "+distFile)
 	}
@@ -621,17 +697,8 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			folder := t.TempDir()
-			ctx := &context.Context{
-				TokenType: context.TokenTypeGitHub,
-				Git: context.GitInfo{
-					CurrentTag: "v1.0.1",
-				},
-				Version:   "1.0.1",
-				Artifacts: artifact.New(),
-				Env: map[string]string{
-					"FOO": "foo_is_bar",
-				},
-				Config: config.Project{
+			ctx := testctx.NewWithCfg(
+				config.Project{
 					Dist:        folder,
 					ProjectName: name,
 					Krews: []config.Krew{
@@ -639,7 +706,7 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 							Name:             name,
 							ShortDescription: "Short desc",
 							Description:      "A run pipe test krew manifest and FOO={{ .Env.FOO }}",
-							Index: config.RepoRef{
+							Repository: config.RepoRef{
 								Owner: "test",
 								Name:  "test",
 							},
@@ -655,8 +722,12 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 							Name:  "test",
 						},
 					},
+					Env: []string{"FOO=foo_is_bar"},
 				},
-			}
+				testctx.GitHubTokenType,
+				testctx.WithVersion("1.0.1"),
+				testctx.WithCurrentTag("v1.0.1"),
+			)
 			fn(ctx)
 			for _, a := range []struct {
 				name   string
@@ -714,7 +785,7 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 			}
 
 			client := client.NewMock()
-			distFile := filepath.Join(folder, name+".yaml")
+			distFile := filepath.Join(folder, "krew", name+".yaml")
 
 			require.NoError(t, Pipe{}.Default(ctx))
 			require.NoError(t, runAll(ctx, client))
@@ -731,22 +802,19 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 }
 
 func TestRunPipeNoBuilds(t *testing.T) {
-	ctx := context.New(
-		config.Project{
-			Krews: []config.Krew{
-				{
-					Name:             manifestName(t),
-					Description:      "Some desc",
-					ShortDescription: "Short desc",
-					Index: config.RepoRef{
-						Owner: "test",
-						Name:  "test",
-					},
+	ctx := testctx.NewWithCfg(config.Project{
+		Krews: []config.Krew{
+			{
+				Name:             manifestName(t),
+				Description:      "Some desc",
+				ShortDescription: "Short desc",
+				Repository: config.RepoRef{
+					Owner: "test",
+					Name:  "test",
 				},
 			},
 		},
-	)
-	ctx.TokenType = context.TokenTypeGitHub
+	}, testctx.GitHubTokenType)
 	client := client.NewMock()
 	require.Equal(t, ErrNoArchivesFound, runAll(ctx, client))
 	require.False(t, client.CreatedFile)
@@ -754,7 +822,7 @@ func TestRunPipeNoBuilds(t *testing.T) {
 
 func TestRunPipeNoUpload(t *testing.T) {
 	folder := t.TempDir()
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist:        folder,
 		ProjectName: "foo",
 		Release:     config.Release{},
@@ -763,15 +831,13 @@ func TestRunPipeNoUpload(t *testing.T) {
 				Name:             manifestName(t),
 				Description:      "Some desc",
 				ShortDescription: "Short desc",
-				Index: config.RepoRef{
+				Repository: config.RepoRef{
 					Owner: "test",
 					Name:  "test",
 				},
 			},
 		},
-	})
-	ctx.TokenType = context.TokenTypeGitHub
-	ctx.Git = context.GitInfo{CurrentTag: "v1.0.1"}
+	}, testctx.GitHubTokenType, testctx.WithCurrentTag("v1.0.1"))
 	path := filepath.Join(folder, "whatever.tar.gz")
 	f, err := os.Create(path)
 	require.NoError(t, err)
@@ -812,7 +878,7 @@ func TestRunPipeNoUpload(t *testing.T) {
 
 func TestRunEmptyTokenType(t *testing.T) {
 	folder := t.TempDir()
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist:        folder,
 		ProjectName: "foo",
 		Release:     config.Release{},
@@ -821,14 +887,13 @@ func TestRunEmptyTokenType(t *testing.T) {
 				Name:             manifestName(t),
 				Description:      "Some desc",
 				ShortDescription: "Short desc",
-				Index: config.RepoRef{
+				Repository: config.RepoRef{
 					Owner: "test",
 					Name:  "test",
 				},
 			},
 		},
-	})
-	ctx.Git = context.GitInfo{CurrentTag: "v1.0.1"}
+	}, testctx.WithCurrentTag("v1.0.1"))
 	path := filepath.Join(folder, "whatever.tar.gz")
 	f, err := os.Create(path)
 	require.NoError(t, err)
@@ -853,7 +918,7 @@ func TestRunEmptyTokenType(t *testing.T) {
 
 func TestRunMultipleBinaries(t *testing.T) {
 	folder := t.TempDir()
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist:        folder,
 		ProjectName: "foo",
 		Release:     config.Release{},
@@ -862,14 +927,13 @@ func TestRunMultipleBinaries(t *testing.T) {
 				Name:             manifestName(t),
 				Description:      "Some desc",
 				ShortDescription: "Short desc",
-				Index: config.RepoRef{
+				Repository: config.RepoRef{
 					Owner: "test",
 					Name:  "test",
 				},
 			},
 		},
-	})
-	ctx.Git = context.GitInfo{CurrentTag: "v1.0.1"}
+	}, testctx.WithCurrentTag("v1.0.1"))
 	path := filepath.Join(folder, "whatever.tar.gz")
 	f, err := os.Create(path)
 	require.NoError(t, err)
@@ -895,20 +959,25 @@ func TestRunMultipleBinaries(t *testing.T) {
 func TestDefault(t *testing.T) {
 	testlib.Mktmp(t)
 
-	ctx := &context.Context{
-		TokenType: context.TokenTypeGitHub,
-		Config: config.Project{
-			ProjectName: "myproject",
-			Krews: []config.Krew{
-				{},
+	ctx := testctx.NewWithCfg(config.Project{
+		ProjectName: "myproject",
+		Krews: []config.Krew{
+			{
+				Index: config.RepoRef{
+					Git: config.GitRepoRef{
+						URL: "foo/bar",
+					},
+				},
 			},
 		},
-	}
+	}, testctx.GitHubTokenType)
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, ctx.Config.ProjectName, ctx.Config.Krews[0].Name)
 	require.NotEmpty(t, ctx.Config.Krews[0].CommitAuthor.Name)
 	require.NotEmpty(t, ctx.Config.Krews[0].CommitAuthor.Email)
 	require.NotEmpty(t, ctx.Config.Krews[0].CommitMessageTemplate)
+	require.Equal(t, "foo/bar", ctx.Config.Krews[0].Repository.Git.URL)
+	require.True(t, ctx.Deprecated)
 }
 
 func TestGHFolder(t *testing.T) {
@@ -918,11 +987,11 @@ func TestGHFolder(t *testing.T) {
 
 func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
-		require.True(t, Pipe{}.Skip(context.New(config.Project{})))
+		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			Krews: []config.Krew{
 				{},
 			},
@@ -932,7 +1001,7 @@ func TestSkip(t *testing.T) {
 }
 
 func TestRunSkipNoName(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Krews: []config.Krew{{}},
 	})
 

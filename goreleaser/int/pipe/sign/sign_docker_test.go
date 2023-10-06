@@ -8,9 +8,10 @@ import (
 
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/gio"
+	"github.com/goreleaser/goreleaser/int/skips"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,33 +20,33 @@ func TestDockerSignDescription(t *testing.T) {
 }
 
 func TestDockerSignDefault(t *testing.T) {
-	ctx := &context.Context{
-		Config: config.Project{
-			DockerSigns: []config.Sign{{}},
-		},
-	}
+	ctx := testctx.NewWithCfg(config.Project{
+		DockerSigns: []config.Sign{{}},
+	})
 	err := DockerPipe{}.Default(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "cosign", ctx.Config.DockerSigns[0].Cmd)
 	require.Equal(t, "", ctx.Config.DockerSigns[0].Signature)
-	require.Equal(t, []string{"sign", "--key=cosign.key", "${artifact}@${digest}"}, ctx.Config.DockerSigns[0].Args)
+	require.Equal(t, []string{"sign", "--key=cosign.key", "${artifact}@${digest}", "--yes"}, ctx.Config.DockerSigns[0].Args)
 	require.Equal(t, "none", ctx.Config.DockerSigns[0].Artifacts)
 }
 
 func TestDockerSignDisabled(t *testing.T) {
-	ctx := context.New(config.Project{})
-	ctx.Config.DockerSigns = []config.Sign{
-		{Artifacts: "none"},
-	}
+	ctx := testctx.NewWithCfg(config.Project{
+		DockerSigns: []config.Sign{
+			{Artifacts: "none"},
+		},
+	})
 	err := DockerPipe{}.Publish(ctx)
 	require.EqualError(t, err, "artifact signing is disabled")
 }
 
 func TestDockerSignInvalidArtifacts(t *testing.T) {
-	ctx := context.New(config.Project{})
-	ctx.Config.DockerSigns = []config.Sign{
-		{Artifacts: "foo"},
-	}
+	ctx := testctx.NewWithCfg(config.Project{
+		DockerSigns: []config.Sign{
+			{Artifacts: "foo"},
+		},
+	})
 	err := DockerPipe{}.Publish(ctx)
 	require.EqualError(t, err, "invalid list of artifacts to sign: foo")
 }
@@ -54,7 +55,7 @@ func TestDockerSignArtifacts(t *testing.T) {
 	testlib.CheckPath(t, "cosign")
 	key := "cosign.key"
 	cmd := "sh"
-	args := []string{"-c", "echo ${artifact}@${digest} > ${signature} && cosign sign --key=" + key + " --upload=false ${artifact}@${digest} > ${signature}"}
+	args := []string{"-c", "echo ${artifact}@${digest} > ${signature} && cosign sign --key=" + key + " --upload=false ${artifact}@${digest} --yes > ${signature}"}
 	password := "password"
 
 	img1 := "ghcr.io/caarlos0/goreleaser-docker-manifest-actions-example:1.2.1-amd64"
@@ -75,7 +76,7 @@ func TestDockerSignArtifacts(t *testing.T) {
 					Artifacts: "all",
 					Stdin:     &password,
 					Cmd:       "cosign",
-					Args:      []string{"sign", "--key=" + key, "--upload=false", "${artifact}"},
+					Args:      []string{"sign", "--key=" + key, "--upload=false", "${artifact}", "--yes"},
 				},
 			},
 		},
@@ -91,7 +92,7 @@ func TestDockerSignArtifacts(t *testing.T) {
 					Stdin:       &password,
 					Cmd:         "cosign",
 					Certificate: `{{ replace (replace (replace .Env.artifact "/" "-") ":" "-") "." "" }}.pem`,
-					Args:        []string{"sign", "--output-certificate=${certificate}", "--key=" + key, "--upload=false", "${artifact}@${digest}"},
+					Args:        []string{"sign", "--output-certificate=${certificate}", "--key=" + key, "--upload=false", "${artifact}@${digest}", "--yes"},
 				},
 			},
 		},
@@ -154,8 +155,9 @@ func TestDockerSignArtifacts(t *testing.T) {
 		// TODO: keyless test?
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := context.New(config.Project{})
-			ctx.Config.DockerSigns = cfg.Signs
+			ctx := testctx.NewWithCfg(config.Project{
+				DockerSigns: cfg.Signs,
+			})
 			wd, err := os.Getwd()
 			require.NoError(t, err)
 			tmp := testlib.Mktmp(t)
@@ -210,21 +212,30 @@ func TestDockerSignArtifacts(t *testing.T) {
 
 func TestDockerSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
-		require.True(t, DockerPipe{}.Skip(context.New(config.Project{})))
+		require.True(t, DockerPipe{}.Skip(testctx.New()))
 	})
 
 	t.Run("skip sign", func(t *testing.T) {
-		ctx := context.New(config.Project{})
-		ctx.SkipSign = true
+		ctx := testctx.New(testctx.Skip(skips.Sign))
 		require.True(t, DockerPipe{}.Skip(ctx))
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			DockerSigns: []config.Sign{
 				{},
 			},
 		})
 		require.False(t, DockerPipe{}.Skip(ctx))
 	})
+}
+
+func TestDockerDependencies(t *testing.T) {
+	ctx := testctx.NewWithCfg(config.Project{
+		DockerSigns: []config.Sign{
+			{Cmd: "cosign"},
+			{Cmd: "gpg2"},
+		},
+	})
+	require.Equal(t, []string{"cosign", "gpg2"}, DockerPipe{}.Dependencies(ctx))
 }

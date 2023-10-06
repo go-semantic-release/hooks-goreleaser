@@ -6,14 +6,21 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/charmbracelet/keygen"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
+	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
+
+func TestContinueOnError(t *testing.T) {
+	require.True(t, Pipe{}.ContinueOnError())
+}
 
 func TestDescription(t *testing.T) {
 	require.NotEmpty(t, Pipe{}.String())
@@ -106,7 +113,7 @@ func TestFullFormulae(t *testing.T) {
 	data.PostInstall = []string{`touch "/tmp/foo"`, `system "echo", "done"`}
 	data.CustomBlock = []string{"devel do", `  url "https://github.com/caarlos0/test/releases/download/v0.1.3/test_Darwin_x86_64.tar.gz"`, `  sha256 "1633f61598ab0791e213135923624eb342196b3494909c91899bcd0560f84c68"`, "end"}
 	data.Tests = []string{`system "#{bin}/{{.ProjectName}}", "-version"`}
-	formulae, err := doBuildFormula(context.New(config.Project{
+	formulae, err := doBuildFormula(testctx.NewWithCfg(config.Project{
 		ProjectName: "foo",
 	}), data)
 	require.NoError(t, err)
@@ -117,7 +124,7 @@ func TestFullFormulae(t *testing.T) {
 func TestFullFormulaeLinuxOnly(t *testing.T) {
 	data := defaultTemplateData
 	data.MacOSPackages = []releasePackage{}
-	formulae, err := doBuildFormula(context.New(config.Project{
+	formulae, err := doBuildFormula(testctx.NewWithCfg(config.Project{
 		ProjectName: "foo",
 	}), data)
 	require.NoError(t, err)
@@ -128,7 +135,7 @@ func TestFullFormulaeLinuxOnly(t *testing.T) {
 func TestFullFormulaeMacOSOnly(t *testing.T) {
 	data := defaultTemplateData
 	data.LinuxPackages = []releasePackage{}
-	formulae, err := doBuildFormula(context.New(config.Project{
+	formulae, err := doBuildFormula(testctx.NewWithCfg(config.Project{
 		ProjectName: "foo",
 	}), data)
 	require.NoError(t, err)
@@ -137,7 +144,7 @@ func TestFullFormulaeMacOSOnly(t *testing.T) {
 }
 
 func TestFormulaeSimple(t *testing.T) {
-	formulae, err := doBuildFormula(context.New(config.Project{}), defaultTemplateData)
+	formulae, err := doBuildFormula(testctx.NewWithCfg(config.Project{}), defaultTemplateData)
 	require.NoError(t, err)
 	assertDefaultTemplateData(t, formulae)
 	require.NotContains(t, formulae, "def caveats")
@@ -155,24 +162,54 @@ func TestSplit(t *testing.T) {
 
 func TestFullPipe(t *testing.T) {
 	type testcase struct {
-		prepare              func(ctx *context.Context)
-		expectedRunError     string
-		expectedPublishError string
+		prepare                func(ctx *context.Context)
+		expectedRunError       string
+		expectedRunErrorAs     any
+		expectedPublishError   string
+		expectedPublishErrorAs any
 	}
 	for name, tt := range map[string]testcase{
 		"default": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].Homepage = "https://github.com/goreleaser"
+			},
+		},
+		"git_remote": {
+			prepare: func(ctx *context.Context) {
+				ctx.TokenType = context.TokenTypeGitHub
+				ctx.Config.Brews[0].Homepage = "https://github.com/goreleaser"
+				ctx.Config.Brews[0].Repository = config.RepoRef{
+					Name:   "test",
+					Branch: "main",
+					Git: config.GitRepoRef{
+						URL:        testlib.GitMakeBareRepository(t),
+						PrivateKey: testlib.MakeNewSSHKey(t, keygen.Ed25519, ""),
+					},
+				}
+			},
+		},
+		"open_pr": {
+			prepare: func(ctx *context.Context) {
+				ctx.TokenType = context.TokenTypeGitHub
+				ctx.Config.Brews[0].Homepage = "https://github.com/goreleaser"
+				ctx.Config.Brews[0].Repository = config.RepoRef{
+					Owner:  "test",
+					Name:   "test",
+					Branch: "update-{{.Version}}",
+					PullRequest: config.PullRequest{
+						Enabled: true,
+					},
+				}
 			},
 		},
 		"custom_download_strategy": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].Homepage = "https://github.com/goreleaser"
 
 				ctx.Config.Brews[0].DownloadStrategy = "GitHubPrivateRepositoryReleaseDownloadStrategy"
@@ -181,8 +218,8 @@ func TestFullPipe(t *testing.T) {
 		"custom_require": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].Homepage = "https://github.com/goreleaser"
 
 				ctx.Config.Brews[0].DownloadStrategy = "CustomDownloadStrategy"
@@ -192,8 +229,8 @@ func TestFullPipe(t *testing.T) {
 		"custom_block": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].Homepage = "https://github.com/goreleaser"
 
 				ctx.Config.Brews[0].CustomBlock = `head "https://github.com/caarlos0/test.git"`
@@ -202,72 +239,64 @@ func TestFullPipe(t *testing.T) {
 		"default_gitlab": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitLab
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].Homepage = "https://gitlab.com/goreleaser"
 			},
 		},
 		"invalid_commit_template": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].CommitMessageTemplate = "{{ .Asdsa }"
 			},
-			expectedPublishError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedPublishErrorAs: &tmpl.Error{},
 		},
-		"valid_tap_templates": {
+		"valid_repository_templates": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
 				ctx.Env = map[string]string{
 					"FOO": "templated",
 				}
-				ctx.Config.Brews[0].Tap.Owner = "{{.Env.FOO}}"
-				ctx.Config.Brews[0].Tap.Name = "{{.Env.FOO}}"
+				ctx.Config.Brews[0].Repository.Owner = "{{.Env.FOO}}"
+				ctx.Config.Brews[0].Repository.Name = "{{.Env.FOO}}"
 			},
 		},
-		"invalid_tap_name_template": {
+		"invalid_repository_name_template": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "{{ .Asdsa }"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "{{ .Asdsa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
-		"invalid_tap_owner_template": {
+		"invalid_repository_owner_template": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Brews[0].Tap.Owner = "{{ .Asdsa }"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "{{ .Asdsa }"
+				ctx.Config.Brews[0].Repository.Name = "test"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
-		"invalid_tap_skip_upload_template": {
+		"invalid_repository_skip_upload_template": {
 			prepare: func(ctx *context.Context) {
 				ctx.Config.Brews[0].SkipUpload = "{{ .Asdsa }"
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 		"invalid_install_template": {
 			prepare: func(ctx *context.Context) {
-				ctx.Config.Brews[0].Tap.Owner = "test"
-				ctx.Config.Brews[0].Tap.Name = "test"
+				ctx.Config.Brews[0].Repository.Owner = "test"
+				ctx.Config.Brews[0].Repository.Name = "test"
 				ctx.Config.Brews[0].Install = "{{ .aaaa }"
 			},
-			expectedRunError: `template: tmpl:1: unexpected "}" in operand`,
+			expectedRunErrorAs: &tmpl.Error{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			folder := t.TempDir()
-			ctx := &context.Context{
-				Git: context.GitInfo{
-					CurrentTag: "v1.0.1",
-				},
-				Version:   "1.0.1",
-				Artifacts: artifact.New(),
-				Env: map[string]string{
-					"FOO": "foo_is_bar",
-				},
-				Config: config.Project{
+			ctx := testctx.NewWithCfg(
+				config.Project{
 					Dist:        folder,
 					ProjectName: name,
 					Brews: []config.Homebrew{
@@ -292,8 +321,11 @@ func TestFullPipe(t *testing.T) {
 							Goamd64:     "v1",
 						},
 					},
+					Env: []string{"FOO=foo_is_bar"},
 				},
-			}
+				testctx.WithVersion("1.0.1"),
+				testctx.WithCurrentTag("v1.0.1"),
+			)
 			tt.prepare(ctx)
 			ctx.Artifacts.Add(&artifact.Artifact{
 				Name:    "bar_bin.tar.gz",
@@ -348,42 +380,56 @@ func TestFullPipe(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
 			client := client.NewMock()
-			distFile := filepath.Join(folder, name+".rb")
+			distFile := filepath.Join(folder, "homebrew", name+".rb")
 
-			if tt.expectedRunError == "" {
-				require.NoError(t, runAll(ctx, client))
-			} else {
-				require.EqualError(t, runAll(ctx, client), tt.expectedRunError)
+			require.NoError(t, Pipe{}.Default(ctx))
+
+			err = runAll(ctx, client)
+			if tt.expectedRunError != "" {
+				require.EqualError(t, err, tt.expectedRunError)
 				return
 			}
+			if tt.expectedRunErrorAs != nil {
+				require.ErrorAs(t, err, tt.expectedRunErrorAs)
+				return
+			}
+			require.NoError(t, err)
+
+			err = publishAll(ctx, client)
 			if tt.expectedPublishError != "" {
-				require.EqualError(t, publishAll(ctx, client), tt.expectedPublishError)
+				require.EqualError(t, err, tt.expectedPublishError)
 				return
 			}
+			if tt.expectedPublishErrorAs != nil {
+				require.ErrorAs(t, err, tt.expectedPublishErrorAs)
+				return
+			}
+			require.NoError(t, err)
 
-			require.NoError(t, publishAll(ctx, client))
-			require.True(t, client.CreatedFile)
-			golden.RequireEqualRb(t, []byte(client.Content))
+			content := []byte(client.Content)
+			if url := ctx.Config.Brews[0].Repository.Git.URL; url == "" {
+				require.True(t, client.CreatedFile, "should have created a file")
+			} else {
+				content = testlib.CatFileFromBareRepositoryOnBranch(
+					t, url,
+					ctx.Config.Brews[0].Repository.Branch,
+					name+".rb",
+				)
+			}
+
+			golden.RequireEqualRb(t, content)
 
 			distBts, err := os.ReadFile(distFile)
 			require.NoError(t, err)
-			require.Equal(t, client.Content, string(distBts))
+			require.Equal(t, string(content), string(distBts))
 		})
 	}
 }
 
 func TestRunPipeNameTemplate(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Env: map[string]string{
-			"FOO_BAR": "is_bar",
-		},
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "foo",
 			Brews: []config.Homebrew{
@@ -393,7 +439,7 @@ func TestRunPipeNameTemplate(t *testing.T) {
 					Homepage:    "https://goreleaser.com",
 					Goamd64:     "v1",
 					Install:     `bin.install "foo"`,
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -402,8 +448,11 @@ func TestRunPipeNameTemplate(t *testing.T) {
 					},
 				},
 			},
+			Env: []string{"FOO_BAR=is_bar"},
 		},
-	}
+		testctx.WithVersion("1.0.1"),
+		testctx.WithCurrentTag("v1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:    "bin.tar.gz",
@@ -422,7 +471,7 @@ func TestRunPipeNameTemplate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	client := client.NewMock()
-	distFile := filepath.Join(folder, "foo_is_bar.rb")
+	distFile := filepath.Join(folder, "homebrew", "foo_is_bar.rb")
 
 	require.NoError(t, runAll(ctx, client))
 	require.NoError(t, publishAll(ctx, client))
@@ -435,24 +484,15 @@ func TestRunPipeNameTemplate(t *testing.T) {
 
 func TestRunPipeMultipleBrewsWithSkip(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Env: map[string]string{
-			"FOO_BAR":     "is_bar",
-			"SKIP_UPLOAD": "true",
-		},
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "foo",
 			Brews: []config.Homebrew{
 				{
 					Name:    "foo",
 					Goamd64: "v1",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -464,7 +504,7 @@ func TestRunPipeMultipleBrewsWithSkip(t *testing.T) {
 				{
 					Name:    "bar",
 					Goamd64: "v1",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -475,7 +515,7 @@ func TestRunPipeMultipleBrewsWithSkip(t *testing.T) {
 				{
 					Name:    "foobar",
 					Goamd64: "v1",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -487,7 +527,7 @@ func TestRunPipeMultipleBrewsWithSkip(t *testing.T) {
 				{
 					Name:    "baz",
 					Goamd64: "v1",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
@@ -497,8 +537,14 @@ func TestRunPipeMultipleBrewsWithSkip(t *testing.T) {
 					SkipUpload: "{{ .Env.SKIP_UPLOAD }}",
 				},
 			},
+			Env: []string{
+				"FOO_BAR=is_bar",
+				"SKIP_UPLOAD=true",
+			},
 		},
-	}
+		testctx.WithVersion("1.0.1"),
+		testctx.WithCurrentTag("v1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:    "bin.tar.gz",
@@ -523,7 +569,7 @@ func TestRunPipeMultipleBrewsWithSkip(t *testing.T) {
 	require.True(t, cli.CreatedFile)
 
 	for _, brew := range ctx.Config.Brews {
-		distFile := filepath.Join(folder, brew.Name+".rb")
+		distFile := filepath.Join(folder, "homebrew", brew.Name+".rb")
 		_, err := os.Stat(distFile)
 		require.NoError(t, err, "file should exist: "+distFile)
 	}
@@ -546,29 +592,21 @@ func TestRunPipeForMultipleAmd64Versions(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			folder := t.TempDir()
-			ctx := &context.Context{
-				TokenType: context.TokenTypeGitHub,
-				Git: context.GitInfo{
-					CurrentTag: "v1.0.1",
-				},
-				Version:   "1.0.1",
-				Artifacts: artifact.New(),
-				Env: map[string]string{
-					"FOO": "foo_is_bar",
-				},
-				Config: config.Project{
+			ctx := testctx.NewWithCfg(
+				config.Project{
 					Dist:        folder,
 					ProjectName: name,
 					Brews: []config.Homebrew{
 						{
 							Name:        name,
 							Description: "Run pipe test formula",
-							Tap: config.RepoRef{
+							Repository: config.RepoRef{
 								Owner: "test",
 								Name:  "test",
 							},
-							Homepage: "https://github.com/goreleaser",
-							Install:  `bin.install "foo"`,
+							Homepage:     "https://github.com/goreleaser",
+							Install:      `bin.install "foo"`,
+							ExtraInstall: `man1.install "./man/foo.1.gz"`,
 						},
 					},
 					GitHubURLs: config.GitHubURLs{
@@ -580,8 +618,12 @@ func TestRunPipeForMultipleAmd64Versions(t *testing.T) {
 							Name:  "test",
 						},
 					},
+					Env: []string{"FOO=foo_is_bar"},
 				},
-			}
+				testctx.GitHubTokenType,
+				testctx.WithVersion("1.0.1"),
+				testctx.WithCurrentTag("v1.0.1"),
+			)
 			fn(ctx)
 			for _, a := range []struct {
 				name    string
@@ -643,7 +685,7 @@ func TestRunPipeForMultipleAmd64Versions(t *testing.T) {
 			}
 
 			client := client.NewMock()
-			distFile := filepath.Join(folder, name+".rb")
+			distFile := filepath.Join(folder, "homebrew", name+".rb")
 
 			require.NoError(t, runAll(ctx, client))
 			require.NoError(t, publishAll(ctx, client))
@@ -671,17 +713,8 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			folder := t.TempDir()
-			ctx := &context.Context{
-				TokenType: context.TokenTypeGitHub,
-				Git: context.GitInfo{
-					CurrentTag: "v1.0.1",
-				},
-				Version:   "1.0.1",
-				Artifacts: artifact.New(),
-				Env: map[string]string{
-					"FOO": "foo_is_bar",
-				},
-				Config: config.Project{
+			ctx := testctx.NewWithCfg(
+				config.Project{
 					Dist:        folder,
 					ProjectName: name,
 					Brews: []config.Homebrew{
@@ -694,7 +727,7 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 							Dependencies: []config.HomebrewDependency{{Name: "zsh"}, {Name: "bash", Type: "recommended"}},
 							Conflicts:    []string{"gtk+", "qt"},
 							Install:      `bin.install "{{ .ProjectName }}"`,
-							Tap: config.RepoRef{
+							Repository: config.RepoRef{
 								Owner: "test",
 								Name:  "test",
 							},
@@ -710,8 +743,12 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 							Name:  "test",
 						},
 					},
+					Env: []string{"FOO=foo_is_bar"},
 				},
-			}
+				testctx.GitHubTokenType,
+				testctx.WithVersion("1.0.1"),
+				testctx.WithCurrentTag("v1.0.1"),
+			)
 			fn(ctx)
 			for _, a := range []struct {
 				name   string
@@ -767,7 +804,7 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 			}
 
 			client := client.NewMock()
-			distFile := filepath.Join(folder, name+".rb")
+			distFile := filepath.Join(folder, "homebrew", name+".rb")
 
 			require.NoError(t, runAll(ctx, client))
 			require.NoError(t, publishAll(ctx, client))
@@ -782,39 +819,39 @@ func TestRunPipeForMultipleArmVersions(t *testing.T) {
 }
 
 func TestRunPipeNoBuilds(t *testing.T) {
-	ctx := context.New(
-		config.Project{
-			Brews: []config.Homebrew{
-				{
-					Tap: config.RepoRef{
-						Owner: "test",
-						Name:  "test",
-					},
+	ctx := testctx.NewWithCfg(config.Project{
+		Brews: []config.Homebrew{
+			{
+				Repository: config.RepoRef{
+					Owner: "test",
+					Name:  "test",
 				},
+				IDs: []string{"foo"},
 			},
 		},
-	)
-	ctx.TokenType = context.TokenTypeGitHub
+	}, testctx.GitHubTokenType)
 	client := client.NewMock()
-	require.Equal(t, ErrNoArchivesFound, runAll(ctx, client))
+	require.NoError(t, Pipe{}.Default(ctx))
+	require.EqualError(t, runAll(ctx, client), ErrNoArchivesFound{
+		ids:     []string{"foo"},
+		goarm:   "6",
+		goamd64: "v1",
+	}.Error())
 	require.False(t, client.CreatedFile)
 }
 
 func TestRunPipeMultipleArchivesSameOsBuild(t *testing.T) {
-	ctx := context.New(
-		config.Project{
-			Brews: []config.Homebrew{
-				{
-					Tap: config.RepoRef{
-						Owner: "test",
-						Name:  "test",
-					},
+	ctx := testctx.NewWithCfg(config.Project{
+		Brews: []config.Homebrew{
+			{
+				Repository: config.RepoRef{
+					Owner: "test",
+					Name:  "test",
 				},
 			},
 		},
-	)
+	}, testctx.GitHubTokenType)
 
-	ctx.TokenType = context.TokenTypeGitHub
 	f, err := os.CreateTemp(t.TempDir(), "")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -949,13 +986,8 @@ func TestRunPipeMultipleArchivesSameOsBuild(t *testing.T) {
 
 func TestRunPipeBinaryRelease(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.2.1",
-		},
-		Version:   "1.2.1",
-		Artifacts: artifact.New(),
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "foo",
 			Brews: []config.Homebrew{
@@ -963,15 +995,17 @@ func TestRunPipeBinaryRelease(t *testing.T) {
 					Name:        "foo",
 					Homepage:    "https://goreleaser.com",
 					Description: "Fake desc",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "foo",
 						Name:  "bar",
 					},
+					ExtraInstall: `man1.install "./man/foo.1.gz"`,
 				},
 			},
 		},
-	}
-
+		testctx.WithVersion("1.2.1"),
+		testctx.WithCurrentTag("v1.2.1"),
+	)
 	path := filepath.Join(folder, "dist/foo_darwin_all/foo")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:   "foo_macos",
@@ -998,27 +1032,76 @@ func TestRunPipeBinaryRelease(t *testing.T) {
 	golden.RequireEqualRb(t, []byte(client.Content))
 }
 
+func TestRunPipePullRequest(t *testing.T) {
+	folder := t.TempDir()
+	ctx := testctx.NewWithCfg(
+		config.Project{
+			Dist:        folder,
+			ProjectName: "foo",
+			Brews: []config.Homebrew{
+				{
+					Name:         "foo",
+					Homepage:     "https://goreleaser.com",
+					Description:  "Fake desc",
+					ExtraInstall: `man1.install "./man/foo.1.gz"`,
+					Repository: config.RepoRef{
+						Owner:  "foo",
+						Name:   "bar",
+						Branch: "update-{{.Version}}",
+						PullRequest: config.PullRequest{
+							Enabled: true,
+						},
+					},
+				},
+			},
+		},
+		testctx.WithVersion("1.2.1"),
+		testctx.WithCurrentTag("v1.2.1"),
+	)
+	path := filepath.Join(folder, "dist/foo_darwin_all/foo")
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Name:   "foo_macos",
+		Path:   path,
+		Goos:   "darwin",
+		Goarch: "all",
+		Type:   artifact.UploadableBinary,
+		Extra: map[string]interface{}{
+			artifact.ExtraID:     "foo",
+			artifact.ExtraFormat: "binary",
+			artifact.ExtraBinary: "foo",
+		},
+	})
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	client := client.NewMock()
+	require.NoError(t, runAll(ctx, client))
+	require.NoError(t, publishAll(ctx, client))
+	require.True(t, client.CreatedFile)
+	require.True(t, client.OpenedPullRequest)
+	golden.RequireEqualRb(t, []byte(client.Content))
+}
+
 func TestRunPipeNoUpload(t *testing.T) {
 	folder := t.TempDir()
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist:        folder,
 		ProjectName: "foo",
 		Release:     config.Release{},
 		Brews: []config.Homebrew{
 			{
-				Tap: config.RepoRef{
+				Repository: config.RepoRef{
 					Owner: "test",
 					Name:  "test",
 				},
 				Goamd64: "v1",
 			},
 		},
-	})
-	ctx.Env = map[string]string{
-		"SKIP_UPLOAD": "true",
-	}
-	ctx.TokenType = context.TokenTypeGitHub
-	ctx.Git = context.GitInfo{CurrentTag: "v1.0.1"}
+		Env: []string{"SKIP_UPLOAD=true"},
+	}, testctx.WithCurrentTag("v1.0.1"), testctx.GitHubTokenType)
 	path := filepath.Join(folder, "whatever.tar.gz")
 	f, err := os.Create(path)
 	require.NoError(t, err)
@@ -1062,21 +1145,20 @@ func TestRunPipeNoUpload(t *testing.T) {
 
 func TestRunEmptyTokenType(t *testing.T) {
 	folder := t.TempDir()
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Dist:        folder,
 		ProjectName: "foo",
 		Release:     config.Release{},
 		Brews: []config.Homebrew{
 			{
-				Tap: config.RepoRef{
+				Repository: config.RepoRef{
 					Owner: "test",
 					Name:  "test",
 				},
 				Goamd64: "v1",
 			},
 		},
-	})
-	ctx.Git = context.GitInfo{CurrentTag: "v1.0.1"}
+	}, testctx.WithCurrentTag("v1.0.0"))
 	path := filepath.Join(folder, "whatever.tar.gz")
 	f, err := os.Create(path)
 	require.NoError(t, err)
@@ -1099,21 +1181,42 @@ func TestRunEmptyTokenType(t *testing.T) {
 
 func TestDefault(t *testing.T) {
 	testlib.Mktmp(t)
-
-	ctx := &context.Context{
-		TokenType: context.TokenTypeGitHub,
-		Config: config.Project{
-			ProjectName: "myproject",
-			Brews: []config.Homebrew{
-				{},
+	repo := config.RepoRef{
+		Owner:  "owner",
+		Name:   "name",
+		Token:  "aaa",
+		Branch: "feat",
+		Git: config.GitRepoRef{
+			URL:        "git@github.com:foo/bar",
+			SSHCommand: "ssh ",
+			PrivateKey: "/fake",
+		},
+		PullRequest: config.PullRequest{
+			Enabled: true,
+			Base: config.PullRequestBase{
+				Owner:  "foo2",
+				Name:   "bar2",
+				Branch: "branch2",
 			},
+			Draft: true,
 		},
 	}
+	ctx := testctx.NewWithCfg(config.Project{
+		ProjectName: "myproject",
+		Brews: []config.Homebrew{
+			{
+				Plist: "<xml>... whatever</xml>",
+				Tap:   repo,
+			},
+		},
+	}, testctx.GitHubTokenType)
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.Equal(t, ctx.Config.ProjectName, ctx.Config.Brews[0].Name)
 	require.NotEmpty(t, ctx.Config.Brews[0].CommitAuthor.Name)
 	require.NotEmpty(t, ctx.Config.Brews[0].CommitAuthor.Email)
 	require.NotEmpty(t, ctx.Config.Brews[0].CommitMessageTemplate)
+	require.Equal(t, repo, ctx.Config.Brews[0].Repository)
+	require.True(t, ctx.Deprecated)
 }
 
 func TestGHFolder(t *testing.T) {
@@ -1123,11 +1226,11 @@ func TestGHFolder(t *testing.T) {
 
 func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
-		require.True(t, Pipe{}.Skip(context.New(config.Project{})))
+		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
 
 	t.Run("dont skip", func(t *testing.T) {
-		ctx := context.New(config.Project{
+		ctx := testctx.NewWithCfg(config.Project{
 			Brews: []config.Homebrew{
 				{},
 			},
@@ -1137,7 +1240,7 @@ func TestSkip(t *testing.T) {
 }
 
 func TestRunSkipNoName(t *testing.T) {
-	ctx := context.New(config.Project{
+	ctx := testctx.NewWithCfg(config.Project{
 		Brews: []config.Homebrew{{}},
 	})
 
@@ -1148,7 +1251,7 @@ func TestRunSkipNoName(t *testing.T) {
 func TestInstalls(t *testing.T) {
 	t.Run("provided", func(t *testing.T) {
 		install, err := installs(
-			context.New(config.Project{}),
+			testctx.New(),
 			config.Homebrew{Install: "bin.install \"foo\"\nbin.install \"bar\""},
 			&artifact.Artifact{},
 		)
@@ -1161,8 +1264,7 @@ func TestInstalls(t *testing.T) {
 
 	t.Run("from archives", func(t *testing.T) {
 		install, err := installs(
-			context.New(config.Project{}),
-
+			testctx.New(),
 			config.Homebrew{},
 			&artifact.Artifact{
 				Type: artifact.UploadableArchive,
@@ -1180,7 +1282,7 @@ func TestInstalls(t *testing.T) {
 
 	t.Run("from binary", func(t *testing.T) {
 		install, err := installs(
-			context.New(config.Project{}),
+			testctx.New(),
 			config.Homebrew{},
 			&artifact.Artifact{
 				Name: "foo_macos",
@@ -1198,7 +1300,7 @@ func TestInstalls(t *testing.T) {
 
 	t.Run("from template", func(t *testing.T) {
 		install, err := installs(
-			context.New(config.Project{}),
+			testctx.New(),
 			config.Homebrew{
 				Install: `bin.install "foo_{{.Os}}" => "foo"`,
 			},
@@ -1217,13 +1319,8 @@ func TestInstalls(t *testing.T) {
 
 func TestRunPipeUniversalBinary(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "unibin",
 			Brews: []config.Homebrew{
@@ -1231,7 +1328,7 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 					Name:        "unibin",
 					Homepage:    "https://goreleaser.com",
 					Description: "Fake desc",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "unibin",
 						Name:  "bar",
 					},
@@ -1242,7 +1339,9 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 				},
 			},
 		},
-	}
+		testctx.WithCurrentTag("v1.0.1"),
+		testctx.WithVersion("1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:   "bin.tar.gz",
@@ -1262,7 +1361,7 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	client := client.NewMock()
-	distFile := filepath.Join(folder, "unibin.rb")
+	distFile := filepath.Join(folder, "homebrew", "unibin.rb")
 
 	require.NoError(t, runAll(ctx, client))
 	require.NoError(t, publishAll(ctx, client))
@@ -1275,13 +1374,8 @@ func TestRunPipeUniversalBinary(t *testing.T) {
 
 func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 	folder := t.TempDir()
-	ctx := &context.Context{
-		Git: context.GitInfo{
-			CurrentTag: "v1.0.1",
-		},
-		Version:   "1.0.1",
-		Artifacts: artifact.New(),
-		Config: config.Project{
+	ctx := testctx.NewWithCfg(
+		config.Project{
 			Dist:        folder,
 			ProjectName: "unibin",
 			Brews: []config.Homebrew{
@@ -1289,7 +1383,7 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 					Name:        "unibin",
 					Homepage:    "https://goreleaser.com",
 					Description: "Fake desc",
-					Tap: config.RepoRef{
+					Repository: config.RepoRef{
 						Owner: "unibin",
 						Name:  "bar",
 					},
@@ -1301,7 +1395,10 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 				},
 			},
 		},
-	}
+
+		testctx.WithCurrentTag("v1.0.1"),
+		testctx.WithVersion("1.0.1"),
+	)
 	path := filepath.Join(folder, "bin.tar.gz")
 	ctx.Artifacts.Add(&artifact.Artifact{
 		Name:    "bin_amd64.tar.gz",
@@ -1347,7 +1444,7 @@ func TestRunPipeUniversalBinaryNotReplacing(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 	client := client.NewMock()
-	distFile := filepath.Join(folder, "unibin.rb")
+	distFile := filepath.Join(folder, "homebrew", "unibin.rb")
 
 	require.NoError(t, runAll(ctx, client))
 	require.NoError(t, publishAll(ctx, client))
