@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -18,6 +19,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/commitauthor"
 	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -42,6 +44,7 @@ var (
 	errNoRepoName     = pipe.Skip("repository name is not set")
 	errSkipUpload     = pipe.Skip("nix.skip_upload is set")
 	errSkipUploadAuto = pipe.Skip("nix.skip_upload is set to 'auto', and current version is a pre-release")
+	errInvalidLicense = errors.New("nix.license is invalid")
 )
 
 // NewBuild returns a pipe to be used in the build phase.
@@ -64,7 +67,7 @@ func (Pipe) String() string                           { return "nixpkgs" }
 func (Pipe) ContinueOnError() bool                    { return true }
 func (Pipe) Dependencies(_ *context.Context) []string { return []string{"nix-prefetch-url"} }
 func (p Pipe) Skip(ctx *context.Context) bool {
-	return len(ctx.Config.Nix) == 0 || !p.prefetcher.Available()
+	return skips.Any(ctx, skips.Nix) || len(ctx.Config.Nix) == 0 || !p.prefetcher.Available()
 }
 
 func (Pipe) Default(ctx *context.Context) error {
@@ -81,6 +84,9 @@ func (Pipe) Default(ctx *context.Context) error {
 		}
 		if nix.Goamd64 == "" {
 			nix.Goamd64 = "v1"
+		}
+		if nix.License != "" && !slices.Contains(validLicenses, nix.License) {
+			return fmt.Errorf("%w: %s", errInvalidLicense, nix.License)
 		}
 	}
 
@@ -257,9 +263,12 @@ func preparePkg(
 	if len(dependencies) > 0 {
 		inputs = append(inputs, "makeWrapper")
 	}
-	if archives[0].Format() == "zip" {
-		inputs = append(inputs, "unzip")
-		dependencies = append(dependencies, "unzip")
+	for _, arch := range archives {
+		if arch.Format() == "zip" {
+			inputs = append(inputs, "unzip")
+			dependencies = append(dependencies, "unzip")
+			break
+		}
 	}
 
 	data := templateData{

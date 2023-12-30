@@ -23,6 +23,12 @@ const (
 	Ko             Key = "ko"
 	Docker         Key = "docker"
 	Before         Key = "before"
+	Winget         Key = "winget"
+	Snapcraft      Key = "snapcraft"
+	Scoop          Key = "scoop"
+	Homebrew       Key = "homebrew"
+	Nix            Key = "nix"
+	AUR            Key = "aur"
 )
 
 func String(ctx *context.Context) string {
@@ -97,6 +103,12 @@ var Release = Keys{
 	SBOM,
 	Ko,
 	Docker,
+	Winget,
+	Snapcraft,
+	Scoop,
+	Homebrew,
+	Nix,
+	AUR,
 	Before,
 }
 

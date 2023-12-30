@@ -5,11 +5,11 @@
   <a rel="me" href="https://fosstodon.org/@goreleaser">Mastodon</a>
   for updates
 - Join our [Discord server](/discord)
-- Read our [blog](./blog/index.md) ([RSS](/feed_rss_created.xml))
+- Read our [blog](./blog/index.md)[^blog] ([RSS](/feed_rss_created.xml))
 - Follow us on [LinkedIn](/linkedin)
 - Ask questions on [GitHub Discussions](https://github.com/goreleaser/goreleaser/discussions)
 - Before contributing, read the [Contributing Guidelines](./contributing.md)
-- [Security Policy](./security.md
+- [Security Policy](./security.md)
 - [EULA](./eula.md)
 
 This project adheres to the Contributor Covenant

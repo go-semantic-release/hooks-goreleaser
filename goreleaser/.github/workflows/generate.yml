@@ -1,14 +1,7 @@
 name: generate
 
 on:
-  push:
-    branches:
-      - 'main'
-    paths:
-      - '.github/workflows/generate.yml'
-      - pkg/config/config.go
-      - CONTRIBUTING.md
-      - USERS.md
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -16,20 +9,27 @@ permissions:
 jobs:
   docs:
     permissions:
-      contents: write  # for stefanzweifel/git-auto-commit-action to push code in repo
+      contents: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v3
         with:
           token: ${{ secrets.GH_PAT }}
-      - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v4
         with:
           go-version: stable
           cache: true
       - uses: arduino/setup-task@e26d8975574116b0097a1161e0fe16ba75d84c1c # v1
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task docs:releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: task docs:generate
       - run: task schema:generate
-      - uses: stefanzweifel/git-auto-commit-action@3ea6ae190baf489ba007f7c92608f33ce20ef04a # v4
+      - run: task nix:licenses:generate
+      - uses: stefanzweifel/git-auto-commit-action@8756aa072ef5b4a080af5dc8fef36c5d586e521d # v5
         with:
           commit_message: "chore: docs auto-update"
           branch: main

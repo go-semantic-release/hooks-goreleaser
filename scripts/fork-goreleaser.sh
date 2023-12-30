@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-current_goreleaser_version=$(go mod graph | grep 'github.com/goreleaser/goreleaser' |tr ' ' '@' | awk -F@ '{ print $2 }' | tail -n 1)
+current_goreleaser_version=$(go mod graph | grep 'github.com/goreleaser/goreleaser' |tr ' ' '@' | awk -F@ '{ print $2 }' | head -n 2 | tail -n 1)
 echo "current goreleaser version from go.mod: ${current_goreleaser_version}"
 
 echo "removing old fork..."

@@ -88,7 +88,7 @@ func buildWithDefaults(ctx *context.Context, build config.Build) (config.Build, 
 }
 
 func runPipeOnBuild(ctx *context.Context, g semerrgroup.Group, build config.Build) {
-	for _, target := range build.Targets {
+	for _, target := range filter(ctx, build.Targets) {
 		target := target
 		build := build
 		g.Go(func() error {
@@ -195,12 +195,13 @@ func buildOptionsForTarget(ctx *context.Context, build config.Build, target stri
 		Goamd64: goamd64,
 	}
 
-	binary, err := tmpl.New(ctx).WithBuildOptions(buildOpts).Apply(build.Binary)
-	if err != nil {
+	if err := tmpl.New(ctx).WithBuildOptions(buildOpts).ApplyAll(
+		&build.Binary,
+		&build.GoBinary,
+	); err != nil {
 		return nil, err
 	}
 
-	build.Binary = binary
 	name := build.Binary + ext
 	dir := fmt.Sprintf("%s_%s", build.ID, target)
 	if build.NoUniqueDistDir {

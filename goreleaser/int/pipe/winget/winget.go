@@ -13,6 +13,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/commitauthor"
 	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -27,6 +28,7 @@ var (
 	errSkipUpload               = pipe.Skip("winget.skip_upload is set")
 	errSkipUploadAuto           = pipe.Skip("winget.skip_upload is set to 'auto', and current version is a pre-release")
 	errMultipleArchives         = pipe.Skip("found multiple archives for the same platform, please consider filtering by id")
+	errMixedFormats             = pipe.Skip("found archives with multiple formats (.exe and .zip)")
 
 	// copied from winget src
 	packageIdentifierValid = regexp.MustCompile("^[^\\.\\s\\\\/:\\*\\?\"<>\\|\\x01-\\x1f]{1,32}(\\.[^\\.\\s\\\\/:\\*\\?\"<>\\|\\x01-\\x1f]{1,32}){1,7}$")
@@ -48,7 +50,7 @@ type Pipe struct{}
 func (Pipe) String() string        { return "winget" }
 func (Pipe) ContinueOnError() bool { return true }
 func (p Pipe) Skip(ctx *context.Context) bool {
-	return len(ctx.Config.Winget) == 0
+	return skips.Any(ctx, skips.Winget) || len(ctx.Config.Winget) == 0
 }
 
 func (Pipe) Default(ctx *context.Context) error {
@@ -164,8 +166,13 @@ func (p Pipe) doRun(ctx *context.Context, winget config.Winget, cl client.Releas
 
 	filters := []artifact.Filter{
 		artifact.ByGoos("windows"),
-		artifact.ByFormats("zip"),
-		artifact.ByType(artifact.UploadableArchive),
+		artifact.Or(
+			artifact.And(
+				artifact.ByFormats("zip"),
+				artifact.ByType(artifact.UploadableArchive),
+			),
+			artifact.ByType(artifact.UploadableBinary),
+		),
 		artifact.Or(
 			artifact.ByGoarch("386"),
 			artifact.ByGoarch("arm64"),
@@ -230,38 +237,43 @@ func (p Pipe) doRun(ctx *context.Context, winget config.Winget, cl client.Releas
 		},
 	}
 
-	var amd64Count, i386count int
+	var amd64Count, i386count, zipCount, binaryCount int
 	for _, archive := range archives {
 		sha256, err := archive.Checksum("sha256")
 		if err != nil {
 			return err
 		}
-		var files []InstallerItemFile
-		folder := artifact.ExtraOr(*archive, artifact.ExtraWrappedIn, ".")
-		for _, bin := range artifact.ExtraOr(*archive, artifact.ExtraBinaries, []string{}) {
-			files = append(files, InstallerItemFile{
-				RelativeFilePath:     strings.ReplaceAll(filepath.Join(folder, bin), "/", "\\"),
-				PortableCommandAlias: strings.TrimSuffix(filepath.Base(bin), ".exe"),
-			})
-		}
 		url, err := tmpl.New(ctx).WithArtifact(archive).Apply(winget.URLTemplate)
 		if err != nil {
 			return err
 		}
-		installer.Installers = append(installer.Installers, InstallerItem{
-			Architecture:         fromGoArch[archive.Goarch],
-			NestedInstallerType:  "portable",
-			NestedInstallerFiles: files,
-			InstallerURL:         url,
-			InstallerSha256:      sha256,
-			UpgradeBehavior:      "uninstallPrevious",
-		})
+		item := InstallerItem{
+			Architecture:    fromGoArch[archive.Goarch],
+			InstallerURL:    url,
+			InstallerSha256: sha256,
+			UpgradeBehavior: "uninstallPrevious",
+		}
+		if archive.Format() == "zip" {
+			zipCount++
+			installer.InstallerType = "zip"
+			item.NestedInstallerType = "portable"
+			item.NestedInstallerFiles = installerItemFilesFor(*archive)
+		} else {
+			binaryCount++
+			installer.InstallerType = "portable"
+			installer.Commands = []string{winget.Name}
+		}
+		installer.Installers = append(installer.Installers, item)
 		switch archive.Goarch {
 		case "386":
 			i386count++
 		case "amd64":
 			amd64Count++
 		}
+	}
+
+	if binaryCount > 0 && zipCount > 0 {
+		return errMixedFormats
 	}
 
 	if i386count > 1 || amd64Count > 1 {
@@ -435,4 +447,16 @@ func repoFileID(tp artifact.Type) string {
 		// should never happen
 		return ""
 	}
+}
+
+func installerItemFilesFor(archive artifact.Artifact) []InstallerItemFile {
+	var files []InstallerItemFile
+	folder := artifact.ExtraOr(archive, artifact.ExtraWrappedIn, ".")
+	for _, bin := range artifact.ExtraOr(archive, artifact.ExtraBinaries, []string{}) {
+		files = append(files, InstallerItemFile{
+			RelativeFilePath:     strings.ReplaceAll(filepath.Join(folder, bin), "/", "\\"),
+			PortableCommandAlias: strings.TrimSuffix(filepath.Base(bin), ".exe"),
+		})
+	}
+	return files
 }

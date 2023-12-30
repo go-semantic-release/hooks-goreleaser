@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -124,7 +123,7 @@ When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and ` + "`GOARCH`" 
 		&root.opts.skips,
 		"skip",
 		nil,
-		fmt.Sprintf("Skip the given options (valid options are %s)", skips.Build.String()),
+		fmt.Sprintf("Skip the given options (valid options are: %s)", skips.Build.String()),
 	)
 	_ = cmd.RegisterFlagCompletionFunc("skip", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return skips.Build.Complete(toComplete), cobra.ShellCompDirectiveDefault
@@ -175,6 +174,7 @@ func setupBuildContext(ctx *context.Context, options buildOpts) error {
 	}
 	log.Debugf("parallelism: %v", ctx.Parallelism)
 	ctx.Snapshot = options.snapshot
+
 	if err := skips.SetBuild(ctx, options.skips...); err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func setupBuildContext(ctx *context.Context, options buildOpts) error {
 	ctx.Clean = options.clean || options.rmDist
 
 	if options.singleTarget {
-		setupBuildSingleTarget(ctx)
+		ctx.Partial = true
 	}
 
 	if len(options.ids) > 0 {
@@ -221,31 +221,6 @@ func setupBuildContext(ctx *context.Context, options buildOpts) error {
 	}
 
 	return nil
-}
-
-func setupBuildSingleTarget(ctx *context.Context) {
-	goos := os.Getenv("GOOS")
-	if goos == "" {
-		goos = runtime.GOOS
-	}
-	goarch := os.Getenv("GOARCH")
-	if goarch == "" {
-		goarch = runtime.GOARCH
-	}
-	log.WithField("reason", "single target is enabled").Warnf("building only for %s/%s", goos, goarch)
-	if len(ctx.Config.Builds) == 0 {
-		ctx.Config.Builds = append(ctx.Config.Builds, config.Build{})
-	}
-	for i := range ctx.Config.Builds {
-		build := &ctx.Config.Builds[i]
-		build.Goos = []string{goos}
-		build.Goarch = []string{goarch}
-		build.Goarm = nil
-		build.Gomips = nil
-		build.Goamd64 = nil
-		build.Targets = nil
-	}
-	ctx.Config.UniversalBinaries = nil
 }
 
 func setupBuildID(ctx *context.Context, ids []string) error {

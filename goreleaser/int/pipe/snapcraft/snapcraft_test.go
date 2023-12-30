@@ -9,6 +9,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/gio"
 	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/int/yaml"
@@ -679,7 +680,14 @@ func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
 		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
-
+	t.Run("skip flag", func(t *testing.T) {
+		ctx := testctx.NewWithCfg(config.Project{
+			Snapcrafts: []config.Snapcraft{
+				{},
+			},
+		}, testctx.Skip(skips.Snapcraft))
+		require.True(t, Pipe{}.Skip(ctx))
+	})
 	t.Run("dont skip", func(t *testing.T) {
 		ctx := testctx.NewWithCfg(config.Project{
 			Snapcrafts: []config.Snapcraft{

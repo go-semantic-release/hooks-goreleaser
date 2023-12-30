@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/charmbracelet/keygen"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -27,23 +27,23 @@ func TestDescription(t *testing.T) {
 }
 
 func TestNameWithDash(t *testing.T) {
-	require.Equal(t, formulaNameFor("some-binary"), "SomeBinary")
+	require.Equal(t, "SomeBinary", formulaNameFor("some-binary"))
 }
 
 func TestNameWithUnderline(t *testing.T) {
-	require.Equal(t, formulaNameFor("some_binary"), "SomeBinary")
+	require.Equal(t, "SomeBinary", formulaNameFor("some_binary"))
 }
 
 func TestNameWithDots(t *testing.T) {
-	require.Equal(t, formulaNameFor("binaryv0.0.0"), "Binaryv000")
+	require.Equal(t, "Binaryv000", formulaNameFor("binaryv0.0.0"))
 }
 
 func TestNameWithAT(t *testing.T) {
-	require.Equal(t, formulaNameFor("some_binary@1"), "SomeBinaryAT1")
+	require.Equal(t, "SomeBinaryAT1", formulaNameFor("some_binary@1"))
 }
 
 func TestSimpleName(t *testing.T) {
-	require.Equal(t, formulaNameFor("binary"), "Binary")
+	require.Equal(t, "Binary", formulaNameFor("binary"))
 }
 
 var defaultTemplateData = templateData{
@@ -186,7 +186,7 @@ func TestFullPipe(t *testing.T) {
 					Branch: "main",
 					Git: config.GitRepoRef{
 						URL:        testlib.GitMakeBareRepository(t),
-						PrivateKey: testlib.MakeNewSSHKey(t, keygen.Ed25519, ""),
+						PrivateKey: testlib.MakeNewSSHKey(t, ""),
 					},
 				}
 			},
@@ -313,6 +313,8 @@ func TestFullPipe(t *testing.T) {
 								{Name: "zsh", Type: "optional"},
 								{Name: "bash", Version: "3.2.57"},
 								{Name: "fish", Type: "optional", Version: "v1.2.3"},
+								{Name: "powershell", Type: "optional", OS: "mac"},
+								{Name: "ash", Version: "1.0.0", OS: "linux"},
 							},
 							Conflicts:   []string{"gtk+", "qt"},
 							Service:     "run foo/bar\nkeep_alive true",
@@ -1228,7 +1230,14 @@ func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
 		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
-
+	t.Run("skip flag", func(t *testing.T) {
+		ctx := testctx.NewWithCfg(config.Project{
+			Brews: []config.Homebrew{
+				{},
+			},
+		}, testctx.Skip(skips.Homebrew))
+		require.True(t, Pipe{}.Skip(ctx))
+	})
 	t.Run("dont skip", func(t *testing.T) {
 		ctx := testctx.NewWithCfg(config.Project{
 			Brews: []config.Homebrew{

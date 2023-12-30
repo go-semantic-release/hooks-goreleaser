@@ -2,6 +2,7 @@ package client
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,7 +13,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/log"
-	"github.com/google/go-github/v55/github"
+	"github.com/charmbracelet/x/exp/ordered"
+	"github.com/google/go-github/v57/github"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -167,9 +169,9 @@ func (c *githubClient) CloseMilestone(ctx *context.Context, repo Repo, title str
 
 func headString(base, head Repo) string {
 	return strings.Join([]string{
-		firstNonEmpty(head.Owner, base.Owner),
-		firstNonEmpty(head.Name, base.Name),
-		firstNonEmpty(head.Branch, base.Branch),
+		ordered.First(head.Owner, base.Owner),
+		ordered.First(head.Name, base.Name),
+		ordered.First(head.Branch, base.Branch),
 	}, ":")
 }
 
@@ -196,8 +198,8 @@ func (c *githubClient) OpenPullRequest(
 	draft bool,
 ) error {
 	c.checkRateLimit(ctx)
-	base.Owner = firstNonEmpty(base.Owner, head.Owner)
-	base.Name = firstNonEmpty(base.Name, head.Name)
+	base.Owner = ordered.First(base.Owner, head.Owner)
+	base.Name = ordered.First(base.Name, head.Name)
 	if base.Branch == "" {
 		def, err := c.getDefaultBranch(ctx, base)
 		if err != nil {
@@ -230,7 +232,7 @@ func (c *githubClient) OpenPullRequest(
 		},
 	)
 	if err != nil {
-		if res.StatusCode == 422 {
+		if res.StatusCode == http.StatusUnprocessableEntity {
 			log.WithError(err).Warn("pull request validation failed")
 			return nil
 		}
@@ -281,12 +283,12 @@ func (c *githubClient) CreateFile(
 		Info("pushing")
 
 	if defBranch != branch && branch != "" {
-		_, res, err := c.client.Repositories.GetBranch(ctx, repo.Owner, repo.Name, branch, true)
-		if err != nil && (res == nil || res.StatusCode != 404) {
+		_, res, err := c.client.Repositories.GetBranch(ctx, repo.Owner, repo.Name, branch, 100)
+		if err != nil && (res == nil || res.StatusCode != http.StatusNotFound) {
 			return fmt.Errorf("could not get branch %q: %w", branch, err)
 		}
 
-		if res.StatusCode == 404 {
+		if res.StatusCode == http.StatusNotFound {
 			defRef, _, err := c.client.Git.GetRef(ctx, repo.Owner, repo.Name, "refs/heads/"+defBranch)
 			if err != nil {
 				return fmt.Errorf("could not get ref %q: %w", "refs/heads/"+defBranch, err)
@@ -298,7 +300,10 @@ func (c *githubClient) CreateFile(
 					SHA: defRef.Object.SHA,
 				},
 			}); err != nil {
-				return fmt.Errorf("could not create ref %q from %q: %w", "refs/heads/"+branch, defRef.Object.GetSHA(), err)
+				rerr := new(github.ErrorResponse)
+				if !errors.As(err, &rerr) || rerr.Message != "Reference already exists" {
+					return fmt.Errorf("could not create ref %q from %q: %w", "refs/heads/"+branch, defRef.Object.GetSHA(), err)
+				}
 			}
 		}
 	}
@@ -312,7 +317,7 @@ func (c *githubClient) CreateFile(
 			Ref: branch,
 		},
 	)
-	if err != nil && (res == nil || res.StatusCode != 404) {
+	if err != nil && (res == nil || res.StatusCode != http.StatusNotFound) {
 		return fmt.Errorf("could not get %q: %w", path, err)
 	}
 
@@ -474,7 +479,7 @@ func (c *githubClient) Upload(
 	if err == nil {
 		return nil
 	}
-	if resp != nil && resp.StatusCode == 422 {
+	if resp != nil && resp.StatusCode == http.StatusUnprocessableEntity {
 		return err
 	}
 	return RetriableError{err}

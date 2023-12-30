@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/caarlos0/log"
+	"github.com/charmbracelet/x/exp/ordered"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -54,7 +55,7 @@ func (g *gitClient) CreateFiles(
 		return pipe.Skip("url is empty")
 	}
 
-	repo.Name = firstNonEmpty(repo.Name, nameFromURL(url))
+	repo.Name = ordered.First(repo.Name, nameFromURL(url))
 
 	key, err := tmpl.New(ctx).Apply(repo.PrivateKey)
 	if err != nil {
@@ -68,7 +69,7 @@ func (g *gitClient) CreateFiles(
 
 	sshcmd, err := tmpl.New(ctx).WithExtraFields(tmpl.Fields{
 		"KeyPath": key,
-	}).Apply(firstNonEmpty(repo.GitSSHCommand, DefaulGitSSHCommand))
+	}).Apply(ordered.First(repo.GitSSHCommand, DefaulGitSSHCommand))
 	if err != nil {
 		return fmt.Errorf("git: failed to template ssh command: %w", err)
 	}
@@ -93,19 +94,20 @@ func (g *gitClient) CreateFiles(
 			{"config", "--local", "user.name", commitAuthor.Name},
 			{"config", "--local", "user.email", commitAuthor.Email},
 			{"config", "--local", "commit.gpgSign", "false"},
-			{"config", "--local", "init.defaultBranch", firstNonEmpty(g.branch, "master")},
+			{"config", "--local", "init.defaultBranch", ordered.First(g.branch, "master")},
 		}); err != nil {
 			return fmt.Errorf("git: failed to setup local repository: %w", err)
 		}
-		if g.branch != "" {
+		if g.branch == "" {
+			return nil
+		}
+		if err := runGitCmds(ctx, cwd, env, [][]string{
+			{"checkout", g.branch},
+		}); err != nil {
 			if err := runGitCmds(ctx, cwd, env, [][]string{
-				{"checkout", g.branch},
+				{"checkout", "-b", g.branch},
 			}); err != nil {
-				if err := runGitCmds(ctx, cwd, env, [][]string{
-					{"checkout", "-b", g.branch},
-				}); err != nil {
-					return fmt.Errorf("git: could not checkout branch %s: %w", g.branch, err)
-				}
+				return fmt.Errorf("git: could not checkout branch %s: %w", g.branch, err)
 			}
 		}
 		return nil
@@ -209,13 +211,6 @@ func runGitCmds(ctx *context.Context, cwd string, env []string, cmds [][]string)
 		}
 	}
 	return nil
-}
-
-func firstNonEmpty(s1, s2 string) string {
-	if s1 != "" {
-		return s1
-	}
-	return s2
 }
 
 func nameFromURL(url string) string {

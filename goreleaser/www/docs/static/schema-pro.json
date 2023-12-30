@@ -101,6 +101,9 @@
 					},
 					"goamd64": {
 						"type": "string"
+					},
+					"directory": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -769,6 +772,9 @@
 					},
 					"file_info": {
 						"$ref": "#/$defs/ContentFileInfo"
+					},
+					"expand": {
+						"type": "boolean"
 					}
 				},
 				"additionalProperties": false,
@@ -901,7 +907,13 @@
 						"type": "array"
 					},
 					"use": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"docker",
+							"buildx",
+							"podman"
+						],
+						"default": "docker"
 					},
 					"templated_files": {
 						"items": {
@@ -1385,6 +1397,13 @@
 							},
 							"version": {
 								"type": "string"
+							},
+							"os": {
+								"type": "string",
+								"enum": [
+									"mac",
+									"linux"
+								]
 							}
 						},
 						"additionalProperties": false,
@@ -2406,6 +2425,13 @@
 			},
 			"Project": {
 				"properties": {
+					"version": {
+						"type": "integer",
+						"enum": [
+							1
+						],
+						"default": 1
+					},
 					"project_name": {
 						"type": "string"
 					},
@@ -3956,7 +3982,14 @@
 					}
 				},
 				"additionalProperties": false,
-				"type": "object"
+				"type": "object",
+				"required": [
+					"package_identifier",
+					"publisher",
+					"repository",
+					"short_description",
+					"license"
+				]
 			},
 			"WingetDependency": {
 				"properties": {

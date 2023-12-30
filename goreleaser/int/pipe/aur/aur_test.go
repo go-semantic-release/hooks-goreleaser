@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/charmbracelet/keygen"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/git"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -164,6 +164,13 @@ func TestFullPipe(t *testing.T) {
 				ctx.Config.AURs[0].Homepage = "https://github.com/goreleaser"
 			},
 		},
+		"custom-dir": {
+			prepare: func(ctx *context.Context) {
+				ctx.TokenType = context.TokenTypeGitHub
+				ctx.Config.AURs[0].Homepage = "https://github.com/goreleaser"
+				ctx.Config.AURs[0].Directory = "foo"
+			},
+		},
 		"with-more-opts": {
 			prepare: func(ctx *context.Context) {
 				ctx.TokenType = context.TokenTypeGitHub
@@ -245,7 +252,7 @@ func TestFullPipe(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			url := testlib.GitMakeBareRepository(t)
-			key := testlib.MakeNewSSHKey(t, keygen.Ed25519, "")
+			key := testlib.MakeNewSSHKey(t, "")
 
 			folder := t.TempDir()
 			ctx := testctx.NewWithCfg(
@@ -345,14 +352,14 @@ func TestFullPipe(t *testing.T) {
 
 			require.NoError(t, Pipe{}.Publish(ctx))
 
-			requireEqualRepoFiles(t, folder, name, url)
+			requireEqualRepoFiles(t, folder, ctx.Config.AURs[0].Directory, name, url)
 		})
 	}
 }
 
 func TestRunPipe(t *testing.T) {
 	url := testlib.GitMakeBareRepository(t)
-	key := testlib.MakeNewSSHKey(t, keygen.Ed25519, "")
+	key := testlib.MakeNewSSHKey(t, "")
 
 	folder := t.TempDir()
 	ctx := testctx.NewWithCfg(
@@ -472,7 +479,7 @@ func TestRunPipe(t *testing.T) {
 	require.NoError(t, runAll(ctx, client))
 	require.NoError(t, Pipe{}.Publish(ctx))
 
-	requireEqualRepoFiles(t, folder, "foo", url)
+	requireEqualRepoFiles(t, folder, ".", "foo", url)
 }
 
 func TestRunPipeNoBuilds(t *testing.T) {
@@ -486,9 +493,56 @@ func TestRunPipeNoBuilds(t *testing.T) {
 	require.False(t, client.CreatedFile)
 }
 
+func TestRunPipeWrappedInDirectory(t *testing.T) {
+	url := testlib.GitMakeBareRepository(t)
+	key := testlib.MakeNewSSHKey(t, "")
+	folder := t.TempDir()
+	ctx := testctx.NewWithCfg(
+		config.Project{
+			Dist:        folder,
+			ProjectName: "foo",
+			AURs: []config.AUR{{
+				GitURL:     url,
+				PrivateKey: key,
+			}},
+		},
+		testctx.WithVersion("1.2.1"),
+		testctx.WithCurrentTag("v1.2.1"),
+		testctx.WithSemver(1, 2, 1, ""),
+	)
+
+	path := filepath.Join(folder, "dist/foo_linux_amd64/foo")
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Name:    "foo.tar.gz",
+		Path:    path,
+		Goos:    "linux",
+		Goarch:  "amd64",
+		Goamd64: "v1",
+		Type:    artifact.UploadableArchive,
+		Extra: map[string]interface{}{
+			artifact.ExtraID:        "foo",
+			artifact.ExtraFormat:    "tar.gz",
+			artifact.ExtraBinaries:  []string{"foo"},
+			artifact.ExtraWrappedIn: "foo",
+		},
+	})
+
+	require.NoError(t, Pipe{}.Default(ctx))
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	client := client.NewMock()
+	require.NoError(t, runAll(ctx, client))
+	require.NoError(t, Pipe{}.Publish(ctx))
+
+	requireEqualRepoFiles(t, folder, ".", "foo", url)
+}
+
 func TestRunPipeBinaryRelease(t *testing.T) {
 	url := testlib.GitMakeBareRepository(t)
-	key := testlib.MakeNewSSHKey(t, keygen.Ed25519, "")
+	key := testlib.MakeNewSSHKey(t, "")
 	folder := t.TempDir()
 	ctx := testctx.NewWithCfg(
 		config.Project{
@@ -529,7 +583,7 @@ func TestRunPipeBinaryRelease(t *testing.T) {
 	require.NoError(t, runAll(ctx, client))
 	require.NoError(t, Pipe{}.Publish(ctx))
 
-	requireEqualRepoFiles(t, folder, "foo", url)
+	requireEqualRepoFiles(t, folder, ".", "foo", url)
 }
 
 func TestRunPipeNoUpload(t *testing.T) {
@@ -699,7 +753,14 @@ func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
 		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
-
+	t.Run("skip flag", func(t *testing.T) {
+		ctx := testctx.NewWithCfg(config.Project{
+			AURs: []config.AUR{
+				{},
+			},
+		}, testctx.Skip(skips.AUR))
+		require.True(t, Pipe{}.Skip(ctx))
+	})
 	t.Run("dont skip", func(t *testing.T) {
 		ctx := testctx.NewWithCfg(config.Project{
 			AURs: []config.AUR{
@@ -710,7 +771,7 @@ func TestSkip(t *testing.T) {
 	})
 }
 
-func requireEqualRepoFiles(tb testing.TB, folder, name, url string) {
+func requireEqualRepoFiles(tb testing.TB, distDir, repoDir, name, url string) {
 	tb.Helper()
 	dir := tb.TempDir()
 	_, err := git.Run(testctx.New(), "-C", dir, "clone", url, "repo")
@@ -720,12 +781,12 @@ func requireEqualRepoFiles(tb testing.TB, folder, name, url string) {
 		"PKGBUILD": ".pkgbuild",
 		".SRCINFO": ".srcinfo",
 	} {
-		path := filepath.Join(folder, "aur", name+"-bin"+ext)
+		path := filepath.Join(distDir, "aur", name+"-bin"+ext)
 		bts, err := os.ReadFile(path)
 		require.NoError(tb, err)
 		golden.RequireEqualExt(tb, bts, ext)
 
-		bts, err = os.ReadFile(filepath.Join(dir, "repo", reponame))
+		bts, err = os.ReadFile(filepath.Join(dir, "repo", repoDir, reponame))
 		require.NoError(tb, err)
 		golden.RequireEqualExt(tb, bts, ext)
 	}

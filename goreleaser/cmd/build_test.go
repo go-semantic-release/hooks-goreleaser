@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"runtime"
 	"testing"
 
 	"github.com/goreleaser/goreleaser/int/pipeline"
@@ -179,26 +178,6 @@ func TestBuildFlags(t *testing.T) {
 		}).Clean)
 	})
 
-	t.Run("single-target", func(t *testing.T) {
-		opts := buildOpts{
-			singleTarget: true,
-		}
-
-		t.Run("runtime", func(t *testing.T) {
-			result := setup(opts)
-			require.Equal(t, []string{runtime.GOOS}, result.Config.Builds[0].Goos)
-			require.Equal(t, []string{runtime.GOARCH}, result.Config.Builds[0].Goarch)
-		})
-
-		t.Run("from env", func(t *testing.T) {
-			t.Setenv("GOOS", "linux")
-			t.Setenv("GOARCH", "arm64")
-			result := setup(opts)
-			require.Equal(t, []string{"linux"}, result.Config.Builds[0].Goos)
-			require.Equal(t, []string{"arm64"}, result.Config.Builds[0].Goarch)
-		})
-	})
-
 	t.Run("id", func(t *testing.T) {
 		t.Run("match", func(t *testing.T) {
 			ctx := testctx.NewWithCfg(config.Project{
@@ -284,54 +263,4 @@ func TestBuildFlags(t *testing.T) {
 			}))
 		})
 	})
-}
-
-func TestBuildSingleTargetWithSpecificTargets(t *testing.T) {
-	ctx := testctx.NewWithCfg(config.Project{
-		ProjectName: "test",
-		Builds: []config.Build{
-			{
-				Targets: []string{
-					"linux_amd64_v1",
-					"darwin_arm64",
-					"darwin_amd64_v1",
-				},
-			},
-		},
-		UniversalBinaries: []config.UniversalBinary{
-			{Replace: true},
-		},
-	})
-
-	t.Setenv("GOOS", "darwin")
-	t.Setenv("GOARCH", "amd64")
-	setupBuildSingleTarget(ctx)
-	require.Equal(t, config.Build{
-		Goos:   []string{"darwin"},
-		Goarch: []string{"amd64"},
-	}, ctx.Config.Builds[0])
-	require.Nil(t, ctx.Config.UniversalBinaries)
-}
-
-func TestBuildSingleTargetRemoveOtherOptions(t *testing.T) {
-	ctx := testctx.NewWithCfg(config.Project{
-		ProjectName: "test",
-		Builds: []config.Build{
-			{
-				Goos:    []string{"linux", "darwin"},
-				Goarch:  []string{"amd64", "arm64"},
-				Goamd64: []string{"v1", "v2"},
-				Goarm:   []string{"6"},
-				Gomips:  []string{"anything"},
-			},
-		},
-	})
-
-	t.Setenv("GOOS", "linux")
-	t.Setenv("GOARCH", "amd64")
-	setupBuildSingleTarget(ctx)
-	require.Equal(t, config.Build{
-		Goos:   []string{"linux"},
-		Goarch: []string{"amd64"},
-	}, ctx.Config.Builds[0])
 }

@@ -340,6 +340,58 @@ func TestPublishPipeSuccess(t *testing.T) {
 	}
 }
 
+func TestKoValidateMainPathIssue4382(t *testing.T) {
+	// testing the validation of the main path directly to cover many cases
+	require.NoError(t, validateMainPath(""))
+	require.NoError(t, validateMainPath("."))
+	require.NoError(t, validateMainPath("./..."))
+	require.NoError(t, validateMainPath("./app"))
+	require.NoError(t, validateMainPath("../../../..."))
+	require.NoError(t, validateMainPath("../../app/"))
+	require.NoError(t, validateMainPath("./testdata/app/main"))
+	require.NoError(t, validateMainPath("./testdata/app/folder.with.dots"))
+
+	require.ErrorIs(t, validateMainPath("app/"), errInvalidMainPath)
+	require.ErrorIs(t, validateMainPath("/src/"), errInvalidMainPath)
+	require.ErrorIs(t, validateMainPath("/src/app"), errInvalidMainPath)
+	require.ErrorIs(t, validateMainPath("./testdata/app/main.go"), errInvalidMainPath)
+
+	// testing with real context
+	ctxOk := testctx.NewWithCfg(config.Project{
+		Builds: []config.Build{
+			{
+				ID:   "foo",
+				Main: "./...",
+			},
+		},
+		Kos: []config.Ko{
+			{
+				ID:         "default",
+				Build:      "foo",
+				Repository: "fakerepo",
+			},
+		},
+	})
+	require.NoError(t, Pipe{}.Default(ctxOk))
+
+	ctxWithInvalidMainPath := testctx.NewWithCfg(config.Project{
+		Builds: []config.Build{
+			{
+				ID:   "foo",
+				Main: "/some/non/relative/path",
+			},
+		},
+		Kos: []config.Ko{
+			{
+				ID:         "default",
+				Build:      "foo",
+				Repository: "fakerepo",
+			},
+		},
+	})
+	require.ErrorIs(t, Pipe{}.Default(ctxWithInvalidMainPath), errInvalidMainPath)
+}
+
 func TestPublishPipeError(t *testing.T) {
 	makeCtx := func() *context.Context {
 		return testctx.NewWithCfg(config.Project{
@@ -386,7 +438,10 @@ func TestPublishPipeError(t *testing.T) {
 		ctx := makeCtx()
 		ctx.Config.Kos[0].WorkingDir = t.TempDir()
 		require.NoError(t, Pipe{}.Default(ctx))
-		require.EqualError(t, Pipe{}.Publish(ctx), `build: build: go build: exit status 1`)
+		require.EqualError(
+			t, Pipe{}.Publish(ctx),
+			"build: build: go build: exit status 1: pattern ./...: directory prefix . does not contain main module or its selected dependencies\n",
+		)
 	})
 
 	t.Run("invalid tags tmpl", func(t *testing.T) {

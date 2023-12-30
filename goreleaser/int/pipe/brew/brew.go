@@ -19,9 +19,12 @@ import (
 	"github.com/goreleaser/goreleaser/int/commitauthor"
 	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const brewConfigExtra = "BrewConfig"
@@ -44,9 +47,11 @@ func (e ErrNoArchivesFound) Error() string {
 // Pipe for brew deployment.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "homebrew tap formula" }
-func (Pipe) ContinueOnError() bool          { return true }
-func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.Brews) == 0 }
+func (Pipe) String() string        { return "homebrew tap formula" }
+func (Pipe) ContinueOnError() bool { return true }
+func (Pipe) Skip(ctx *context.Context) bool {
+	return skips.Any(ctx, skips.Homebrew) || len(ctx.Config.Brews) == 0
+}
 
 func (Pipe) Default(ctx *context.Context) error {
 	for i := range ctx.Config.Brews {
@@ -212,7 +217,7 @@ func doRun(ctx *context.Context, brew config.Homebrew, cl client.ReleaseURLTempl
 		),
 		artifact.Or(
 			artifact.And(
-				artifact.ByFormats("zip", "tar.gz"),
+				artifact.ByFormats("zip", "tar.gz", "tar.xz"),
 				artifact.ByType(artifact.UploadableArchive),
 			),
 			artifact.ByType(artifact.UploadableBinary),
@@ -468,6 +473,7 @@ func formulaNameFor(name string) string {
 	name = strings.ReplaceAll(name, "-", " ")
 	name = strings.ReplaceAll(name, "_", " ")
 	name = strings.ReplaceAll(name, ".", "")
-	name = strings.ReplaceAll(name, "@", "AT")
-	return strings.ReplaceAll(strings.Title(name), " ", "") // nolint:staticcheck
+	name = cases.Title(language.English).String(name)
+	name = strings.ReplaceAll(name, " ", "")
+	return strings.ReplaceAll(name, "@", "AT")
 }

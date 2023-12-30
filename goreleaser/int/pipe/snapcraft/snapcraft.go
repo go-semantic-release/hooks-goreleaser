@@ -17,6 +17,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/ids"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -104,8 +105,10 @@ type Pipe struct{}
 
 func (Pipe) String() string                           { return "snapcraft packages" }
 func (Pipe) ContinueOnError() bool                    { return true }
-func (Pipe) Skip(ctx *context.Context) bool           { return len(ctx.Config.Snapcrafts) == 0 }
 func (Pipe) Dependencies(_ *context.Context) []string { return []string{"snapcraft"} }
+func (Pipe) Skip(ctx *context.Context) bool {
+	return skips.Any(ctx, skips.Snapcraft) || len(ctx.Config.Snapcrafts) == 0
+}
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {

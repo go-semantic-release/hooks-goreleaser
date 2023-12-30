@@ -11,6 +11,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/stretchr/testify/require"
@@ -27,6 +28,11 @@ func TestString(t *testing.T) {
 func TestSkip(t *testing.T) {
 	t.Run("no-nix", func(t *testing.T) {
 		require.True(t, Pipe{}.Skip(testctx.New()))
+	})
+	t.Run("skip flag", func(t *testing.T) {
+		require.True(t, NewPublish().Skip(testctx.NewWithCfg(config.Project{
+			Nix: []config.Nix{{}},
+		}, testctx.Skip(skips.Nix))))
 	})
 	t.Run("nix-all-good", func(t *testing.T) {
 		require.False(t, NewPublish().Skip(testctx.NewWithCfg(config.Project{
@@ -80,6 +86,7 @@ func TestPrefetcher(t *testing.T) {
 func TestRunPipe(t *testing.T) {
 	for _, tt := range []struct {
 		name                 string
+		expectDefaultErrorIs error
 		expectRunErrorIs     error
 		expectPublishErrorIs error
 		nix                  config.Nix
@@ -88,6 +95,18 @@ func TestRunPipe(t *testing.T) {
 			name: "minimal",
 			nix: config.Nix{
 				IDs: []string{"foo"},
+				Repository: config.RepoRef{
+					Owner: "foo",
+					Name:  "bar",
+				},
+			},
+		},
+		{
+			name:                 "invalid license",
+			expectDefaultErrorIs: errInvalidLicense,
+			nix: config.Nix{
+				IDs:     []string{"foo"},
+				License: "mitt",
 				Repository: config.RepoRef{
 					Owner: "foo",
 					Name:  "bar",
@@ -193,6 +212,20 @@ func TestRunPipe(t *testing.T) {
 				Dependencies: []config.NixDependency{
 					{Name: "git"},
 				},
+				Repository: config.RepoRef{
+					Owner: "foo",
+					Name:  "bar",
+				},
+			},
+		},
+		{
+			name: "zip-and-tar",
+			nix: config.Nix{
+				Name:        "foozip",
+				IDs:         []string{"zip-and-tar"},
+				Description: "my test",
+				Homepage:    "https://goreleaser.com",
+				License:     "mit",
 				Repository: config.RepoRef{
 					Owner: "foo",
 					Name:  "bar",
@@ -477,6 +510,11 @@ func TestRunPipe(t *testing.T) {
 					}
 					createFakeArtifact("wrapped-in-dir", goos, goarch, "", "", "tar.gz", map[string]any{artifact.ExtraWrappedIn: "./foo"})
 					createFakeArtifact("foo-zip", goos, goarch, "v1", "", "zip", nil)
+					if goos == "darwin" {
+						createFakeArtifact("zip-and-tar", goos, goarch, "v1", "", "zip", nil)
+					} else {
+						createFakeArtifact("zip-and-tar", goos, goarch, "v1", "", "tar.gz", nil)
+					}
 				}
 			}
 
@@ -504,12 +542,18 @@ func TestRunPipe(t *testing.T) {
 			}
 
 			// default
+			if tt.expectDefaultErrorIs != nil {
+				err := bpipe.Default(ctx)
+				require.ErrorAs(t, err, &tt.expectDefaultErrorIs)
+				return
+
+			}
 			require.NoError(t, bpipe.Default(ctx))
 
 			// run
 			if tt.expectRunErrorIs != nil {
 				err := bpipe.runAll(ctx, client)
-				require.ErrorAs(t, err, &tt.expectPublishErrorIs)
+				require.ErrorAs(t, err, &tt.expectRunErrorIs)
 				return
 			}
 			require.NoError(t, bpipe.runAll(ctx, client))

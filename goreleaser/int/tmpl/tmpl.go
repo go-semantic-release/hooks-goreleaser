@@ -183,6 +183,7 @@ func buildOptsToFields(opts build.Options) Fields {
 		osKey:  opts.Goos,
 		arch:   opts.Goarch,
 		arm:    opts.Goarm,
+		amd64:  opts.Goamd64,
 		mips:   opts.Gomips,
 	}
 }
@@ -260,6 +261,8 @@ func (e ExpectedSingleEnvErr) Error() string {
 	return "expected {{ .Env.VAR_NAME }} only (no plain-text or other interpolation)"
 }
 
+var envOnlyRe = regexp.MustCompile(`^{{\s*\.Env\.[^.\s}]+\s*}}$`)
+
 // ApplySingleEnvOnly enforces template to only contain a single environment variable
 // and nothing else.
 func (t *Template) ApplySingleEnvOnly(s string) (string, error) {
@@ -272,8 +275,7 @@ func (t *Template) ApplySingleEnvOnly(s string) (string, error) {
 	// but regexp reduces the complexity and should be sufficient,
 	// given the context is mostly discouraging users from bad practice
 	// of hard-coded credentials, rather than catch all possible cases
-	envOnlyRe := regexp.MustCompile(`^{{\s*\.Env\.[^.\s}]+\s*}}$`)
-	if !envOnlyRe.Match([]byte(s)) {
+	if !envOnlyRe.MatchString(s) {
 		return "", ExpectedSingleEnvErr{}
 	}
 

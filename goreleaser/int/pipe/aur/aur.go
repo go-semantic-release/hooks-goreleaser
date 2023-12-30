@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/commitauthor"
 	"github.com/goreleaser/goreleaser/int/pipe"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -31,9 +33,11 @@ var ErrNoArchivesFound = errors.New("no linux archives found")
 // Pipe for arch linux's AUR pkgbuild.
 type Pipe struct{}
 
-func (Pipe) String() string                 { return "arch user repositories" }
-func (Pipe) ContinueOnError() bool          { return true }
-func (Pipe) Skip(ctx *context.Context) bool { return len(ctx.Config.AURs) == 0 }
+func (Pipe) String() string        { return "arch user repositories" }
+func (Pipe) ContinueOnError() bool { return true }
+func (Pipe) Skip(ctx *context.Context) bool {
+	return skips.Any(ctx, skips.AUR) || len(ctx.Config.AURs) == 0
+}
 
 func (Pipe) Default(ctx *context.Context) error {
 	for i := range ctx.Config.AURs {
@@ -86,11 +90,12 @@ func runAll(ctx *context.Context, cli client.ReleaseURLTemplater) error {
 }
 
 func doRun(ctx *context.Context, aur config.AUR, cl client.ReleaseURLTemplater) error {
-	name, err := tmpl.New(ctx).Apply(aur.Name)
-	if err != nil {
+	if err := tmpl.New(ctx).ApplyAll(
+		&aur.Name,
+		&aur.Directory,
+	); err != nil {
 		return err
 	}
-	aur.Name = name
 
 	filters := []artifact.Filter{
 		artifact.ByGoos("linux"),
@@ -135,8 +140,10 @@ func doRun(ctx *context.Context, aur config.AUR, cl client.ReleaseURLTemplater) 
 			bin := artifact.ExtraOr(*art, artifact.ExtraBinary, art.Name)
 			pkg = fmt.Sprintf(`install -Dm755 "./%s "${pkgdir}/usr/bin/%s"`, name, bin)
 		case artifact.UploadableArchive:
+			folder := artifact.ExtraOr(*art, artifact.ExtraWrappedIn, ".")
 			for _, bin := range artifact.ExtraOr(*art, artifact.ExtraBinaries, []string{}) {
-				pkg = fmt.Sprintf(`install -Dm755 "./%s" "${pkgdir}/usr/bin/%[1]s"`, bin)
+				path := filepath.ToSlash(filepath.Clean(filepath.Join(folder, bin)))
+				pkg = fmt.Sprintf(`install -Dm755 "./%s" "${pkgdir}/usr/bin/%s"`, path, bin)
 				break
 			}
 		}
@@ -389,7 +396,7 @@ func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
 			return err
 		}
 		files = append(files, client.RepoFile{
-			Path:    pkg.Name,
+			Path:    path.Join(cfg.Directory, pkg.Name),
 			Content: content,
 		})
 	}

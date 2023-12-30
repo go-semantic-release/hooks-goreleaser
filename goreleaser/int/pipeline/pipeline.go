@@ -24,6 +24,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/metadata"
 	"github.com/goreleaser/goreleaser/int/pipe/nfpm"
 	"github.com/goreleaser/goreleaser/int/pipe/nix"
+	"github.com/goreleaser/goreleaser/int/pipe/partial"
 	"github.com/goreleaser/goreleaser/int/pipe/prebuild"
 	"github.com/goreleaser/goreleaser/int/pipe/publish"
 	"github.com/goreleaser/goreleaser/int/pipe/reportsizes"
@@ -59,6 +60,8 @@ var BuildPipeline = []Piper{
 	semver.Pipe{},
 	// load default configs
 	defaults.Pipe{},
+	// setup things for partial builds/releases
+	partial.Pipe{},
 	// snapshot version handling
 	snapshot.Pipe{},
 	// run global hooks before build
@@ -69,6 +72,8 @@ var BuildPipeline = []Piper{
 	gomod.Pipe{},
 	// run prebuild stuff
 	prebuild.Pipe{},
+	// proxy gomod if needed
+	gomod.CheckGoModPipe{},
 	// proxy gomod if needed
 	gomod.ProxyPipe{},
 	// writes the actual config (with defaults et al set) to dist

@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/charmbracelet/keygen"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/client"
 	"github.com/goreleaser/goreleaser/int/golden"
+	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/int/testlib"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -239,7 +239,7 @@ func Test_doRun(t *testing.T) {
 								Branch: "main",
 								Git: config.GitRepoRef{
 									URL:        testlib.GitMakeBareRepository(t),
-									PrivateKey: testlib.MakeNewSSHKey(t, keygen.Ed25519, ""),
+									PrivateKey: testlib.MakeNewSSHKey(t, ""),
 								},
 							},
 							Folder:      "scoops",
@@ -1103,7 +1103,16 @@ func TestSkip(t *testing.T) {
 	t.Run("skip", func(t *testing.T) {
 		require.True(t, Pipe{}.Skip(testctx.New()))
 	})
-
+	t.Run("skip flag", func(t *testing.T) {
+		ctx := testctx.NewWithCfg(config.Project{
+			Scoop: config.Scoop{
+				Repository: config.RepoRef{
+					Name: "a",
+				},
+			},
+		}, testctx.Skip(skips.Scoop))
+		require.True(t, Pipe{}.Skip(ctx))
+	})
 	t.Run("dont skip", func(t *testing.T) {
 		ctx := testctx.NewWithCfg(config.Project{
 			Scoop: config.Scoop{

@@ -11,10 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goreleaser/goreleaser/int/logext"
 	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/goreleaser/nfpm/v2/files"
 	"github.com/invopop/jsonschema"
 )
+
+type Versioned struct {
+	Version int
+}
 
 // Git configs.
 type Git struct {
@@ -151,6 +156,7 @@ type HomebrewDependency struct {
 	Name    string `yaml:"name,omitempty" json:"name,omitempty"`
 	Type    string `yaml:"type,omitempty" json:"type,omitempty"`
 	Version string `yaml:"version,omitempty" json:"version,omitempty"`
+	OS      string `yaml:"os,omitempty" json:"os,omitempty" jsonschema:"enum=mac,enum=linux"`
 }
 
 // type alias to prevent stack overflowing in the custom unmarshaler.
@@ -213,6 +219,7 @@ type AUR struct {
 	GitSSHCommand         string       `yaml:"git_ssh_command,omitempty" json:"git_ssh_command,omitempty"`
 	PrivateKey            string       `yaml:"private_key,omitempty" json:"private_key,omitempty"`
 	Goamd64               string       `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
+	Directory             string       `yaml:"directory,omitempty" json:"directory,omitempty"`
 }
 
 // Homebrew contains the brew section.
@@ -311,25 +318,25 @@ func (a *NixDependency) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 type Winget struct {
 	Name                  string             `yaml:"name,omitempty" json:"name,omitempty"`
-	PackageIdentifier     string             `yaml:"package_identifier,omitempty" json:"package_identifier,omitempty"`
-	Publisher             string             `yaml:"publisher,omitempty" json:"publisher,omitempty"`
+	PackageIdentifier     string             `yaml:"package_identifier" json:"package_identifier"`
+	Publisher             string             `yaml:"publisher" json:"publisher"`
 	PublisherURL          string             `yaml:"publisher_url,omitempty" json:"publisher_url,omitempty"`
 	PublisherSupportURL   string             `yaml:"publisher_support_url,omitempty" json:"publisher_support_url,omitempty"`
 	Copyright             string             `yaml:"copyright,omitempty" json:"copyright,omitempty"`
 	CopyrightURL          string             `yaml:"copyright_url,omitempty" json:"copyright_url,omitempty"`
 	Author                string             `yaml:"author,omitempty" json:"author,omitempty"`
 	Path                  string             `yaml:"path,omitempty" json:"path,omitempty"`
-	Repository            RepoRef            `yaml:"repository,omitempty" json:"repository,omitempty"`
+	Repository            RepoRef            `yaml:"repository" json:"repository"`
 	CommitAuthor          CommitAuthor       `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
 	CommitMessageTemplate string             `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
 	IDs                   []string           `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Goamd64               string             `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
 	SkipUpload            string             `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
 	URLTemplate           string             `yaml:"url_template,omitempty" json:"url_template,omitempty"`
-	ShortDescription      string             `yaml:"short_description,omitempty" json:"short_description,omitempty"`
+	ShortDescription      string             `yaml:"short_description" json:"short_description"`
 	Description           string             `yaml:"description,omitempty" json:"description,omitempty"`
 	Homepage              string             `yaml:"homepage,omitempty" json:"homepage,omitempty"`
-	License               string             `yaml:"license,omitempty" json:"license,omitempty"`
+	License               string             `yaml:"license" json:"license"`
 	LicenseURL            string             `yaml:"license_url,omitempty" json:"license_url,omitempty"`
 	ReleaseNotes          string             `yaml:"release_notes,omitempty" json:"release_notes,omitempty"`
 	ReleaseNotesURL       string             `yaml:"release_notes_url,omitempty" json:"release_notes_url,omitempty"`
@@ -1034,7 +1041,7 @@ type Docker struct {
 	Files              []string `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
 	BuildFlagTemplates []string `yaml:"build_flag_templates,omitempty" json:"build_flag_templates,omitempty"`
 	PushFlags          []string `yaml:"push_flags,omitempty" json:"push_flags,omitempty"`
-	Use                string   `yaml:"use,omitempty" json:"use,omitempty"`
+	Use                string   `yaml:"use,omitempty" json:"use,omitempty" jsonschema:"enum=docker,enum=buildx,default=docker"`
 }
 
 // DockerManifest config.
@@ -1144,6 +1151,7 @@ type Source struct {
 
 // Project includes all project configuration.
 type Project struct {
+	Version         int              `yaml:"version,omitempty" json:"version,omitempty" jsonschema:"enum=1,default=1"`
 	ProjectName     string           `yaml:"project_name,omitempty" json:"project_name,omitempty"`
 	Env             []string         `yaml:"env,omitempty" json:"env,omitempty"`
 	Release         Release          `yaml:"release,omitempty" json:"release,omitempty"`
@@ -1339,12 +1347,31 @@ func Load(file string) (config Project, err error) {
 	return LoadReader(f)
 }
 
+type VersionError struct {
+	current int
+}
+
+func (e VersionError) Error() string {
+	return fmt.Sprintf(
+		"only configurations files on %s are supported, yours is %s, please update your configuration",
+		logext.Keyword("version: 1"),
+		logext.Keyword(fmt.Sprintf("version: %d", e.current)),
+	)
+}
+
 // LoadReader config via io.Reader.
 func LoadReader(fd io.Reader) (config Project, err error) {
 	data, err := io.ReadAll(fd)
 	if err != nil {
 		return config, err
 	}
+
+	var versioned Versioned
+	_ = yaml.Unmarshal(data, &versioned)
+	if versioned.Version != 0 && versioned.Version != 1 {
+		return config, VersionError{versioned.Version}
+	}
+
 	err = yaml.UnmarshalStrict(data, &config)
 	return config, err
 }
