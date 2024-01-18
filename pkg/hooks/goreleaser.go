@@ -89,6 +89,22 @@ func (gr *GoReleaser) Success(shConfig *hooks.SuccessHookConfig) error {
 	ctx.PreRelease = gr.prerelease
 	ctx.Config.Release.Draft = false // always disable drafts
 
+	// make it possible for Goreleaser templates to understand whether the changes introduce major/minor/patch changes, so they can present that information to the user
+	ctx.Env["GOSEMREL_MAJOR"] = ""
+	ctx.Env["GOSEMREL_MINOR"] = ""
+	ctx.Env["GOSEMREL_PATCH"] = ""
+	for _, c := range shConfig.Commits {
+		if c.Change.Major {
+			ctx.Env["GOSEMREL_MAJOR"] = "true"
+		}
+		if c.Change.Minor {
+			ctx.Env["GOSEMREL_MINOR"] = "true"
+		}
+		if c.Change.Patch {
+			ctx.Env["GOSEMREL_PATCH"] = "true"
+		}
+	}
+
 	for _, pipe := range pipeline.Pipeline {
 		if _, ok := pipe.(git.Pipe); ok {
 			log.Info("skipping git pipe")
