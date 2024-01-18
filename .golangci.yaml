@@ -23,6 +23,8 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment
+  goconst:
+    min-occurrences: 6
 
 run:
   skip-dirs:
