@@ -14,4 +14,4 @@ completions/
 .idea/
 manpages
 output.json
-!/int/pipe/dist
+.direnv

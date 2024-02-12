@@ -37,6 +37,11 @@ brews:
     - foo
     - bar
 
+    # Sets the app file within a DMG.
+    #
+    # Since: 1.24 (pro)
+    app: MyApp.app
+
     # GOARM to specify which 32-bit arm version to use if there are multiple
     # versions from the build section. Brew formulas support only one 32-bit
     # version.
@@ -167,7 +172,7 @@ brews:
     # Additional install instructions so you don't need to override `install`.
     #
     # Template: allowed
-    # Since: v1.20.
+    # Since: v1.20
     extra_install: |
       bash_completion.install "completions/foo.bash" => "foo"
       man1.install "man/foo.1.gz"

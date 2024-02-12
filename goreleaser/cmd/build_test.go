@@ -3,9 +3,9 @@ package cmd
 import (
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/pipeline"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/internal/pipeline"
+	"github.com/goreleaser/goreleaser/internal/skips"
+	"github.com/goreleaser/goreleaser/internal/testctx"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
@@ -136,6 +136,11 @@ func TestBuildFlags(t *testing.T) {
 		require.NoError(t, setupBuildContext(ctx, opts))
 		return ctx
 	}
+
+	t.Run("action", func(t *testing.T) {
+		ctx := setup(buildOpts{})
+		require.Equal(t, context.ActionBuild, ctx.Action)
+	})
 
 	t.Run("snapshot", func(t *testing.T) {
 		ctx := setup(buildOpts{

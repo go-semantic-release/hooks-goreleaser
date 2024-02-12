@@ -48,14 +48,14 @@ jobs:
       - uses: crazy-max/ghaction-upx@v3
         with:
           install-only: true
-      - uses: cachix/install-nix-action@v24
+      - uses: cachix/install-nix-action@v25
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v4
         with:
           go-version: stable
-      - uses: sigstore/cosign-installer@v3.3.0
-      - uses: anchore/sbom-action/download-syft@v0.15.1
+      - uses: sigstore/cosign-installer@v3.4.0
+      - uses: anchore/sbom-action/download-syft@v0.15.8
       - name: setup-validate-krew-manifest
         run: go install sigs.k8s.io/krew/cmd/validate-krew-manifest@latest
       - name: setup-tparse
@@ -66,7 +66,7 @@ jobs:
           task build
       - name: test
         run: ./scripts/test.sh
-      - uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # v3
+      - uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4
         with:
           file: ./coverage.txt
       - run: ./goreleaser check

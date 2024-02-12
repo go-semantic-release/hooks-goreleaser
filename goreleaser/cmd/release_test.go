@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/internal/skips"
+	"github.com/goreleaser/goreleaser/internal/testctx"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
@@ -61,6 +61,11 @@ func TestReleaseFlags(t *testing.T) {
 		require.NoError(t, setupReleaseContext(ctx, opts))
 		return ctx
 	}
+
+	t.Run("action", func(t *testing.T) {
+		ctx := setup(t, releaseOpts{})
+		require.Equal(t, context.ActionRelease, ctx.Action)
+	})
 
 	t.Run("snapshot", func(t *testing.T) {
 		ctx := setup(t, releaseOpts{

@@ -57,7 +57,7 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v2
-      - uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3
+      - uses: actions/cache@13aacd865c20de90d75de3b17ebe84f7a17d57d2 # v4
         with:
           path: |
             ./dist/*.deb
@@ -89,19 +89,19 @@ jobs:
       - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v4
         with:
           go-version: stable
-      - uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3
+      - uses: actions/cache@13aacd865c20de90d75de3b17ebe84f7a17d57d2 # v4
         with:
           path: |
             ./dist/*.deb
             ./dist/*.rpm
             ./dist/*.apk
           key: ${{ github.ref }}
-      - uses: sigstore/cosign-installer@v3.3.0
-      - uses: anchore/sbom-action/download-syft@v0.15.1
+      - uses: sigstore/cosign-installer@v3.4.0
+      - uses: anchore/sbom-action/download-syft@v0.15.8
       - uses: crazy-max/ghaction-upx@v3
         with:
           install-only: true
-      - uses: cachix/install-nix-action@v24
+      - uses: cachix/install-nix-action@v25
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: dockerhub-login

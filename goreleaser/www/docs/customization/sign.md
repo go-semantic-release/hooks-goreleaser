@@ -54,14 +54,17 @@ signs:
 
     # Which artifacts to sign
     #
-    #   all:      all artifacts
-    #   none:     no signing
-    #   checksum: only checksum file(s)
-    #   source:   source archive
-    #   package:  linux packages (deb, rpm, apk)
-    #   archive:  archives from archive pipe
-    #   binary:   binaries if archiving format is set to binary
-    #   sbom:     any Software Bill of Materials generated for other artifacts
+    # Valid options are:
+    # - none        no signing
+    # - all:        all artifacts
+    # - checksum:   checksum files
+    # - source:     source archive
+    # - package:    Linux packages (deb, rpm, apk, etc)
+    # - installer:  Windows MSI installers (Pro only)
+    # - diskimage:  macOS DMG disk images (Pro only)
+    # - archive:    archives from archive pipe
+    # - binary:     binaries output from the build stage
+    # - sbom:       any SBOMs generated for other artifacts
     #
     # Default: 'none'
     artifacts: all
@@ -152,7 +155,12 @@ Executables can be signed after build using post hooks.
 
 ### With gon
 
-For example, you can use [gon][] to create notarized macOS apps:
+!!! notice
+
+    [gon][] was discontinued by its maintainer, but it lives on in a
+    [fork][gon-fork], which we'll use here.
+
+For example, you can use [gon][gon-fork] to create notarized macOS apps:
 
 ```yaml
 # .goreleaser.yaml
@@ -176,7 +184,7 @@ builds:
       post: gon gon.hcl
 ```
 
-and:
+And:
 
 ```terraform
 # gon.hcl
@@ -260,4 +268,5 @@ And it will work just fine. Just make sure to always use the `${signature}`
 template variable as the result file name and `${artifact}` as the origin file.
 
 [gon]: https://github.com/mitchellh/gon
+[gon-fork]: https://github.com/Bearer/gon
 [cosign]: https://github.com/sigstore/cosign

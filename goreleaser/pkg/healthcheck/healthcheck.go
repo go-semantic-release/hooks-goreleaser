@@ -5,12 +5,12 @@ package healthcheck
 import (
 	"fmt"
 
-	"github.com/goreleaser/goreleaser/int/pipe/chocolatey"
-	"github.com/goreleaser/goreleaser/int/pipe/docker"
-	"github.com/goreleaser/goreleaser/int/pipe/nix"
-	"github.com/goreleaser/goreleaser/int/pipe/sbom"
-	"github.com/goreleaser/goreleaser/int/pipe/sign"
-	"github.com/goreleaser/goreleaser/int/pipe/snapcraft"
+	"github.com/goreleaser/goreleaser/internal/pipe/chocolatey"
+	"github.com/goreleaser/goreleaser/internal/pipe/docker"
+	"github.com/goreleaser/goreleaser/internal/pipe/nix"
+	"github.com/goreleaser/goreleaser/internal/pipe/sbom"
+	"github.com/goreleaser/goreleaser/internal/pipe/sign"
+	"github.com/goreleaser/goreleaser/internal/pipe/snapcraft"
 	"github.com/goreleaser/goreleaser/pkg/context"
 )
 

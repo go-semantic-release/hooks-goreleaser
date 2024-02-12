@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goreleaser/goreleaser/int/logext"
-	"github.com/goreleaser/goreleaser/int/yaml"
+	"github.com/goreleaser/goreleaser/internal/logext"
+	"github.com/goreleaser/goreleaser/internal/yaml"
 	"github.com/goreleaser/nfpm/v2/files"
 	"github.com/invopop/jsonschema"
 )
@@ -285,8 +285,8 @@ func (a NixDependency) JSONSchema() *jsonschema.Schema {
 	reflector := jsonschema.Reflector{
 		ExpandedStruct: true,
 	}
-	type t NixDependency
-	schema := reflector.Reflect(&t{})
+	type nixDependencyAlias NixDependency
+	schema := reflector.Reflect(&nixDependencyAlias{})
 	return &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
 			{
@@ -317,8 +317,8 @@ func (a *NixDependency) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 type Winget struct {
-	Name                  string             `yaml:"name,omitempty" json:"name,omitempty"`
-	PackageIdentifier     string             `yaml:"package_identifier" json:"package_identifier"`
+	Name                  string             `yaml:"name" json:"name"`
+	PackageIdentifier     string             `yaml:"package_identifier,omitempty" json:"package_identifier,omitempty"`
 	Publisher             string             `yaml:"publisher" json:"publisher"`
 	PublisherURL          string             `yaml:"publisher_url,omitempty" json:"publisher_url,omitempty"`
 	PublisherSupportURL   string             `yaml:"publisher_support_url,omitempty" json:"publisher_support_url,omitempty"`
@@ -536,7 +536,7 @@ type BuildDetailsOverride struct {
 }
 
 type BuildDetails struct {
-	Buildmode string      `yaml:"buildmode,omitempty" json:"buildmode,omitempty"`
+	Buildmode string      `yaml:"buildmode,omitempty" json:"buildmode,omitempty" jsonschema:"enum=c-archive,enum=c-shared,enum=,default="`
 	Ldflags   StringArray `yaml:"ldflags,omitempty" json:"ldflags,omitempty"`
 	Tags      FlagArray   `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Flags     FlagArray   `yaml:"flags,omitempty" json:"flags,omitempty"`
@@ -611,11 +611,11 @@ func (bh *Hook) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func (bh Hook) JSONSchema() *jsonschema.Schema {
-	type t Hook
+	type hookAlias Hook
 	reflector := jsonschema.Reflector{
 		ExpandedStruct: true,
 	}
-	schema := reflector.Reflect(&t{})
+	schema := reflector.Reflect(&hookAlias{})
 	return &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
 			{
@@ -668,11 +668,11 @@ func (f *File) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func (f File) JSONSchema() *jsonschema.Schema {
-	type t File
+	type fileAlias File
 	reflector := jsonschema.Reflector{
 		ExpandedStruct: true,
 	}
-	schema := reflector.Reflect(&t{})
+	schema := reflector.Reflect(&fileAlias{})
 	return &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
 			{
@@ -786,8 +786,15 @@ type NFPM struct {
 	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
 	License     string   `yaml:"license,omitempty" json:"license,omitempty"`
 	Bindir      string   `yaml:"bindir,omitempty" json:"bindir,omitempty"`
+	Libdirs     Libdirs  `yaml:"libdirs,omitempty" json:"libdirs,omitempty"`
 	Changelog   string   `yaml:"changelog,omitempty" json:"changelog,omitempty"`
 	Meta        bool     `yaml:"meta,omitempty" json:"meta,omitempty"` // make package without binaries - only deps
+}
+
+type Libdirs struct {
+	Header   string `yaml:"header,omitempty" json:"header,omitempty"`
+	CArchive string `yaml:"carchive,omitempty" json:"carchive,omitempty"`
+	CShared  string `yaml:"cshared,omitempty" json:"cshared,omitempty"`
 }
 
 // NFPMScripts is used to specify maintainer scripts.
@@ -1065,10 +1072,13 @@ type Filters struct {
 type Changelog struct {
 	Filters Filters          `yaml:"filters,omitempty" json:"filters,omitempty"`
 	Sort    string           `yaml:"sort,omitempty" json:"sort,omitempty" jsonschema:"enum=asc,enum=desc,enum=,default="`
-	Skip    string           `yaml:"skip,omitempty" json:"skip,omitempty" jsonschema:"oneof_type=string;boolean"` // TODO(caarlos0): rename to Disable to match other pipes
+	Disable string           `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
 	Use     string           `yaml:"use,omitempty" json:"use,omitempty" jsonschema:"enum=git,enum=github,enum=github-native,enum=gitlab,default=git"`
 	Groups  []ChangelogGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
 	Abbrev  int              `yaml:"abbrev,omitempty" json:"abbrev,omitempty"`
+
+	// Deprecated: use disable instead.
+	Skip string `yaml:"skip,omitempty" json:"skip,omitempty" jsonschema:"oneof_type=string;boolean,deprecated=true,description=use disable instead"`
 }
 
 // ChangelogGroup holds the grouping criteria for the changelog.
@@ -1093,16 +1103,25 @@ type Before struct {
 
 // Blob contains config for GO CDK blob.
 type Blob struct {
-	Bucket     string      `yaml:"bucket,omitempty" json:"bucket,omitempty"`
-	Provider   string      `yaml:"provider,omitempty" json:"provider,omitempty"`
-	Region     string      `yaml:"region,omitempty" json:"region,omitempty"`
-	DisableSSL bool        `yaml:"disableSSL,omitempty" json:"disableSSL,omitempty"` // nolint:tagliatelle // TODO(caarlos0): rename to disable_ssl
-	Folder     string      `yaml:"folder,omitempty" json:"folder,omitempty"`
-	KMSKey     string      `yaml:"kmskey,omitempty" json:"kmskey,omitempty"`
-	IDs        []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
-	Endpoint   string      `yaml:"endpoint,omitempty" json:"endpoint,omitempty"` // used for minio for example
-	ExtraFiles []ExtraFile `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
-	Disable    string      `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
+	Bucket             string      `yaml:"bucket,omitempty" json:"bucket,omitempty"`
+	Provider           string      `yaml:"provider,omitempty" json:"provider,omitempty"`
+	Region             string      `yaml:"region,omitempty" json:"region,omitempty"`
+	DisableSSL         bool        `yaml:"disable_ssl,omitempty" json:"disable_ssl,omitempty"`
+	Folder             string      `yaml:"folder,omitempty" json:"folder,omitempty"`
+	KMSKey             string      `yaml:"kms_key,omitempty" json:"kms_key,omitempty"`
+	IDs                []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Endpoint           string      `yaml:"endpoint,omitempty" json:"endpoint,omitempty"` // used for minio for example
+	ExtraFiles         []ExtraFile `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
+	Disable            string      `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
+	S3ForcePathStyle   *bool       `yaml:"s3_force_path_style,omitempty" json:"s3_force_path_style,omitempty"`
+	ACL                string      `yaml:"acl,omitempty" json:"acl,omitempty"`
+	CacheControl       []string    `yaml:"cache_control,omitempty" json:"cache_control,omitempty"`
+	ContentDisposition string      `yaml:"content_disposition,omitempty" json:"content_disposition,omitempty"`
+
+	// Deprecated: use disable_ssl instead
+	OldDisableSSL bool `yaml:"disableSSL,omitempty" json:"disableSSL,omitempty" jsonschema:"deprecated=true,description=use disable_ssl instead"` // nolint:tagliatelle
+	// Deprecated: use kms_key instead
+	OldKMSKey string `yaml:"kmskey,omitempty" json:"kmskey,omitempty" jsonschema:"deprecated=true,description=use kms_key instead"`
 }
 
 // Upload configuration.

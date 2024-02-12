@@ -33,7 +33,7 @@ blobs:
 
     # Disables SSL
     # Requires provider to be `s3`
-    disableSSL: true
+    disable_ssl: true
 
     # Bucket name.
     #
@@ -80,6 +80,44 @@ blobs:
       - src: LICENSE.tpl
         dst: LICENSE.txt
 
+    # Allow to disable `s3ForcePathStyle`.
+    #
+    # Default: true
+    # Since: v1.24
+    s3_force_path_style: false
+
+    # ACL to be applied to all files in this configuration.
+    #
+    # If you need different ACLs for different files, create multiple `blobs`
+    # configurations.
+    #
+    # Only available when `provider` is S3.
+    #
+    # Default: empty
+    # Since: v1.24
+    acl: foo
+
+    # Cache control options.
+    #
+    # If you need different `cache_control` options for different files,
+    # create multiple `blobs` configurations.
+    #
+    # Default: empty
+    # Since: v1.24
+    cache_control:
+      - max-age=9999
+      - public
+
+    # Allows to set the content disposition of the file.
+    #
+    # If you need different `content_disposition` options for different files,
+    # create multiple `blobs` configurations.
+    #
+    # Default: attachment;filename={{.Filename}}
+    # Templates: allowed
+    # Since: v1.24
+    content_disposition: "inline"
+
   - provider: gs
     bucket: goreleaser-bucket
     folder: "foo/bar/{{.Version}}"
@@ -117,6 +155,7 @@ blobs:
 Storage account is set over URL param `storage_account` in `bucket` or in environment variable `AZURE_STORAGE_ACCOUNT`
 
 It supports authentication with
+
 - [environment variables](https://docs.microsoft.com/en-us/azure/storage/common/storage-azure-cli#set-default-azure-storage-account-environment-variables):
   - `AZURE_STORAGE_KEY` or `AZURE_STORAGE_SAS_TOKEN`
 - [default Azure credential](https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication-service-principal)

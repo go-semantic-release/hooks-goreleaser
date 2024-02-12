@@ -9,15 +9,15 @@ import (
 
 	"github.com/caarlos0/ctrlc"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/deprecate"
-	"github.com/goreleaser/goreleaser/int/gio"
-	"github.com/goreleaser/goreleaser/int/logext"
-	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
-	"github.com/goreleaser/goreleaser/int/middleware/logging"
-	"github.com/goreleaser/goreleaser/int/middleware/skip"
-	"github.com/goreleaser/goreleaser/int/pipeline"
-	"github.com/goreleaser/goreleaser/int/skips"
+	"github.com/goreleaser/goreleaser/internal/artifact"
+	"github.com/goreleaser/goreleaser/internal/deprecate"
+	"github.com/goreleaser/goreleaser/internal/gio"
+	"github.com/goreleaser/goreleaser/internal/logext"
+	"github.com/goreleaser/goreleaser/internal/middleware/errhandler"
+	"github.com/goreleaser/goreleaser/internal/middleware/logging"
+	"github.com/goreleaser/goreleaser/internal/middleware/skip"
+	"github.com/goreleaser/goreleaser/internal/pipeline"
+	"github.com/goreleaser/goreleaser/internal/skips"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/spf13/cobra"
@@ -167,6 +167,7 @@ func setupPipeline(ctx *context.Context, options buildOpts) []pipeline.Piper {
 }
 
 func setupBuildContext(ctx *context.Context, options buildOpts) error {
+	ctx.Action = context.ActionBuild
 	ctx.Deprecated = options.deprecated // test only
 	ctx.Parallelism = runtime.GOMAXPROCS(0)
 	if options.parallelism > 0 {
