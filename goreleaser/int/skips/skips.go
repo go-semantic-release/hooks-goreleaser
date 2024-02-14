@@ -29,6 +29,8 @@ const (
 	Homebrew       Key = "homebrew"
 	Nix            Key = "nix"
 	AUR            Key = "aur"
+	NFPM           Key = "nfpm"
+	Chocolatey     Key = "chocolatey"
 )
 
 func String(ctx *context.Context) string {
@@ -104,11 +106,13 @@ var Release = Keys{
 	Ko,
 	Docker,
 	Winget,
+	Chocolatey,
 	Snapcraft,
 	Scoop,
 	Homebrew,
 	Nix,
 	AUR,
+	NFPM,
 	Before,
 }
 

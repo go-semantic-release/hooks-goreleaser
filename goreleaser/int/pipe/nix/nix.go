@@ -23,6 +23,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
+	"golang.org/x/exp/maps"
 )
 
 const nixConfigExtra = "NixConfig"
@@ -253,15 +254,11 @@ func preparePkg(
 		return "", err
 	}
 
-	folder := artifact.ExtraOr(*archives[0], artifact.ExtraWrappedIn, ".")
-	if folder == "" {
-		folder = "."
-	}
-
 	inputs := []string{"installShellFiles"}
 	dependencies := depNames(nix.Dependencies)
 	if len(dependencies) > 0 {
 		inputs = append(inputs, "makeWrapper")
+		dependencies = append(dependencies, "makeWrapper")
 	}
 	for _, arch := range archives {
 		if arch.Format() == "zip" {
@@ -277,7 +274,7 @@ func preparePkg(
 		Install:      installs,
 		PostInstall:  postInstall,
 		Archives:     map[string]Archive{},
-		SourceRoot:   folder,
+		SourceRoots:  map[string]string{},
 		Description:  nix.Description,
 		Homepage:     nix.Homepage,
 		License:      nix.License,
@@ -305,10 +302,19 @@ func preparePkg(
 			if _, ok := data.Archives[key]; ok {
 				return "", ErrMultipleArchivesSamePlatform
 			}
+			folder := artifact.ExtraOr(*art, artifact.ExtraWrappedIn, ".")
+			if folder == "" {
+				folder = "."
+			}
+			data.SourceRoots[key] = folder
 			data.Archives[key] = archive
 			plat := goosToPlatform[art.Goos+goarch+art.Goarm]
 			platforms[plat] = true
 		}
+	}
+
+	if roots := slices.Compact(maps.Values(data.SourceRoots)); len(roots) == 1 {
+		data.SourceRoot = roots[0]
 	}
 	data.Platforms = keys(platforms)
 	sort.Strings(data.Platforms)
@@ -498,10 +504,10 @@ func binInstallFormats(nix config.Nix) []string {
 	var depStrings []string
 
 	if len(darwinDeps) > 0 {
-		depStrings = append(depStrings, fmt.Sprintf("lib.optionals stdenv.isDarwin [ %s ]", strings.Join(darwinDeps, " ")))
+		depStrings = append(depStrings, fmt.Sprintf("lib.optionals stdenvNoCC.isDarwin [ %s ]", strings.Join(darwinDeps, " ")))
 	}
 	if len(linuxDeps) > 0 {
-		depStrings = append(depStrings, fmt.Sprintf("lib.optionals stdenv.isLinux [ %s ]", strings.Join(linuxDeps, " ")))
+		depStrings = append(depStrings, fmt.Sprintf("lib.optionals stdenvNoCC.isLinux [ %s ]", strings.Join(linuxDeps, " ")))
 	}
 	if len(deps) > 0 {
 		depStrings = append(depStrings, fmt.Sprintf("[ %s ]", strings.Join(deps, " ")))

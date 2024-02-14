@@ -8,6 +8,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/extrafiles"
@@ -53,7 +55,11 @@ func urlFor(ctx *context.Context, conf config.Blob) (string, error) {
 	}
 	if endpoint != "" {
 		query.Add("endpoint", endpoint)
-		query.Add("s3ForcePathStyle", "true")
+		if conf.S3ForcePathStyle == nil {
+			query.Add("s3ForcePathStyle", "true")
+		} else {
+			query.Add("s3ForcePathStyle", fmt.Sprintf("%t", *conf.S3ForcePathStyle))
+		}
 	}
 
 	region, err := tmpl.New(ctx).Apply(conf.Region)
@@ -104,7 +110,21 @@ func doUpload(ctx *context.Context, conf config.Blob) error {
 		filter = artifact.And(filter, artifact.ByIDs(conf.IDs...))
 	}
 
-	up := &productionUploader{}
+	up := &productionUploader{
+		cacheControl:       conf.CacheControl,
+		contentDisposition: conf.ContentDisposition,
+	}
+	if conf.Provider == "s3" && conf.ACL != "" {
+		up.beforeWrite = func(asFunc func(interface{}) bool) error {
+			req := &s3manager.UploadInput{}
+			if !asFunc(&req) {
+				return fmt.Errorf("could not apply before write")
+			}
+			req.ACL = aws.String(conf.ACL)
+			return nil
+		}
+	}
+
 	if err := up.Open(ctx, bucketURL); err != nil {
 		return handleError(err, bucketURL)
 	}
@@ -210,7 +230,10 @@ type uploader interface {
 
 // productionUploader actually do upload to.
 type productionUploader struct {
-	bucket *blob.Bucket
+	bucket             *blob.Bucket
+	beforeWrite        func(asFunc func(interface{}) bool) error
+	cacheControl       []string
+	contentDisposition string
 }
 
 func (u *productionUploader) Close() error {
@@ -234,8 +257,17 @@ func (u *productionUploader) Open(ctx *context.Context, bucket string) error {
 func (u *productionUploader) Upload(ctx *context.Context, filepath string, data []byte) error {
 	log.WithField("path", filepath).Info("uploading")
 
+	disp, err := tmpl.New(ctx).WithExtraFields(tmpl.Fields{
+		"Filename": path.Base(filepath),
+	}).Apply(u.contentDisposition)
+	if err != nil {
+		return err
+	}
+
 	opts := &blob.WriterOptions{
-		ContentDisposition: "attachment; filename=" + path.Base(filepath),
+		ContentDisposition: disp,
+		BeforeWrite:        u.beforeWrite,
+		CacheControl:       strings.Join(u.cacheControl, ", "),
 	}
 	w, err := u.bucket.NewWriter(ctx, filepath, opts)
 	if err != nil {

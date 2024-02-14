@@ -288,13 +288,13 @@
 					"region": {
 						"type": "string"
 					},
-					"disableSSL": {
+					"disable_ssl": {
 						"type": "boolean"
 					},
 					"folder": {
 						"type": "string"
 					},
-					"kmskey": {
+					"kms_key": {
 						"type": "string"
 					},
 					"ids": {
@@ -321,6 +321,29 @@
 								"type": "boolean"
 							}
 						]
+					},
+					"s3_force_path_style": {
+						"type": "boolean"
+					},
+					"acl": {
+						"type": "string"
+					},
+					"cache_control": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"content_disposition": {
+						"type": "string"
+					},
+					"disableSSL": {
+						"type": "boolean",
+						"description": "use disable_ssl instead"
+					},
+					"kmskey": {
+						"type": "string",
+						"description": "use kms_key instead"
 					},
 					"templated_extra_files": {
 						"items": {
@@ -413,7 +436,13 @@
 						"type": "boolean"
 					},
 					"buildmode": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"c-archive",
+							"c-shared",
+							""
+						],
+						"default": ""
 					},
 					"ldflags": {
 						"$ref": "#/$defs/StringArray"
@@ -474,7 +503,13 @@
 						"type": "string"
 					},
 					"buildmode": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"c-archive",
+							"c-shared",
+							""
+						],
+						"default": ""
 					},
 					"ldflags": {
 						"$ref": "#/$defs/StringArray"
@@ -527,7 +562,7 @@
 						],
 						"default": ""
 					},
-					"skip": {
+					"disable": {
 						"oneOf": [
 							{
 								"type": "string"
@@ -564,6 +599,17 @@
 							"type": "string"
 						},
 						"type": "array"
+					},
+					"skip": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						],
+						"description": "use disable instead"
 					}
 				},
 				"additionalProperties": false,
@@ -717,6 +763,14 @@
 					},
 					"goamd64": {
 						"type": "string"
+					},
+					"use": {
+						"type": "string",
+						"enum": [
+							"archive",
+							"msi"
+						],
+						"default": "archive"
 					}
 				},
 				"additionalProperties": false,
@@ -807,6 +861,42 @@
 					"$ref": "#/$defs/Content"
 				},
 				"type": "array"
+			},
+			"DMG": {
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goamd64": {
+						"type": "string"
+					},
+					"extra_files": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"replace": {
+						"type": "boolean"
+					},
+					"mod_timestamp": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"name"
+				]
 			},
 			"Discord": {
 				"properties": {
@@ -1005,7 +1095,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/t",
+						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/file-alias",
 						"$defs": {
 							"FileInfo": {
 								"properties": {
@@ -1166,6 +1256,12 @@
 						"type": "string"
 					},
 					"ignore_tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"ignore_tag_prefixes": {
 						"items": {
 							"type": "string"
 						},
@@ -1368,6 +1464,9 @@
 						},
 						"type": "array"
 					},
+					"app": {
+						"type": "string"
+					},
 					"tap": {
 						"$ref": "#/$defs/RepoRef",
 						"description": "use repository instead"
@@ -1426,7 +1525,7 @@
 								},
 								{
 									"$schema": "https://json-schema.org/draft/2020-12/schema",
-									"$id": "https://github.com/goreleaser/goreleaser/pkg/config/t",
+									"$id": "https://github.com/goreleaser/goreleaser/pkg/config/hook-alias",
 									"properties": {
 										"dir": {
 											"type": "string"
@@ -1720,6 +1819,21 @@
 				"additionalProperties": false,
 				"type": "object"
 			},
+			"Libdirs": {
+				"properties": {
+					"header": {
+						"type": "string"
+					},
+					"carchive": {
+						"type": "string"
+					},
+					"cshared": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
 			"LinkedIn": {
 				"properties": {
 					"enabled": {
@@ -1731,6 +1845,46 @@
 				},
 				"additionalProperties": false,
 				"type": "object"
+			},
+			"MSI": {
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"wxs": {
+						"type": "string"
+					},
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"goamd64": {
+						"type": "string"
+					},
+					"extra_files": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"replace": {
+						"type": "boolean"
+					},
+					"mod_timestamp": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"name",
+					"wxs"
+				]
 			},
 			"Mastodon": {
 				"properties": {
@@ -1946,6 +2100,9 @@
 					},
 					"bindir": {
 						"type": "string"
+					},
+					"libdirs": {
+						"$ref": "#/$defs/Libdirs"
 					},
 					"changelog": {
 						"type": "string"
@@ -2361,7 +2518,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/t",
+						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/nix-dependency-alias",
 						"properties": {
 							"name": {
 								"type": "string"
@@ -2465,6 +2622,18 @@
 					"winget": {
 						"items": {
 							"$ref": "#/$defs/Winget"
+						},
+						"type": "array"
+					},
+					"msi": {
+						"items": {
+							"$ref": "#/$defs/MSI"
+						},
+						"type": "array"
+					},
+					"dmg": {
+						"items": {
+							"$ref": "#/$defs/DMG"
 						},
 						"type": "array"
 					},
@@ -2985,9 +3154,10 @@
 						"enum": [
 							"source",
 							"package",
+							"diskimage",
+							"installer",
 							"archive",
 							"binary",
-							"any",
 							"any"
 						],
 						"default": "archive"
@@ -3119,6 +3289,14 @@
 					"goamd64": {
 						"type": "string"
 					},
+					"use": {
+						"type": "string",
+						"enum": [
+							"archive",
+							"msi"
+						],
+						"default": "archive"
+					},
 					"bucket": {
 						"$ref": "#/$defs/RepoRef",
 						"description": "use repository instead"
@@ -3155,7 +3333,9 @@
 							"package",
 							"archive",
 							"binary",
-							"sbom"
+							"sbom",
+							"installer",
+							"diskimage"
 						]
 					},
 					"ids": {
@@ -3979,12 +4159,23 @@
 							"$ref": "#/$defs/WingetDependency"
 						},
 						"type": "array"
+					},
+					"product_code": {
+						"type": "string"
+					},
+					"use": {
+						"type": "string",
+						"enum": [
+							"archive",
+							"binary",
+							"msi"
+						]
 					}
 				},
 				"additionalProperties": false,
 				"type": "object",
 				"required": [
-					"package_identifier",
+					"name",
 					"publisher",
 					"repository",
 					"short_description",
