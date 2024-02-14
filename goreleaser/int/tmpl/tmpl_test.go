@@ -92,6 +92,8 @@ func TestWithArtifact(t *testing.T) {
 		"nightly false":                    `nightly {{.IsNightly}}`,
 		"draft true":                       `draft {{.IsDraft}}`,
 		"dirty true":                       `dirty {{.IsGitDirty}}`,
+		"clean false":                      `clean {{.IsGitClean}}`,
+		"state dirty":                      `state {{.GitTreeState}}`,
 		"env bar: barrrrr":                 `env bar: {{ envOrDefault "BAR" "barrrrr" }}`,
 		"env foo: bar":                     `env foo: {{ envOrDefault "FOO" "barrrrr" }}`,
 
@@ -248,6 +250,11 @@ func TestFuncMap(t *testing.T) {
 			Template: `{{ tolower "TEST" }}`,
 			Name:     "tolower",
 			Expected: "test",
+		},
+		{
+			Template: `{{ if contains "TEST_TEST_TEST" "TEST" }}it does{{else}}nope{{end}}`,
+			Name:     "contains",
+			Expected: "it does",
 		},
 		{
 			Template: `{{ trimprefix "v1.2.4" "v" }}`,

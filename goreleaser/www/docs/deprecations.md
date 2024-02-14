@@ -2,8 +2,10 @@
 
 This page is used to list deprecation notices across GoReleaser.
 
-Deprecated options will be removed after ~6 months from the time they were
-deprecated.
+Deprecated options are only removed on major versions of GoReleaser.
+
+Nevertheless, it's a good thing to keep your configuration up-to-date to prevent
+any issues.
 
 You can check your use of deprecated configurations by running:
 
@@ -25,17 +27,77 @@ Description.
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     foo: bar
     ```
 
 === "After"
 
-    ``` yaml
+    ```yaml
     foo: bar
     ```
 
 -->
+
+### changelog.skip
+
+> since 2024-01-14
+
+Changed to `disable` to conform with all other pipes.
+
+=== "Before"
+
+    ```yaml
+    changelog:
+      skip: true
+    ```
+
+=== "After"
+
+    ```yaml
+    changelog:
+      disable: true
+    ```
+
+### blobs.kmskey
+
+> since 2024-01-07
+
+Changed to `kms_key` to conform with all other options.
+
+=== "Before"
+
+    ```yaml
+    blobs:
+      - kmskey: foo
+    ```
+
+=== "After"
+
+    ```yaml
+    blobs:
+      - kms_key: foo
+    ```
+
+### blobs.disableSSL
+
+> since 2024-01-07
+
+Changed to `disable_ssl` to conform with all other options.
+
+=== "Before"
+
+    ```yaml
+    blobs:
+      - disableSSL: true
+    ```
+
+=== "After"
+
+    ```yaml
+    blobs:
+      - disable_ssl: true
+    ```
 
 ### `--skip`
 
@@ -237,14 +299,14 @@ GoReleaser now allows many `scoop` configurations, so it should be pluralized
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     scoop:
       # ...
     ```
 
 === "After"
 
-    ``` yaml
+    ```yaml
     scoops:
     - # ...
     ```
@@ -261,14 +323,14 @@ Simply use the pluralized form, `builds`, according to the
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     build:
       # ...
     ```
 
 === "After"
 
-    ``` yaml
+    ```yaml
     builds:
     - # ...
     ```
@@ -338,7 +400,7 @@ enable this option and test it out with
 
 === "After"
 
-    ``` yaml
+    ```yaml
     archives:
     -
       rlcp: true
@@ -352,7 +414,7 @@ Same as [`archives.rlcp`](#archivesrlcp).
 
 === "After"
 
-    ``` yaml
+    ```yaml
     source:
       rlcp: true
     ```
@@ -389,7 +451,7 @@ You can still get the same features by abusing the `name_template` property.
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     archives:
       - id: foo
         name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
@@ -403,7 +465,7 @@ You can still get the same features by abusing the `name_template` property.
 
 === "After"
 
-    ``` yaml
+    ```yaml
     archives:
       - id: foo
         name_template: >-
@@ -430,7 +492,7 @@ You can still get the same features by abusing the `file_name_template` property
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     nfpms:
       - id: foo
         file_name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
@@ -444,7 +506,7 @@ You can still get the same features by abusing the `file_name_template` property
 
 === "After"
 
-    ``` yaml
+    ```yaml
     nfpms:
       - id: foo
         file_name_template: >-
@@ -471,7 +533,7 @@ You can still get the same features by abusing the `name_template` property.
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     snapcrafts:
       - id: foo
         name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
@@ -485,7 +547,7 @@ You can still get the same features by abusing the `name_template` property.
 
 === "After"
 
-    ``` yaml
+    ```yaml
     snapcrafts:
       - id: foo
         name_template: >-
@@ -509,7 +571,7 @@ On [GoReleaser PRO](/pro/) custom variables should now be prefixed with `.Var`.
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     variables:
       foo: bar
     some_template: 'lala-{{ .foo }}'
@@ -517,7 +579,7 @@ On [GoReleaser PRO](/pro/) custom variables should now be prefixed with `.Var`.
 
 === "After"
 
-    ``` yaml
+    ```yaml
     variables:
       foo: bar
     some_template: 'lala-{{ .Var.foo }}'
@@ -547,7 +609,7 @@ nFPM empty folders is now deprecated in favor of a `dir` content type:
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     nfpms:
     - empty_folders:
       - /foo/bar
@@ -555,7 +617,7 @@ nFPM empty folders is now deprecated in favor of a `dir` content type:
 
 === "After"
 
-    ``` yaml
+    ```yaml
     nfpms:
     - contents:
       - dst: /foo/bar
@@ -936,14 +998,14 @@ so the name `puts` kind of lost its meaning.
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     puts:
     - ...
     ```
 
 === "After"
 
-    ``` yaml
+    ```yaml
     uploads:
     - ...
     ```
@@ -960,14 +1022,14 @@ The `name_template` field was deprecated in favor of a more clear one,
 
 === "Before"
 
-    ``` yaml
+    ```yaml
     nfpms:
     - name_template: foo
     ```
 
 === "After"
 
-    ``` yaml
+    ```yaml
     nfpms:
     - file_name_template: foo
     ```

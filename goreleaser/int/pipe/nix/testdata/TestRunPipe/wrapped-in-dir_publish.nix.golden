@@ -2,10 +2,10 @@
 # vim: set ft=nix ts=2 sw=2 sts=2 et sta
 {
 system ? builtins.currentSystem
-, pkgs
 , lib
 , fetchurl
 , installShellFiles
+, stdenvNoCC
 }:
 let
   shaMap = {
@@ -23,8 +23,15 @@ let
     x86_64-darwin = "https://dummyhost/download/v1.2.1/foo_darwin_amd64v1.tar.gz";
     aarch64-darwin = "https://dummyhost/download/v1.2.1/foo_darwin_arm64.tar.gz";
   };
+  sourceRootMap = {
+    i686-linux = "./foo_386";
+    x86_64-linux = "./foo_amd64";
+    aarch64-linux = "./foo_arm64";
+    x86_64-darwin = "./foo_amd64";
+    aarch64-darwin = "./foo_arm64";
+  };
 in
-pkgs.stdenv.mkDerivation {
+stdenvNoCC.mkDerivation {
   pname = "wrapped-in-dir";
   version = "1.2.1";
   src = fetchurl {
@@ -32,7 +39,7 @@ pkgs.stdenv.mkDerivation {
     sha256 = shaMap.${system};
   };
 
-  sourceRoot = "./foo";
+  sourceRoot = sourceRootMap.${system};
 
   nativeBuildInputs = [ installShellFiles ];
 

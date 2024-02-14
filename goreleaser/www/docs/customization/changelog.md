@@ -13,7 +13,7 @@ changelog:
   # This may result in an empty release notes on GitHub/GitLab/Gitea.
   #
   # Templates: allowed
-  skip: "{{ .Env.CREATE_CHANGELOG }}"
+  disable: "{{ .Env.CREATE_CHANGELOG }}"
 
   # Changelog generation implementation to use.
   #
@@ -127,5 +127,6 @@ changelog:
 
     * The `github-native` changelog does not support `sort` and `filter`.
     * When releasing a [nightly][], `use` will fallback to `git`.
+    * The `github` changelog will only work if both tags exist in GitHub.
 
 [nightly]: ./nightlies.md

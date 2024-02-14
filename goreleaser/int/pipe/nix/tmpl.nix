@@ -2,14 +2,10 @@
 # vim: set ft=nix ts=2 sw=2 sts=2 et sta
 {
 system ? builtins.currentSystem
-, pkgs
 , lib
 , fetchurl
 , installShellFiles
-{{- if .Dependencies }}
-, makeWrapper
-, stdenv
-{{- end -}}
+, stdenvNoCC
 {{- range $index, $element := .Dependencies }}
 , {{ . -}}
 {{- end }}
@@ -62,8 +58,34 @@ let
     aarch64-darwin = "{{ . }}";
     {{- end }}
   };
+
+  {{- if not .SourceRoot }}
+  sourceRootMap = {
+    {{- with  .SourceRoots.linux386 }}
+    i686-linux = "{{ . }}";
+    {{- end }}
+    {{- with  .SourceRoots.linuxamd64 }}
+    x86_64-linux = "{{ . }}";
+    {{- end }}
+    {{- with  .SourceRoots.linuxarm6 }}
+    armv6l-linux = "{{ . }}";
+    {{- end }}
+    {{- with  .SourceRoots.linuxarm7 }}
+    armv7l-linux = "{{ . }}";
+    {{- end }}
+    {{- with  .SourceRoots.linuxarm64 }}
+    aarch64-linux = "{{ . }}";
+    {{- end }}
+    {{- with  .SourceRoots.darwinamd64 }}
+    x86_64-darwin = "{{ . }}";
+    {{- end }}
+    {{- with  .SourceRoots.darwinarm64 }}
+    aarch64-darwin = "{{ . }}";
+    {{- end }}
+  };
+  {{- end }}
 in
-pkgs.stdenv.mkDerivation {
+stdenvNoCC.mkDerivation {
   pname = "{{ .Name }}";
   version = "{{ .Version }}";
   src = fetchurl {
@@ -71,7 +93,7 @@ pkgs.stdenv.mkDerivation {
     sha256 = shaMap.${system};
   };
 
-  sourceRoot = "{{ .SourceRoot }}";
+  sourceRoot = {{ with .SourceRoot }}"{{ . }}"{{ else }}sourceRootMap.${system}{{ end }};
 
   nativeBuildInputs = [ {{ range $input, $plat := .Inputs }}{{ . }} {{ end }}];
 

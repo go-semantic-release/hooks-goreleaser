@@ -4,6 +4,7 @@ package blob
 import (
 	"fmt"
 
+	"github.com/goreleaser/goreleaser/int/deprecate"
 	"github.com/goreleaser/goreleaser/int/pipe"
 	"github.com/goreleaser/goreleaser/int/semerrgroup"
 	"github.com/goreleaser/goreleaser/int/tmpl"
@@ -27,6 +28,17 @@ func (Pipe) Default(ctx *context.Context) error {
 		}
 		if blob.Folder == "" {
 			blob.Folder = "{{ .ProjectName }}/{{ .Tag }}"
+		}
+		if blob.ContentDisposition == "" {
+			blob.ContentDisposition = "attachment;filename={{.Filename}}"
+		}
+		if blob.OldDisableSSL {
+			deprecate.Notice(ctx, "blobs.disableSSL")
+			blob.DisableSSL = true
+		}
+		if blob.OldKMSKey != "" {
+			deprecate.Notice(ctx, "blobs.kmskey")
+			blob.KMSKey = blob.OldKMSKey
 		}
 	}
 	return nil

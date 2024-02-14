@@ -169,9 +169,9 @@ func Upload(ctx *context.Context, uploads []config.Upload, kind string, check Re
 		//	- "binary": Upload only the raw binaries
 		switch v := strings.ToLower(upload.Mode); v {
 		case ModeArchive:
-			// TODO: should we add source archives here too?
 			filters = append(filters,
 				artifact.ByType(artifact.UploadableArchive),
+				artifact.ByType(artifact.UploadableSourceArchive),
 				artifact.ByType(artifact.LinuxPackage),
 			)
 		case ModeBinary:
@@ -197,6 +197,9 @@ func Upload(ctx *context.Context, uploads []config.Upload, kind string, check Re
 
 func uploadWithFilter(ctx *context.Context, upload *config.Upload, filter artifact.Filter, kind string, check ResponseChecker) error {
 	artifacts := ctx.Artifacts.Filter(filter).List()
+	if len(artifacts) == 0 {
+		log.Info("no artifacts found")
+	}
 	log.Debugf("will upload %d artifacts", len(artifacts))
 	g := semerrgroup.New(ctx.Parallelism)
 	for _, artifact := range artifacts {
@@ -238,15 +241,13 @@ func uploadAsset(ctx *context.Context, upload *config.Upload, artifact *artifact
 	}
 	log.Debugf("generated target url: %s", targetURL)
 
-	headers := map[string]string{}
-	if upload.CustomHeaders != nil {
-		for name, value := range upload.CustomHeaders {
-			resolvedValue, err := tmpl.New(ctx).WithArtifact(artifact).Apply(value)
-			if err != nil {
-				return fmt.Errorf("%s: %s: failed to resolve custom_headers template: %w", upload.Name, kind, err)
-			}
-			headers[name] = resolvedValue
+	headers := make(map[string]string, len(upload.CustomHeaders))
+	for name, value := range upload.CustomHeaders {
+		resolvedValue, err := tmpl.New(ctx).WithArtifact(artifact).Apply(value)
+		if err != nil {
+			return fmt.Errorf("%s: %s: failed to resolve custom_headers template: %w", upload.Name, kind, err)
 		}
+		headers[name] = resolvedValue
 	}
 	if upload.ChecksumHeader != "" {
 		sum, err := artifact.Checksum("sha256")
