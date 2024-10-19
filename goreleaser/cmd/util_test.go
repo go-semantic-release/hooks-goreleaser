@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,14 +62,14 @@ func goModInit(tb testing.TB) {
 	tb.Helper()
 	createFile(tb, "go.mod", `module foo
 
-go 1.22
+go 1.23
 `)
 }
 
 func createGoReleaserYaml(tb testing.TB) {
 	tb.Helper()
-	yaml := `build:
-  binary: fake
+	yaml := `builds:
+- binary: 'fake{{if .IsSnapshot}}_snapshot{{end}}'
   goos:
     - linux
   goarch:

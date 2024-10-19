@@ -6,23 +6,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 
 	"github.com/caarlos0/go-shellwords"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/deprecate"
-	"github.com/goreleaser/goreleaser/int/ids"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/shell"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	builders "github.com/goreleaser/goreleaser/pkg/build"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/ids"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/shell"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	builders "github.com/goreleaser/goreleaser/v2/pkg/build"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 
 	// langs to init.
-	_ "github.com/goreleaser/goreleaser/int/builders/golang"
+	_ "github.com/goreleaser/goreleaser/v2/int/builders/golang"
 )
 
 // Pipe for build.
@@ -36,7 +34,11 @@ func (Pipe) String() string {
 func (Pipe) Run(ctx *context.Context) error {
 	g := semerrgroup.New(ctx.Parallelism)
 	for _, build := range ctx.Config.Builds {
-		if build.Skip {
+		skip, err := tmpl.New(ctx).Bool(build.Skip)
+		if err != nil {
+			return err
+		}
+		if skip {
 			log.WithField("id", build.ID).Info("skip is set")
 			continue
 		}
@@ -48,10 +50,6 @@ func (Pipe) Run(ctx *context.Context) error {
 
 // Default sets the pipe defaults.
 func (Pipe) Default(ctx *context.Context) error {
-	if !reflect.DeepEqual(ctx.Config.SingleBuild, config.Build{}) {
-		deprecate.Notice(ctx, "build")
-	}
-
 	ids := ids.New("builds")
 	for i, build := range ctx.Config.Builds {
 		build, err := buildWithDefaults(ctx, build)
@@ -62,7 +60,7 @@ func (Pipe) Default(ctx *context.Context) error {
 		ids.Inc(ctx.Config.Builds[i].ID)
 	}
 	if len(ctx.Config.Builds) == 0 {
-		build, err := buildWithDefaults(ctx, ctx.Config.SingleBuild)
+		build, err := buildWithDefaults(ctx, config.Build{})
 		if err != nil {
 			return err
 		}
@@ -200,7 +198,11 @@ func buildOptionsForTarget(ctx *context.Context, build config.Build, target stri
 
 	name := bin + ext
 	dir := fmt.Sprintf("%s_%s", build.ID, target)
-	if build.NoUniqueDistDir {
+	noUnique, err := tmpl.New(ctx).Bool(build.NoUniqueDistDir)
+	if err != nil {
+		return nil, err
+	}
+	if noUnique {
 		dir = ""
 	}
 	relpath := filepath.Join(ctx.Config.Dist, dir, name)
@@ -226,6 +228,9 @@ func extFor(target string, build config.BuildDetails) string {
 		if strings.Contains(target, "windows") {
 			return ".dll"
 		}
+		if strings.Contains(target, "wasm") {
+			return ".wasm"
+		}
 		return ".so"
 	case "c-archive":
 		if strings.Contains(target, "windows") {
@@ -234,7 +239,7 @@ func extFor(target string, build config.BuildDetails) string {
 		return ".a"
 	}
 
-	if target == "js_wasm" {
+	if strings.Contains(target, "wasm") {
 		return ".wasm"
 	}
 

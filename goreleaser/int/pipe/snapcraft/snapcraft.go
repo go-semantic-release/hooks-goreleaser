@@ -12,16 +12,16 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/gio"
-	"github.com/goreleaser/goreleaser/int/ids"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/int/yaml"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/gio"
+	"github.com/goreleaser/goreleaser/v2/int/ids"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/int/yaml"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 const releasesExtra = "releases"
@@ -126,6 +126,15 @@ func (Pipe) Default(ctx *context.Context) error {
 		if snap.Grade == "" {
 			snap.Grade = "stable"
 		}
+		if snap.Confinement == "" {
+			snap.Confinement = "strict"
+		}
+		if snap.Description == "" {
+			return fmt.Errorf("description is required")
+		}
+		if snap.Summary == "" {
+			return fmt.Errorf("summary is required")
+		}
 		if len(snap.ChannelTemplates) == 0 {
 			switch snap.Grade {
 			case "devel":
@@ -180,7 +189,7 @@ func doRun(ctx *context.Context, snap config.Snapcraft) error {
 		return ErrNoSnapcraft
 	}
 
-	g := semerrgroup.New(ctx.Parallelism)
+	g := semerrgroup.NewBlockingFirst(semerrgroup.New(ctx.Parallelism))
 	for platform, binaries := range ctx.Artifacts.Filter(
 		artifact.And(
 			artifact.ByGoos("linux"),

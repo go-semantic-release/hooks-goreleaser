@@ -9,13 +9,13 @@ import (
 	"github.com/anchore/quill/quill/notary"
 	"github.com/anchore/quill/quill/pki/load"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 type MacOS struct{}
@@ -98,6 +98,13 @@ func signAndNotarize(ctx *context.Context, cfg config.MacOSSignNotarize) error {
 		log.WithField("binary", bin.Path).Info("signing")
 		if err := quill.Sign(*signCfg); err != nil {
 			return fmt.Errorf("notarize: macos: %s: %w", bin.Path, err)
+		}
+
+		if cfg.Notarize.IssuerID == "" ||
+			cfg.Notarize.KeyID == "" ||
+			cfg.Notarize.Key == "" {
+			log.WithField("binary", bin.Path).Info("will not try to notarize")
+			continue
 		}
 
 		notarizeCfg := quill.NewNotarizeConfig(

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=jcroql
-version: 1
+version: 2
 
 env:
   - GO111MODULE=on
@@ -12,7 +12,7 @@ before:
     - ./scripts/manpages.sh
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 gomod:
   proxy: true
@@ -188,11 +188,28 @@ archives:
     builds_info:
       group: root
       owner: root
+      mtime: "{{ .CommitDate }}"
     files:
-      - README.md
-      - LICENSE.md
-      - completions/*
-      - manpages/*
+      - src: README.md
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: LICENSE.md
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: completions/*
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: manpages/*
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
 
 brews:
   - repository:

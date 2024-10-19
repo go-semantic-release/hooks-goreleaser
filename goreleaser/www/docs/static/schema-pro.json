@@ -1,6 +1,6 @@
 {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://github.com/goreleaser/goreleaser/pkg/config/project",
+		"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/project",
 		"$ref": "#/$defs/Project",
 		"$defs": {
 			"AUR": {
@@ -243,20 +243,6 @@
 							"$ref": "#/$defs/TemplatedFile"
 						},
 						"type": "array"
-					},
-					"rlcp": {
-						"oneOf": [
-							{
-								"type": "string"
-							},
-							{
-								"type": "boolean"
-							}
-						],
-						"description": "you can now remove this"
-					},
-					"strip_parent_binary_folder": {
-						"type": "boolean"
 					}
 				},
 				"additionalProperties": false,
@@ -278,6 +264,50 @@
 				"properties": {
 					"hooks": {
 						"$ref": "#/$defs/Hooks"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"BeforePublishHook": {
+				"properties": {
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"dir": {
+						"type": "string"
+					},
+					"cmd": {
+						"type": "string"
+					},
+					"env": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"artifacts": {
+						"items": {
+							"type": "string",
+							"enum": [
+								"image",
+								"checksum",
+								"source",
+								"package",
+								"archive",
+								"binary",
+								"sbom",
+								"installer",
+								"diskimage"
+							]
+						},
+						"type": "array"
+					},
+					"output": {
+						"type": "boolean"
 					}
 				},
 				"additionalProperties": false,
@@ -346,22 +376,17 @@
 					"include_meta": {
 						"type": "boolean"
 					},
-					"disableSSL": {
-						"type": "boolean",
-						"description": "use disable_ssl instead"
-					},
-					"kmskey": {
-						"type": "string",
-						"description": "use kms_key instead"
-					},
-					"folder": {
-						"type": "string"
+					"extra_files_only": {
+						"type": "boolean"
 					},
 					"templated_extra_files": {
 						"items": {
 							"$ref": "#/$defs/TemplatedExtraFile"
 						},
 						"type": "array"
+					},
+					"if": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -448,7 +473,14 @@
 						"type": "string"
 					},
 					"skip": {
-						"type": "boolean"
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
 					},
 					"gobinary": {
 						"type": "string"
@@ -457,7 +489,14 @@
 						"type": "string"
 					},
 					"no_unique_dist_dir": {
-						"type": "boolean"
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
 					},
 					"no_main_check": {
 						"type": "boolean"
@@ -631,17 +670,6 @@
 							"type": "string"
 						},
 						"type": "array"
-					},
-					"skip": {
-						"oneOf": [
-							{
-								"type": "string"
-							},
-							{
-								"type": "boolean"
-							}
-						],
-						"description": "use disable instead"
 					}
 				},
 				"additionalProperties": false,
@@ -822,6 +850,47 @@
 				},
 				"additionalProperties": false,
 				"type": "object"
+			},
+			"Cloudsmith": {
+				"properties": {
+					"ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"organization": {
+						"type": "string"
+					},
+					"repository": {
+						"type": "string"
+					},
+					"formats": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"secret_name": {
+						"type": "string"
+					},
+					"disable": {
+						"type": "string"
+					},
+					"distributions": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"type": "object"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object",
+				"required": [
+					"organization",
+					"repository",
+					"distributions"
+				]
 			},
 			"CommitAuthor": {
 				"properties": {
@@ -1157,7 +1226,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/file-alias",
+						"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/file-alias",
 						"$defs": {
 							"FileInfo": {
 								"properties": {
@@ -1199,7 +1268,7 @@
 			},
 			"FileInfo": {
 				"$schema": "https://json-schema.org/draft/2020-12/schema",
-				"$id": "https://github.com/goreleaser/goreleaser/pkg/config/file-info",
+				"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/file-info",
 				"$ref": "#/$defs/FileInfo",
 				"$defs": {
 					"FileInfo": {
@@ -1299,21 +1368,13 @@
 					},
 					"disable": {
 						"type": "string"
-					},
-					"skip": {
-						"oneOf": [
-							{
-								"type": "string"
-							},
-							{
-								"type": "boolean"
-							}
-						],
-						"description": "use disable instead"
 					}
 				},
 				"additionalProperties": false,
-				"type": "object"
+				"type": "object",
+				"required": [
+					"account"
+				]
 			},
 			"Git": {
 				"properties": {
@@ -1549,17 +1610,6 @@
 					},
 					"app": {
 						"type": "string"
-					},
-					"tap": {
-						"$ref": "#/$defs/RepoRef",
-						"description": "use repository instead"
-					},
-					"plist": {
-						"type": "string",
-						"description": "use service instead"
-					},
-					"folder": {
-						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -1572,7 +1622,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/homebrew-dependency",
+						"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/homebrew-dependency",
 						"properties": {
 							"name": {
 								"type": "string"
@@ -1604,14 +1654,14 @@
 					{
 						"items": {
 							"$schema": "https://json-schema.org/draft/2020-12/schema",
-							"$id": "https://github.com/goreleaser/goreleaser/pkg/config/hook",
+							"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/hook",
 							"oneOf": [
 								{
 									"type": "string"
 								},
 								{
 									"$schema": "https://json-schema.org/draft/2020-12/schema",
-									"$id": "https://github.com/goreleaser/goreleaser/pkg/config/hook-alias",
+									"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/hook-alias",
 									"properties": {
 										"dir": {
 											"type": "string"
@@ -1715,7 +1765,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/include",
+						"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/include",
 						"$defs": {
 							"IncludeFromFile": {
 								"properties": {
@@ -1896,10 +1946,6 @@
 								"type": "boolean"
 							}
 						]
-					},
-					"index": {
-						"$ref": "#/$defs/RepoRef",
-						"description": "use repository instead"
 					}
 				},
 				"additionalProperties": false,
@@ -2210,6 +2256,9 @@
 					"archlinux": {
 						"$ref": "#/$defs/NFPMArchLinux"
 					},
+					"ipk": {
+						"$ref": "#/$defs/NFPMIPK"
+					},
 					"templated_contents": {
 						"$ref": "#/$defs/Contents"
 					},
@@ -2239,7 +2288,8 @@
 								"deb",
 								"rpm",
 								"termux.deb",
-								"archlinux"
+								"archlinux",
+								"ipk"
 							]
 						},
 						"type": "array"
@@ -2458,6 +2508,60 @@
 				"additionalProperties": false,
 				"type": "object"
 			},
+			"NFPMIPK": {
+				"properties": {
+					"abi_version": {
+						"type": "string"
+					},
+					"alternatives": {
+						"items": {
+							"$ref": "#/$defs/NFPMIPKAlternative"
+						},
+						"type": "array"
+					},
+					"auto_installed": {
+						"type": "boolean"
+					},
+					"essential": {
+						"type": "boolean"
+					},
+					"predepends": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"tags": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"fields": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"type": "object"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
+			"NFPMIPKAlternative": {
+				"properties": {
+					"priority": {
+						"type": "integer"
+					},
+					"target": {
+						"type": "string"
+					},
+					"link_name": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false,
+				"type": "object"
+			},
 			"NFPMOverridables": {
 				"properties": {
 					"file_name_template": {
@@ -2534,6 +2638,9 @@
 					},
 					"archlinux": {
 						"$ref": "#/$defs/NFPMArchLinux"
+					},
+					"ipk": {
+						"$ref": "#/$defs/NFPMIPK"
 					},
 					"templated_contents": {
 						"$ref": "#/$defs/Contents"
@@ -2616,6 +2723,9 @@
 			},
 			"Nightly": {
 				"properties": {
+					"version_template": {
+						"type": "string"
+					},
 					"name_template": {
 						"type": "string"
 					},
@@ -2706,7 +2816,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/nix-dependency-alias",
+						"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/nix-dependency-alias",
 						"properties": {
 							"name": {
 								"type": "string"
@@ -2788,9 +2898,9 @@
 					"version": {
 						"type": "integer",
 						"enum": [
-							1
+							2
 						],
-						"default": 1
+						"default": 2
 					},
 					"project_name": {
 						"type": "string"
@@ -2951,6 +3061,12 @@
 						},
 						"type": "array"
 					},
+					"binary_signs": {
+						"items": {
+							"$ref": "#/$defs/Sign"
+						},
+						"type": "array"
+					},
 					"env_files": {
 						"$ref": "#/$defs/EnvFiles"
 					},
@@ -3051,19 +3167,23 @@
 						},
 						"type": "array"
 					},
+					"cloudsmiths": {
+						"items": {
+							"$ref": "#/$defs/Cloudsmith"
+						},
+						"type": "array"
+					},
 					"dockerhub": {
 						"items": {
 							"$ref": "#/$defs/DockerHub"
 						},
 						"type": "array"
 					},
-					"scoop": {
-						"$ref": "#/$defs/Scoop",
-						"description": "use scoops instead"
-					},
-					"build": {
-						"$ref": "#/$defs/Build",
-						"description": "use builds instead"
+					"before_publish": {
+						"items": {
+							"$ref": "#/$defs/BeforePublishHook"
+						},
+						"type": "array"
 					}
 				},
 				"additionalProperties": false,
@@ -3073,6 +3193,24 @@
 				"properties": {
 					"mod_timestamp": {
 						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"homepage": {
+						"type": "string"
+					},
+					"license": {
+						"type": "string"
+					},
+					"maintainers": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"full_description": {
+						"$ref": "#/$defs/IncludedMarkdown"
 					}
 				},
 				"additionalProperties": false,
@@ -3161,7 +3299,7 @@
 					},
 					{
 						"$schema": "https://json-schema.org/draft/2020-12/schema",
-						"$id": "https://github.com/goreleaser/goreleaser/pkg/config/pull-request-base",
+						"$id": "https://github.com/goreleaser/goreleaser/v2/pkg/config/pull-request-base",
 						"properties": {
 							"owner": {
 								"type": "string"
@@ -3525,13 +3663,6 @@
 							"msi"
 						],
 						"default": "archive"
-					},
-					"bucket": {
-						"$ref": "#/$defs/RepoRef",
-						"description": "use repository instead"
-					},
-					"folder": {
-						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -3575,6 +3706,9 @@
 							"type": "string"
 						},
 						"type": "array"
+					},
+					"if": {
+						"type": "string"
 					},
 					"stdin": {
 						"type": "string"
@@ -3693,7 +3827,12 @@
 						"type": "string"
 					},
 					"grade": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"stable",
+							"devel"
+						],
+						"default": "stable"
 					},
 					"channel_templates": {
 						"items": {
@@ -3702,7 +3841,13 @@
 						"type": "array"
 					},
 					"confinement": {
-						"type": "string"
+						"type": "string",
+						"enum": [
+							"strict",
+							"classic",
+							"devmode"
+						],
+						"default": "strict"
 					},
 					"assumes": {
 						"items": {
@@ -3752,7 +3897,11 @@
 					}
 				},
 				"additionalProperties": false,
-				"type": "object"
+				"type": "object",
+				"required": [
+					"summary",
+					"description"
+				]
 			},
 			"SnapcraftAppMetadata": {
 				"properties": {
@@ -3917,6 +4066,9 @@
 				"properties": {
 					"name_template": {
 						"type": "string"
+					},
+					"version_template": {
+						"type": "string"
 					}
 				},
 				"additionalProperties": false,
@@ -3954,17 +4106,6 @@
 							"$ref": "#/$defs/TemplatedFile"
 						},
 						"type": "array"
-					},
-					"rlcp": {
-						"oneOf": [
-							{
-								"type": "string"
-							},
-							{
-								"type": "boolean"
-							}
-						],
-						"description": "you can now remove this"
 					}
 				},
 				"additionalProperties": false,
@@ -4268,8 +4409,23 @@
 						},
 						"type": "object"
 					},
+					"extra_files": {
+						"items": {
+							"$ref": "#/$defs/ExtraFile"
+						},
+						"type": "array"
+					},
+					"extra_files_only": {
+						"type": "boolean"
+					},
 					"matrix": {
 						"$ref": "#/$defs/Matrix"
+					},
+					"templated_extra_files": {
+						"items": {
+							"$ref": "#/$defs/TemplatedExtraFile"
+						},
+						"type": "array"
 					}
 				},
 				"additionalProperties": false,

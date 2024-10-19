@@ -21,7 +21,7 @@ Template for new deprecations:
 
 ### property
 
-> since yyyy-mm-dd (v1.xx)
+> since v2.xx
 
 Description.
 
@@ -39,9 +39,60 @@ Description.
 
 -->
 
+### kos.sbom
+
+> since v2.2
+
+Ko removed support for `cyclonedx` and `go.version-m` SBOMs from upstream.
+You can now either use `spdx` or `none`.
+From now on, these two options will be replaced by `none`.
+We recommend you change it to `spdx`.
+
+### nightly.name_template
+
+> since v2.2
+
+Property renamed so its easier to reason about.
+
+=== "Before"
+
+    ```yaml
+    nightly:
+      name_template: 'foo'
+    ```
+
+=== "After"
+
+    ```yaml
+    nightly:
+      version_template: 'foo'
+    ```
+
+### snapshot.name_template
+
+> since v2.2
+
+Property renamed so its easier to reason about.
+
+=== "Before"
+
+    ```yaml
+    snapshot:
+      name_template: 'foo'
+    ```
+
+=== "After"
+
+    ```yaml
+    snapshot:
+      version_template: 'foo'
+    ```
+
+## Removed in v2
+
 ### archives.strip_parent_binary_folder
 
-> since 2024-03-29 (v1.25)
+> since 2024-03-29 (v1.25), removed 2024-05-26 (v2.0)
 
 Property was renamed to be consistent across all configurations.
 
@@ -63,7 +114,7 @@ Property was renamed to be consistent across all configurations.
 
 ### blobs.folder
 
-> since 2024-03-29 (v1.25)
+> since 2024-03-29 (v1.25), removed 2024-05-26 (v2.0)
 
 Property was renamed to be consistent across all configurations.
 
@@ -85,7 +136,7 @@ Property was renamed to be consistent across all configurations.
 
 ### brews.folder
 
-> since 2024-03-29 (v1.25)
+> since 2024-03-29 (v1.25), removed 2024-05-26 (v2.0)
 
 Property was renamed to be consistent across all configurations.
 
@@ -107,7 +158,7 @@ Property was renamed to be consistent across all configurations.
 
 ### scoops.folder
 
-> since 2024-03-29 (v1.25)
+> since 2024-03-29 (v1.25), removed 2024-05-26 (v2.0)
 
 Property was renamed to be consistent across all configurations.
 
@@ -129,7 +180,7 @@ Property was renamed to be consistent across all configurations.
 
 ### furies.skip
 
-> since 2024-03-03 (v1.25)
+> since 2024-03-03 (v1.25), removed 2024-05-26 (v2.0)
 
 Changed to `disable` to conform with all other pipes.
 
@@ -149,7 +200,7 @@ Changed to `disable` to conform with all other pipes.
 
 ### changelog.skip
 
-> since 2024-01-14 (v1.24)
+> since 2024-01-14 (v1.24), removed 2024-05-26 (v2.0)
 
 Changed to `disable` to conform with all other pipes.
 
@@ -169,7 +220,7 @@ Changed to `disable` to conform with all other pipes.
 
 ### blobs.kmskey
 
-> since 2024-01-07 (v1.24)
+> since 2024-01-07 (v1.24), removed 2024-05-26 (v2.0)
 
 Changed to `kms_key` to conform with all other options.
 
@@ -189,7 +240,7 @@ Changed to `kms_key` to conform with all other options.
 
 ### blobs.disableSSL
 
-> since 2024-01-07 (v1.24)
+> since 2024-01-07 (v1.24), removed 2024-05-26 (v2.0)
 
 Changed to `disable_ssl` to conform with all other options.
 
@@ -209,7 +260,7 @@ Changed to `disable_ssl` to conform with all other options.
 
 ### `--skip`
 
-> since 2023-09-14 (v1.21)
+> since 2023-09-14 (v1.21), removed 2024-05-26 (v2.0)
 
 The following `goreleaser release` flags were deprecated:
 
@@ -255,7 +306,7 @@ the valid options, and shell autocompletion should work properly as well.
 
 ### scoops.bucket
 
-> since 2023-06-13 (v1.19.0)
+> since 2023-06-13 (v1.19.0), removed 2024-05-26 (v2.0)
 
 Replace `bucket` with `repository`.
 
@@ -281,7 +332,7 @@ Replace `bucket` with `repository`.
 
 ### krews.index
 
-> since 2023-06-13 (v1.19.0)
+> since 2023-06-13 (v1.19.0), removed 2024-05-26 (v2.0)
 
 Replace `index` with `repository`.
 
@@ -307,7 +358,7 @@ Replace `index` with `repository`.
 
 ### brews.tap
 
-> since 2023-06-13 (v1.19.0)
+> since 2023-06-13 (v1.19.0), removed 2024-05-26 (v2.0)
 
 Replace `tap` with `repository`.
 
@@ -333,7 +384,7 @@ Replace `tap` with `repository`.
 
 ### archives.rlcp
 
-> since 2023-06-06 (v1.19.0)
+> since 2023-06-06 (v1.19.0), removed 2024-05-26 (v2.0)
 
 This option is now default and can't be changed. You can remove it from your
 configuration files.
@@ -342,7 +393,7 @@ See [this](#archivesrlcp_1) for more info.
 
 ### source.rlcp
 
-> since 2023-06-06 (v1.19.0)
+> since 2023-06-06 (v1.19.0), removed 2024-05-26 (v2.0)
 
 This option is now default and can't be changed. You can remove it from your
 configuration files.
@@ -351,7 +402,7 @@ See [this](#sourcerlcp_1) for more info.
 
 ### brews.plist
 
-> since 2023-06-06 (v1.19.0)
+> since 2023-06-06 (v1.19.0), removed 2024-05-26 (v2.0)
 
 `plist` is deprecated by Homebrew, and now on GoReleaser too. Use `service`
 instead.
@@ -382,7 +433,7 @@ instead.
 
 ### --debug
 
-> since 2023-05-16 (v1.19.0)
+> since 2023-05-16 (v1.19.0), removed 2024-05-26 (v2.0)
 
 `--debug` has been deprecated in favor of `--verbose`.
 
@@ -400,10 +451,10 @@ instead.
 
 ### scoop
 
-> since 2023-04-30 (v1.18.0)
+> since 2023-04-30 (v1.18.0), removed 2024-05-26 (v2.0)
 
 GoReleaser now allows many `scoop` configurations, so it should be pluralized
-[accordingly](/customization/scoop).
+[accordingly](customization/scoop.md).
 
 === "Before"
 
@@ -421,13 +472,13 @@ GoReleaser now allows many `scoop` configurations, so it should be pluralized
 
 ### build
 
-> since 2023-02-09 (v1.16.0)
+> since 2023-02-09 (v1.16.0), removed 2024-05-26 (v2.0)
 
 This option was still being supported, even though undocumented, for a couple
 of years now. It's finally time to sunset it.
 
 Simply use the pluralized form, `builds`, according to the
-[documentation](/customization/builds).
+[documentation](customization/builds.md).
 
 === "Before"
 
@@ -445,7 +496,7 @@ Simply use the pluralized form, `builds`, according to the
 
 ### --rm-dist
 
-> since 2023-01-17 (v1.15.0)
+> since 2023-01-17 (v1.15.0), removed 2024-05-26 (v2.0)
 
 `--rm-dist` has been deprecated in favor of `--clean`.
 
@@ -463,7 +514,7 @@ Simply use the pluralized form, `builds`, according to the
 
 ### nfpms.maintainer
 
-> since 2022-05-07 (v1.9.0)
+> since 2022-05-07 (v1.9.0), removed 2024-05-26 (v2.0)
 
 nFPM will soon make mandatory setting the maintainer field.
 
@@ -481,9 +532,9 @@ nFPM will soon make mandatory setting the maintainer field.
     - maintainer: 'Name <email>'
     ```
 
-## Expired deprecation notices
-
 The following options were deprecated in the past and were already removed.
+
+## Removed in v1
 
 ### archives.rlcp
 
@@ -675,7 +726,7 @@ instead of custom templates.
 
 > since 2022-01-20 (v1.4.0), removed 2023-05-01 (v1.18.0)
 
-On [GoReleaser PRO](/pro/) custom variables should now be prefixed with `.Var`.
+In [GoReleaser PRO](pro.md) custom variables should now be prefixed with `.Var`.
 
 === "Before"
 
@@ -765,7 +816,7 @@ You can still use any of the other install methods.
 This also includes `install.goreleaser.com`.
 
 Most common tools installed via that website were probably
-[GoReleaser](/install/) itself and
+[GoReleaser](install.md) itself and
 [golangci-lint](https://golangci-lint.run/welcome/install/).
 
 Please follow to the check their documentation for alternative install methods.
@@ -812,6 +863,8 @@ ignore:
 ```
 
 If you try to use new versions of GoReleaser with Go 1.15 or older, it will warn about it until this deprecation warning expires, after that your build will likely fail.
+
+## Removed in v0.\*
 
 ### Skipping SemVer Validations
 

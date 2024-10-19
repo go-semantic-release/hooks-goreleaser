@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/pkg/build"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/pkg/build"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -53,6 +53,7 @@ const (
 	patch           = "Patch"
 	prerelease      = "Prerelease"
 	isSnapshot      = "IsSnapshot"
+	isSingleTarget  = "IsSingleTarget"
 	isNightly       = "IsNightly"
 	isDraft         = "IsDraft"
 	env             = "Env"
@@ -118,6 +119,7 @@ func New(ctx *context.Context) *Template {
 		patch:           ctx.Semver.Patch,
 		prerelease:      ctx.Semver.Prerelease,
 		isSnapshot:      ctx.Snapshot,
+		isSingleTarget:  ctx.SingleTarget,
 		isNightly:       false,
 		isDraft:         ctx.Config.Release.Draft,
 		releaseNotes:    ctx.ReleaseNotes,
@@ -151,7 +153,7 @@ func (t *Template) WithEnvS(envs []string) *Template {
 
 // WithEnv overrides template's env field with the given environment map.
 func (t *Template) WithEnv(e map[string]string) *Template {
-	t.fields[env] = e
+	t.fields[env] = context.Env(e)
 	return t
 }
 

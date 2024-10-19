@@ -19,7 +19,7 @@ mv "goreleaser-${goreleaser_version}" goreleaser
 
 echo "renaming internal to int..."
 mv goreleaser/internal goreleaser/int
-find ./goreleaser -type f -name "*.go" -exec sed -i '' "s/github\.com\/goreleaser\/goreleaser\/internal/github\.com\/goreleaser\/goreleaser\/int/g" {} \;
+find ./goreleaser -type f -name "*.go" -exec sed -i '' "s/github\.com\/goreleaser\/goreleaser\/v2\/internal/github\.com\/goreleaser\/goreleaser\/v2\/int/g" {} \;
 echo "!/int/pipe/dist" >> goreleaser/.gitignore
 
 echo "cleanup..."

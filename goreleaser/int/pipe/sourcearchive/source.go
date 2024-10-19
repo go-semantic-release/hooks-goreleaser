@@ -7,14 +7,13 @@ import (
 	"path/filepath"
 
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/archivefiles"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/deprecate"
-	"github.com/goreleaser/goreleaser/int/gio"
-	"github.com/goreleaser/goreleaser/int/git"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/archive"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/archivefiles"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/gio"
+	"github.com/goreleaser/goreleaser/v2/int/git"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/archive"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 // Pipe for source archive.
@@ -40,7 +39,7 @@ func (Pipe) Run(ctx *context.Context) error {
 	}
 	filename := name + "." + format
 	path := filepath.Join(ctx.Config.Dist, filename)
-	log.WithField("file", filename).Info("creating source archive")
+	log.WithField("file", path).Info("creating source archive")
 	args := []string{
 		"archive",
 		"-o", path,
@@ -129,13 +128,8 @@ func (Pipe) Default(ctx *context.Context) error {
 	if archive.Format == "" {
 		archive.Format = "tar.gz"
 	}
-
 	if archive.NameTemplate == "" {
 		archive.NameTemplate = "{{ .ProjectName }}-{{ .Version }}"
-	}
-
-	if archive.Enabled && archive.RLCP != "" {
-		deprecate.Notice(ctx, "source.rlcp")
 	}
 	return nil
 }

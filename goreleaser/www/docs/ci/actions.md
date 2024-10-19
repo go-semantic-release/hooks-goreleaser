@@ -27,6 +27,7 @@ permissions:
   contents: write
   # packages: write
   # issues: write
+  # id-token: write
 
 jobs:
   goreleaser:
@@ -43,12 +44,12 @@ jobs:
       # More assembly might be required: Docker logins, GPG, etc.
       # It all depends on your needs.
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
           # either 'goreleaser' (default) or 'goreleaser-pro'
           distribution: goreleaser
           # 'latest', 'nightly', or a semver
-          version: "~> v1"
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,9 +100,9 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
-          version: "~> v1"
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -136,7 +137,7 @@ Following inputs can be used as `step.with` keys
 | Name           | Type   | Default      | Description                                                      |
 | -------------- | ------ | ------------ | ---------------------------------------------------------------- |
 | `distribution` | String | `goreleaser` | GoReleaser distribution, either `goreleaser` or `goreleaser-pro` |
-| `version`[^1]  | String | `~> v1`      | GoReleaser version                                               |
+| `version`[^1]  | String | `~> v2`      | GoReleaser version                                               |
 | `args`         | String |              | Arguments to pass to GoReleaser                                  |
 | `workdir`      | String | `.`          | Working directory (below repository root)                        |
 | `install-only` | Bool   | `false`      | Just install GoReleaser                                          |
@@ -170,14 +171,15 @@ The following
 are required by GoReleaser:
 
 - `contents: write` if you wish to
-  - [upload archives as GitHub Releases](/customization/release/), or
-  - publish to [Homebrew](/customization/homebrew/), or
-    [Scoop](/customization/scoop/) (assuming it's part of the same repository)
+  - [upload archives as GitHub Releases](../customization/release.md), or
+  - publish to [Homebrew](../customization/homebrew.md), or
+    [Scoop](../customization/scoop.md) (assuming it's part of the same repository)
 - or just `contents: read` if you don't need any of the above
-- `packages: write` if you [push Docker images](/customization/docker/) to
+- `packages: write` if you [push Docker images](../customization/docker.md) to
   GitHub
 - `issues: write` if you use [milestone closing
-  capability](/customization/milestone/)
+  capability](../customization/milestone.md)
+- `id-token: write` if you wish use [Cosign][cosign] with [GitHub OIDC][oidc]
 
 `GITHUB_TOKEN` permissions [are limited to the repository][about-github-token]
 that contains your workflow.
@@ -196,9 +198,9 @@ jobs:
     steps:
       # ...
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
-          version: "~> v1"
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
@@ -221,9 +223,11 @@ You can check [this example repository](https://github.com/goreleaser/example) f
 [goreleaser-action]: https://github.com/goreleaser/goreleaser-action
 [actions]: https://github.com/features/actions
 [syntax]: https://help.github.com/en/articles/workflow-syntax-for-github-actions#About-yaml-syntax-for-workflows
-[signing]: https://goreleaser.com/customization/sign/
+[signing]: ../customization/sign.md
 [import-gpg]: https://github.com/crazy-max/ghaction-import-gpg
 [github-token]: https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token
 [about-github-token]: https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token#about-the-github_token-secret
 [pat]: https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/
 [secrets]: https://help.github.com/en/actions/automating-your-workflow-with-github-actions/creating-and-using-encrypted-secrets
+[oidc]: https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect#adding-permissions-settings
+[cosign]: https://github.com/sigstore/cosign

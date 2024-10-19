@@ -8,11 +8,11 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/pkg/build"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/pkg/build"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,58 +45,60 @@ func TestWithArtifact(t *testing.T) {
 		testctx.WithSemver(1, 2, 3, ""),
 		testctx.Snapshot,
 		func(ctx *context.Context) {
-			ctx.ModulePath = "github.com/goreleaser/goreleaser"
+			ctx.ModulePath = "github.com/goreleaser/goreleaser/v2"
 			ctx.ReleaseNotes = "test release notes"
 			ctx.Date = time.Unix(1678327562, 0)
+			ctx.SingleTarget = true
 		},
 	)
 	for expect, tmpl := range map[string]string{
-		"bar":                              "{{.Env.FOO}}",
-		"linux":                            "{{.Os}}",
-		"amd64":                            "{{.Arch}}",
-		"6":                                "{{.Arm}}",
-		"softfloat":                        "{{.Mips}}",
-		"v3":                               "{{.Amd64}}",
-		"1.2.3":                            "{{.Version}}",
-		"v1.2.3":                           "{{.Tag}}",
-		"1-2-3":                            "{{.Major}}-{{.Minor}}-{{.Patch}}",
-		"test-branch":                      "{{.Branch}}",
-		"commit":                           "{{.Commit}}",
-		"fullcommit":                       "{{.FullCommit}}",
-		"shortcommit":                      "{{.ShortCommit}}",
-		"binary":                           "{{.Binary}}",
-		"proj":                             "{{.ProjectName}}",
-		"github.com/goreleaser/goreleaser": "{{ .ModulePath }}",
-		"v2.0.0":                           "{{.Tag | incmajor }}",
-		"2.0.0":                            "{{.Version | incmajor }}",
-		"v1.3.0":                           "{{.Tag | incminor }}",
-		"1.3.0":                            "{{.Version | incminor }}",
-		"v1.2.4":                           "{{.Tag | incpatch }}",
-		"1.2.4":                            "{{.Version | incpatch }}",
-		"test release notes":               "{{ .ReleaseNotes }}",
-		"v1.2.2":                           "{{ .PreviousTag }}",
-		"awesome release":                  "{{ .TagSubject }}",
-		"awesome release\n\nanother line":  "{{ .TagContents }}",
-		"another line":                     "{{ .TagBody }}",
-		"runtime: " + runtime.GOOS:         "runtime: {{ .Runtime.Goos }}",
-		"runtime: " + runtime.GOARCH:       "runtime: {{ .Runtime.Goarch }}",
-		"artifact name: not-this-binary":   "artifact name: {{ .ArtifactName }}",
-		"artifact ext: .exe":               "artifact ext: {{ .ArtifactExt }}",
-		"artifact path: /tmp/foo.exe":      "artifact path: {{ .ArtifactPath }}",
-		"artifact basename: foo.exe":       "artifact basename: {{ base .ArtifactPath }}",
-		"artifact dir: /tmp":               "artifact dir: {{ dir .ArtifactPath }}",
-		"2023":                             `{{ .Now.Format "2006" }}`,
-		"2023-03-09T02:06:02Z":             `{{ .Date }}`,
-		"1678327562":                       `{{ .Timestamp }}`,
-		"snapshot true":                    `snapshot {{.IsSnapshot}}`,
-		"nightly false":                    `nightly {{.IsNightly}}`,
-		"draft true":                       `draft {{.IsDraft}}`,
-		"dirty true":                       `dirty {{.IsGitDirty}}`,
-		"clean false":                      `clean {{.IsGitClean}}`,
-		"state dirty":                      `state {{.GitTreeState}}`,
-		"env bar: barrrrr":                 `env bar: {{ envOrDefault "BAR" "barrrrr" }}`,
-		"env foo: bar":                     `env foo: {{ envOrDefault "FOO" "barrrrr" }}`,
-		"env foo is set: true":             `env foo is set: {{ isEnvSet "FOO" }}`,
+		"bar":                                 "{{.Env.FOO}}",
+		"linux":                               "{{.Os}}",
+		"amd64":                               "{{.Arch}}",
+		"6":                                   "{{.Arm}}",
+		"softfloat":                           "{{.Mips}}",
+		"v3":                                  "{{.Amd64}}",
+		"1.2.3":                               "{{.Version}}",
+		"v1.2.3":                              "{{.Tag}}",
+		"1-2-3":                               "{{.Major}}-{{.Minor}}-{{.Patch}}",
+		"test-branch":                         "{{.Branch}}",
+		"commit":                              "{{.Commit}}",
+		"fullcommit":                          "{{.FullCommit}}",
+		"shortcommit":                         "{{.ShortCommit}}",
+		"binary":                              "{{.Binary}}",
+		"proj":                                "{{.ProjectName}}",
+		"github.com/goreleaser/goreleaser/v2": "{{ .ModulePath }}",
+		"v2.0.0":                              "{{.Tag | incmajor }}",
+		"2.0.0":                               "{{.Version | incmajor }}",
+		"v1.3.0":                              "{{.Tag | incminor }}",
+		"1.3.0":                               "{{.Version | incminor }}",
+		"v1.2.4":                              "{{.Tag | incpatch }}",
+		"1.2.4":                               "{{.Version | incpatch }}",
+		"test release notes":                  "{{ .ReleaseNotes }}",
+		"v1.2.2":                              "{{ .PreviousTag }}",
+		"awesome release":                     "{{ .TagSubject }}",
+		"awesome release\n\nanother line":     "{{ .TagContents }}",
+		"another line":                        "{{ .TagBody }}",
+		"runtime: " + runtime.GOOS:            "runtime: {{ .Runtime.Goos }}",
+		"runtime: " + runtime.GOARCH:          "runtime: {{ .Runtime.Goarch }}",
+		"artifact name: not-this-binary":      "artifact name: {{ .ArtifactName }}",
+		"artifact ext: .exe":                  "artifact ext: {{ .ArtifactExt }}",
+		"artifact path: /tmp/foo.exe":         "artifact path: {{ .ArtifactPath }}",
+		"artifact basename: foo.exe":          "artifact basename: {{ base .ArtifactPath }}",
+		"artifact dir: /tmp":                  "artifact dir: {{ dir .ArtifactPath }}",
+		"2023":                                `{{ .Now.Format "2006" }}`,
+		"2023-03-09T02:06:02Z":                `{{ .Date }}`,
+		"1678327562":                          `{{ .Timestamp }}`,
+		"snapshot true":                       `snapshot {{.IsSnapshot}}`,
+		"singletarget true":                   `singletarget {{.IsSingleTarget}}`,
+		"nightly false":                       `nightly {{.IsNightly}}`,
+		"draft true":                          `draft {{.IsDraft}}`,
+		"dirty true":                          `dirty {{.IsGitDirty}}`,
+		"clean false":                         `clean {{.IsGitClean}}`,
+		"state dirty":                         `state {{.GitTreeState}}`,
+		"env bar: barrrrr":                    `env bar: {{ envOrDefault "BAR" "barrrrr" }}`,
+		"env foo: bar":                        `env foo: {{ envOrDefault "FOO" "barrrrr" }}`,
+		"env foo is set: true":                `env foo is set: {{ isEnvSet "FOO" }}`,
 
 		"remove this": "{{ filter .Env.MULTILINE \".*remove.*\" }}",
 		"something with\nmultiple lines\nto test things": "{{ reverseFilter .Env.MULTILINE \".*remove.*\" }}",
@@ -178,7 +180,7 @@ func TestEnv(t *testing.T) {
 	}
 }
 
-func TestWithEnv(t *testing.T) {
+func TestWithEnvS(t *testing.T) {
 	ctx := testctx.New(
 		testctx.WithEnv(map[string]string{"FOO": "BAR"}),
 		testctx.WithCurrentTag("v1.2.3"),
@@ -198,6 +200,14 @@ func TestWithEnv(t *testing.T) {
 	out, err = tpl.Apply(`{{ range $idx, $key := .Env }}{{ $idx }},{{ end }}`)
 	require.NoError(t, err)
 	require.Equal(t, "BAR,FOO,NOVAL,", out)
+
+	out, err = tpl.Apply(`{{ envOrDefault "NOPE" "no" }}`)
+	require.NoError(t, err)
+	require.Equal(t, "no", out)
+
+	out, err = tpl.Apply(`{{ isEnvSet "NOPE" }}`)
+	require.NoError(t, err)
+	require.Equal(t, "false", out)
 }
 
 func TestFuncMap(t *testing.T) {

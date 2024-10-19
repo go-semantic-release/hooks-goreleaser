@@ -3,9 +3,9 @@ package announce
 import (
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/require"
 )

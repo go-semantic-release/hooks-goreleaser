@@ -5,13 +5,13 @@ package healthcheck
 import (
 	"fmt"
 
-	"github.com/goreleaser/goreleaser/int/pipe/chocolatey"
-	"github.com/goreleaser/goreleaser/int/pipe/docker"
-	"github.com/goreleaser/goreleaser/int/pipe/nix"
-	"github.com/goreleaser/goreleaser/int/pipe/sbom"
-	"github.com/goreleaser/goreleaser/int/pipe/sign"
-	"github.com/goreleaser/goreleaser/int/pipe/snapcraft"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/chocolatey"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/docker"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/nix"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/sbom"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/sign"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/snapcraft"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 // Healthchecker should be implemented by pipes that want checks.
@@ -29,6 +29,7 @@ var Healthcheckers = []Healthchecker{
 	system{},
 	snapcraft.Pipe{},
 	sign.Pipe{},
+	sign.BinaryPipe{},
 	sign.DockerPipe{},
 	sbom.Pipe{},
 	docker.Pipe{},

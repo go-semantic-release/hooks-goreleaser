@@ -12,12 +12,13 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/extrafiles"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 const (
@@ -199,7 +200,24 @@ func Upload(ctx *context.Context, uploads []config.Upload, kind string, check Re
 }
 
 func uploadWithFilter(ctx *context.Context, upload *config.Upload, filter artifact.Filter, kind string, check ResponseChecker) error {
-	artifacts := ctx.Artifacts.Filter(filter).List()
+	var artifacts []*artifact.Artifact
+	extraFiles, err := extrafiles.Find(ctx, upload.ExtraFiles)
+	if err != nil {
+		return err
+	}
+
+	for name, path := range extraFiles {
+		artifacts = append(artifacts, &artifact.Artifact{
+			Name: name,
+			Path: path,
+			Type: artifact.UploadableFile,
+		})
+	}
+
+	if !upload.ExtraFilesOnly {
+		artifacts = append(artifacts, ctx.Artifacts.Filter(filter).List()...)
+	}
+
 	if len(artifacts) == 0 {
 		log.Info("no artifacts found")
 	}

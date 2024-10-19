@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -284,7 +284,7 @@ func requireGoMod(tb testing.TB) {
 	require.NoError(tb, err)
 	require.Contains(tb, string(mod), `module foo
 
-go 1.22`)
+go 1.23`)
 }
 
 func fakeGoModAndSum(tb testing.TB, module string) {

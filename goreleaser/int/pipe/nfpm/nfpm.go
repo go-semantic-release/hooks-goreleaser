@@ -10,15 +10,15 @@ import (
 
 	"dario.cat/mergo"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/deprecate"
-	"github.com/goreleaser/goreleaser/int/ids"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/deprecate"
+	"github.com/goreleaser/goreleaser/v2/int/ids"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/goreleaser/nfpm/v2"
 	"github.com/goreleaser/nfpm/v2/deprecation"
 	"github.com/goreleaser/nfpm/v2/files"
@@ -26,6 +26,7 @@ import (
 	_ "github.com/goreleaser/nfpm/v2/apk"  // blank import to register the format
 	_ "github.com/goreleaser/nfpm/v2/arch" // blank import to register the format
 	_ "github.com/goreleaser/nfpm/v2/deb"  // blank import to register the format
+	_ "github.com/goreleaser/nfpm/v2/ipk"  // blank import to register the format
 	_ "github.com/goreleaser/nfpm/v2/rpm"  // blank import to register the format
 )
 
@@ -104,6 +105,7 @@ func doRun(ctx *context.Context, fpm config.NFPM) error {
 			artifact.ByGoos("linux"),
 			artifact.ByGoos("ios"),
 			artifact.ByGoos("android"),
+			artifact.ByGoos("aix"),
 		),
 	}
 	if len(fpm.Builds) > 0 {
@@ -113,7 +115,7 @@ func doRun(ctx *context.Context, fpm config.NFPM) error {
 		Filter(artifact.And(filters...)).
 		GroupByPlatform()
 	if len(linuxBinaries) == 0 {
-		return fmt.Errorf("no linux binaries found for builds %v", fpm.Builds)
+		return fmt.Errorf("no linux/unix binaries found for builds %v", fpm.Builds)
 	}
 	g := semerrgroup.New(ctx.Parallelism)
 	for _, format := range fpm.Formats {
@@ -147,7 +149,7 @@ func isSupportedTermuxArch(goos, goarch string) bool {
 	if goos != "android" {
 		return false
 	}
-	for _, arch := range []string{"amd64", "arm64", "386"} {
+	for _, arch := range []string{"amd64", "arm64", "arm", "386"} {
 		if strings.HasPrefix(goarch, arch) {
 			return true
 		}
@@ -173,6 +175,7 @@ var termuxArchReplacer = strings.NewReplacer(
 	"386", "i686",
 	"amd64", "x86_64",
 	"arm64", "aarch64",
+	"arm6", "arm",
 )
 
 func create(ctx *context.Context, fpm config.NFPM, format string, artifacts []*artifact.Artifact) error {
@@ -185,6 +188,30 @@ func create(ctx *context.Context, fpm config.NFPM, format string, artifacts []*a
 			infoPlatform = "iphoneos-arm64"
 		} else {
 			log.Debugf("skipping ios for %s as its not supported", format)
+			return nil
+		}
+	}
+
+	// AIX is weird, so we default to 7.2 as the earliest release
+	// that supports golang. This can be overridden by setting platform
+	// in your .goreleaser.yaml. See the following:
+	// https://www.unix.com/aix/266963-tip-problem-rpm-different-operating-system.html
+	// Additionally, it is recommended to set the rpmArch to ppc
+	// As AIX, while being ppc64, expects the rpms to specify ppc.
+	// We will default to setting ppc here, but again this can be
+	// overridden by setting it in your .goreleaser.yaml See the following:
+	// https://developer.ibm.com/articles/au-aix-build-open-source-rpm-packages/
+	// https://developer.ibm.com/articles/configure-yum-on-aix/
+	if infoPlatform == "aix" {
+		if artifacts[0].Goarch != "ppc64" {
+			log.Debugf("skipping aix/%s as its not supported", infoArch)
+			return nil
+		}
+		if format == "rpm" {
+			infoPlatform = "aix7.2"
+			infoArch = "ppc"
+		} else {
+			log.Infof("skipping aix for %s as its not supported", format)
 			return nil
 		}
 	}
@@ -434,6 +461,15 @@ func create(ctx *context.Context, fpm config.NFPM, format string, artifacts []*a
 					PreUpgrade:  overridden.ArchLinux.Scripts.PreUpgrade,
 					PostUpgrade: overridden.ArchLinux.Scripts.PostUpgrade,
 				},
+			},
+			IPK: nfpm.IPK{
+				ABIVersion:    overridden.IPK.ABIVersion,
+				AutoInstalled: overridden.IPK.AutoInstalled,
+				Alternatives:  overridden.IPK.ToNFPAlts(),
+				Essential:     overridden.IPK.Essential,
+				Predepends:    overridden.IPK.Predepends,
+				Tags:          overridden.IPK.Tags,
+				Fields:        overridden.IPK.Fields,
 			},
 		},
 	}

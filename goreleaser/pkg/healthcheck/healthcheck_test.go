@@ -3,7 +3,7 @@ package healthcheck
 import (
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
 	"github.com/stretchr/testify/require"
 )
 

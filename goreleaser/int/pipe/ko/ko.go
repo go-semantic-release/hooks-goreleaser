@@ -25,13 +25,14 @@ import (
 	"github.com/google/ko/pkg/build"
 	"github.com/google/ko/pkg/commands/options"
 	"github.com/google/ko/pkg/publish"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/ids"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/deprecate"
+	"github.com/goreleaser/goreleaser/v2/int/ids"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -49,8 +50,9 @@ var (
 		azureKeychain,
 	)
 
-	errNoRepository    = errors.New("ko: missing repository: please set either the repository field or a $KO_DOCKER_REPO environment variable")
-	errInvalidMainPath = errors.New("ko: invalid Main path: ko.main (or build.main if ko.main is not set) should be a relative path")
+	errNoRepository      = errors.New("ko: missing repository: please set either the repository field or a $KO_DOCKER_REPO environment variable")
+	errInvalidMainPath   = errors.New("ko: invalid Main path: ko.main (or build.main if ko.main is not set) should be a relative path")
+	errInvalidMainGoPath = errors.New("ko: invalid Main path: your path should point to a directory instead of a .go file")
 )
 
 // Pipe that build OCI compliant images with ko.
@@ -115,7 +117,11 @@ func (Pipe) Default(ctx *context.Context) error {
 			ko.Tags = []string{"latest"}
 		}
 
-		if ko.SBOM == "" {
+		switch ko.SBOM {
+		case "cyclonedx", "go.version-m":
+			deprecate.Notice(ctx, "kos.sbom")
+			ko.SBOM = "none"
+		case "":
 			ko.SBOM = "spdx"
 		}
 
@@ -130,6 +136,15 @@ func (Pipe) Default(ctx *context.Context) error {
 		ids.Inc(ko.ID)
 	}
 	return ids.Validate()
+}
+
+func (p Pipe) Run(ctx *context.Context) error {
+	if ctx.Snapshot {
+		// publish actually handles pushing to the local docker daemon when
+		// snapshot is true.
+		return p.Publish(ctx)
+	}
+	return nil
 }
 
 // Publish executes the Pipe.
@@ -214,10 +229,6 @@ func (o *buildOptions) makeBuilder(ctx *context.Context) (*build.Caching, error)
 	switch o.sbom {
 	case "spdx":
 		buildOptions = append(buildOptions, build.WithSPDX("devel"))
-	case "cyclonedx":
-		buildOptions = append(buildOptions, build.WithCycloneDX())
-	case "go.version-m":
-		buildOptions = append(buildOptions, build.WithGoVersionSBOM())
 	case "none":
 		buildOptions = append(buildOptions, build.WithDisabledSBOM())
 	default:
@@ -247,17 +258,32 @@ func doBuild(ctx *context.Context, ko config.Ko) func() error {
 			return fmt.Errorf("build: %w", err)
 		}
 
-		po := []publish.Option{publish.WithTags(opts.tags), publish.WithNamer(options.MakeNamer(&options.PublishOptions{
+		po := &options.PublishOptions{
 			DockerRepo:          opts.imageRepo,
 			Bare:                opts.bare,
 			PreserveImportPaths: opts.preserveImportPaths,
 			BaseImportPaths:     opts.baseImportPaths,
 			Tags:                opts.tags,
-		})), publish.WithAuthFromKeychain(keychain)}
-
-		p, err := publish.NewDefault(opts.imageRepo, po...)
+			Local:               ctx.Snapshot,
+			LocalDomain:         "goreleaser.ko.local",
+		}
+		var p publish.Interface
+		if ctx.Snapshot {
+			p, err = publish.NewDaemon(
+				options.MakeNamer(po),
+				opts.tags,
+				publish.WithLocalDomain(po.LocalDomain),
+			)
+		} else {
+			p, err = publish.NewDefault(
+				opts.imageRepo,
+				publish.WithTags(opts.tags),
+				publish.WithNamer(options.MakeNamer(po)),
+				publish.WithAuthFromKeychain(keychain),
+			)
+		}
 		if err != nil {
-			return fmt.Errorf("newDefault: %w", err)
+			return fmt.Errorf("newPublisher: %w", err)
 		}
 		defer func() { _ = p.Close() }()
 		ref, err := p.Publish(ctx, r, opts.importPath)
@@ -437,7 +463,7 @@ func validateMainPath(path string) error {
 	}
 	// paths sure can have dots in them, but if the path ends in .go, it's propably a file that one misundertood as a valid value
 	if strings.HasSuffix(path, ".go") {
-		return errInvalidMainPath
+		return errInvalidMainGoPath
 	}
 	return nil
 }

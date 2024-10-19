@@ -10,11 +10,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/pkg/archive"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/archive"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1227,4 +1228,14 @@ func TestExtraFormatWhenOverride(t *testing.T) {
 	require.NoError(t, Pipe{}.Run(ctx))
 	archives := ctx.Artifacts.Filter(artifact.ByFormats("zip")).List()
 	require.Len(t, archives, 1)
+}
+
+func TestSkip(t *testing.T) {
+	t.Run("skip", func(t *testing.T) {
+		ctx := testctx.New(testctx.Skip(skips.Archive))
+		require.True(t, Pipe{}.Skip(ctx))
+	})
+	t.Run("dont skip", func(t *testing.T) {
+		require.False(t, Pipe{}.Skip(testctx.New()))
+	})
 }

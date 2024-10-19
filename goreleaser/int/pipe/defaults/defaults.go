@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/goreleaser/goreleaser/int/client"
-	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/context"
-	"github.com/goreleaser/goreleaser/pkg/defaults"
+	"github.com/goreleaser/goreleaser/v2/int/client"
+	"github.com/goreleaser/goreleaser/v2/int/middleware/errhandler"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/pkg/defaults"
 )
 
 // Pipe that sets the defaults.
@@ -20,9 +20,6 @@ func (Pipe) String() string { return "setting defaults" }
 
 // Run the pipe.
 func (Pipe) Run(ctx *context.Context) error {
-	if ctx.Config.Dist == "" {
-		ctx.Config.Dist = "dist"
-	}
 	if ctx.Config.GitHubURLs.Download == "" {
 		ctx.Config.GitHubURLs.Download = client.DefaultGitHubDownloadURL
 	}

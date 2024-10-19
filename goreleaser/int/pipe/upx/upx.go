@@ -8,12 +8,12 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/docker/go-units"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 type Pipe struct{}
@@ -95,6 +95,7 @@ var knownExceptions = []string{
 	"CantPackException",
 	"AlreadyPackedException",
 	"NotCompressibleException",
+	"UnknownExecutableFormatException",
 }
 
 func findBinaries(ctx *context.Context, upx config.UPX) []*artifact.Artifact {

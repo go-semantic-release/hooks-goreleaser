@@ -2,8 +2,8 @@
 package custompublishers
 
 import (
-	"github.com/goreleaser/goreleaser/int/exec"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/exec"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 // Pipe for custom publisher.
