@@ -1,6 +1,8 @@
 module github.com/go-semantic-release/hooks-goreleaser/v2
 
-go 1.23
+go 1.23.0
+
+toolchain go1.23.2
 
 require (
 	github.com/caarlos0/log v0.4.6

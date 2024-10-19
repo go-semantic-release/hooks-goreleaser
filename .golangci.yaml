@@ -26,6 +26,6 @@ linters-settings:
   goconst:
     min-occurrences: 6
 
-run:
-  skip-dirs:
+issues:
+  exclude-dirs:
     - goreleaser
