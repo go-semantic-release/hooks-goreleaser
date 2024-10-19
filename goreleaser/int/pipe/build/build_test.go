@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	api "github.com/goreleaser/goreleaser/pkg/build"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	api "github.com/goreleaser/goreleaser/v2/pkg/build"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -399,40 +399,29 @@ func TestDefaultPartialBuilds(t *testing.T) {
 	})
 }
 
-func TestDefaultFillSingleBuild(t *testing.T) {
-	testlib.Mktmp(t)
-
-	ctx := testctx.NewWithCfg(config.Project{
-		ProjectName: "foo",
-		SingleBuild: config.Build{
-			Main: "testreleaser",
-		},
-	})
-	require.NoError(t, Pipe{}.Default(ctx))
-	require.Len(t, ctx.Config.Builds, 1)
-	require.Equal(t, "foo", ctx.Config.Builds[0].Binary)
-}
-
-func TestDefaultFailSingleBuild(t *testing.T) {
-	folder := testlib.Mktmp(t)
-	config := config.Project{
-		Dist: folder,
-		SingleBuild: config.Build{
-			Builder: "fakeFailDefault",
-		},
-	}
-	ctx := testctx.NewWithCfg(config)
-	require.EqualError(t, Pipe{}.Default(ctx), errFailedDefault.Error())
-	require.Empty(t, ctx.Artifacts.List())
-}
-
 func TestSkipBuild(t *testing.T) {
 	folder := testlib.Mktmp(t)
 	config := config.Project{
 		Dist: folder,
 		Builds: []config.Build{
 			{
-				Skip: true,
+				Skip: "true",
+			},
+		},
+	}
+	ctx := testctx.NewWithCfg(config, testctx.WithCurrentTag("2.4.5"))
+	require.NoError(t, Pipe{}.Run(ctx))
+	require.Empty(t, ctx.Artifacts.List())
+}
+
+func TestSkipBuildTmpl(t *testing.T) {
+	folder := testlib.Mktmp(t)
+	config := config.Project{
+		Dist: folder,
+		Env:  []string{"FOO=bar"},
+		Builds: []config.Build{
+			{
+				Skip: "{{ eq .Env.FOO \"bar\" }}",
 			},
 		},
 	}
@@ -473,6 +462,8 @@ func TestExtWindows(t *testing.T) {
 
 func TestExtWasm(t *testing.T) {
 	require.Equal(t, ".wasm", extFor("js_wasm", config.BuildDetails{}))
+	require.Equal(t, ".wasm", extFor("wasip1_wasm", config.BuildDetails{}))
+	require.Equal(t, ".wasm", extFor("wasip1_wasm", config.BuildDetails{Buildmode: "c-shared"}))
 }
 
 func TestExtOthers(t *testing.T) {
@@ -634,18 +625,37 @@ func TestBuildOptionsForTarget(t *testing.T) {
 			},
 		},
 		{
-			name: "overriding dist path",
+			name: "no unique dist path evals true",
 			build: config.Build{
 				ID:     "testid",
-				Binary: "distpath/{{.Os}}/{{.Arch}}/testbinary_{{.Os}}_{{.Arch}}",
+				Binary: "distpath/{{.Os}}/{{.Arch}}/testbinary",
 				Targets: []string{
 					"linux_amd64",
 				},
-				NoUniqueDistDir: true,
+				NoUniqueDistDir: `{{ printf "true"}}`,
 			},
 			expectedOpts: &api.Options{
-				Name:    "distpath/linux/amd64/testbinary_linux_amd64",
-				Path:    filepath.Join(tmpDir, "distpath", "linux", "amd64", "testbinary_linux_amd64"),
+				Name:    "distpath/linux/amd64/testbinary",
+				Path:    filepath.Join(tmpDir, "distpath", "linux", "amd64", "testbinary"),
+				Target:  "linux_amd64_v1",
+				Goos:    "linux",
+				Goarch:  "amd64",
+				Goamd64: "v1",
+			},
+		},
+		{
+			name: "no unique dist path evals false",
+			build: config.Build{
+				ID:     "testid",
+				Binary: "testbinary",
+				Targets: []string{
+					"linux_amd64",
+				},
+				NoUniqueDistDir: `{{ printf "false"}}`,
+			},
+			expectedOpts: &api.Options{
+				Name:    "testbinary",
+				Path:    filepath.Join(tmpDir, "testid_linux_amd64_v1", "testbinary"),
 				Target:  "linux_amd64_v1",
 				Goos:    "linux",
 				Goarch:  "amd64",

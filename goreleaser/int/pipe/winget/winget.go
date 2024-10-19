@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/client"
-	"github.com/goreleaser/goreleaser/int/commitauthor"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/client"
+	"github.com/goreleaser/goreleaser/v2/int/commitauthor"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 var (

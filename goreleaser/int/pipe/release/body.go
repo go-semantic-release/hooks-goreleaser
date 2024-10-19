@@ -5,9 +5,9 @@ import (
 	"os"
 	"text/template"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 const bodyTemplateText = `{{ with .Header }}{{ . }}{{ "\n" }}{{ end }}

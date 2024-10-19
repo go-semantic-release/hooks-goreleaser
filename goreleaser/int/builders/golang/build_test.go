@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	api "github.com/goreleaser/goreleaser/pkg/build"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	api "github.com/goreleaser/goreleaser/v2/pkg/build"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 
@@ -990,6 +990,16 @@ func TestProcessFlagsInvalid(t *testing.T) {
 	flags, err := processFlags(ctx, &artifact.Artifact{}, []string{}, source, "-testflag=")
 	testlib.RequireTemplateError(t, err)
 	require.Nil(t, flags)
+}
+
+func TestProcessFlagsIgnoreEmptyFlags(t *testing.T) {
+	ctx := testctx.New()
+	source := []string{
+		"{{if eq 1 2}}-ignore-me{{end}}",
+	}
+	flags, err := processFlags(ctx, &artifact.Artifact{}, []string{}, source, "")
+	require.NoError(t, err)
+	require.Empty(t, flags)
 }
 
 func TestBuildModTimestamp(t *testing.T) {

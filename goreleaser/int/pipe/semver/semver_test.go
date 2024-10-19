@@ -3,8 +3,8 @@ package semver
 import (
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/stretchr/testify/require"
 )
 

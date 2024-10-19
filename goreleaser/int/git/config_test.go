@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/git"
-	"github.com/goreleaser/goreleaser/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/int/git"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
 	"github.com/stretchr/testify/require"
 )
 

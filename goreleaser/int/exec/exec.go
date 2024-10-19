@@ -10,15 +10,15 @@ import (
 
 	"github.com/caarlos0/go-shellwords"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/extrafiles"
-	"github.com/goreleaser/goreleaser/int/gio"
-	"github.com/goreleaser/goreleaser/int/logext"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/extrafiles"
+	"github.com/goreleaser/goreleaser/v2/int/gio"
+	"github.com/goreleaser/goreleaser/v2/int/logext"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 // Environment variables to pass through to exec

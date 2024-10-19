@@ -10,20 +10,18 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/client"
-	"github.com/goreleaser/goreleaser/int/commitauthor"
-	"github.com/goreleaser/goreleaser/int/deprecate"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/int/yaml"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/client"
+	"github.com/goreleaser/goreleaser/v2/int/commitauthor"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/int/yaml"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 const (
@@ -55,10 +53,6 @@ func (Pipe) Default(ctx *context.Context) error {
 		}
 		if krew.Goamd64 == "" {
 			krew.Goamd64 = "v1"
-		}
-		if !reflect.DeepEqual(krew.Index, config.RepoRef{}) {
-			krew.Repository = krew.Index
-			deprecate.Notice(ctx, "krews.index")
 		}
 	}
 

@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/require"
@@ -29,6 +29,9 @@ const (
 var listen string
 
 func TestMain(m *testing.M) {
+	if !testlib.InPath("docker") {
+		os.Exit(m.Run())
+	}
 	prepareEnv()
 
 	requireNoErr := func(err error) {
@@ -48,7 +51,7 @@ func TestMain(m *testing.M) {
 			"MINIO_ROOT_USER=" + minioUser,
 			"MINIO_ROOT_PASSWORD=" + minioPwd,
 		},
-		ExposedPorts: []string{"9000", "9001"},
+		ExposedPorts: []string{"9000/tcp", "9001/tcp"},
 		Cmd:          []string{"server", "/data", "--console-address", ":9001"},
 	}, func(hc *docker.HostConfig) {
 		hc.AutoRemove = true
@@ -71,15 +74,16 @@ func TestMain(m *testing.M) {
 }
 
 func TestMinioUpload(t *testing.T) {
+	testlib.CheckPath(t, "docker")
 	name := "basic"
-	folder := t.TempDir()
-	srcpath := filepath.Join(folder, "source.tar.gz")
-	tgzpath := filepath.Join(folder, "bin.tar.gz")
-	debpath := filepath.Join(folder, "bin.deb")
-	checkpath := filepath.Join(folder, "check.txt")
-	metapath := filepath.Join(folder, "metadata.json")
-	sigpath := filepath.Join(folder, "f.sig")
-	certpath := filepath.Join(folder, "f.pem")
+	directory := t.TempDir()
+	srcpath := filepath.Join(directory, "source.tar.gz")
+	tgzpath := filepath.Join(directory, "bin.tar.gz")
+	debpath := filepath.Join(directory, "bin.deb")
+	checkpath := filepath.Join(directory, "check.txt")
+	metapath := filepath.Join(directory, "metadata.json")
+	sigpath := filepath.Join(directory, "f.sig")
+	certpath := filepath.Join(directory, "f.pem")
 	require.NoError(t, os.WriteFile(checkpath, []byte("fake checksums"), 0o744))
 	require.NoError(t, os.WriteFile(metapath, []byte(`{"fake":true}`), 0o744))
 	require.NoError(t, os.WriteFile(srcpath, []byte("fake\nsrc"), 0o744))
@@ -88,7 +92,7 @@ func TestMinioUpload(t *testing.T) {
 	require.NoError(t, os.WriteFile(sigpath, []byte("fake\nsig"), 0o744))
 	require.NoError(t, os.WriteFile(certpath, []byte("fake\ncert"), 0o744))
 	ctx := testctx.NewWithCfg(config.Project{
-		Dist:        folder,
+		Dist:        directory,
 		ProjectName: "testupload",
 		Blobs: []config.Blob{
 			{
@@ -163,7 +167,7 @@ func TestMinioUpload(t *testing.T) {
 	require.NoError(t, Pipe{}.Default(ctx))
 	require.NoError(t, Pipe{}.Publish(ctx))
 
-	require.Subset(t, getFiles(t, ctx, ctx.Config.Blobs[0]), []string{
+	require.ElementsMatch(t, getFiles(t, ctx, ctx.Config.Blobs[0]), []string{
 		"testupload/v1.0.0/bin.deb",
 		"testupload/v1.0.0/bin.tar.gz",
 		"testupload/v1.0.0/metadata.json",
@@ -176,16 +180,17 @@ func TestMinioUpload(t *testing.T) {
 }
 
 func TestMinioUploadCustomBucketID(t *testing.T) {
+	testlib.CheckPath(t, "docker")
 	name := "fromenv"
-	folder := t.TempDir()
-	tgzpath := filepath.Join(folder, "bin.tar.gz")
-	debpath := filepath.Join(folder, "bin.deb")
+	directory := t.TempDir()
+	tgzpath := filepath.Join(directory, "bin.tar.gz")
+	debpath := filepath.Join(directory, "bin.deb")
 	require.NoError(t, os.WriteFile(tgzpath, []byte("fake\ntargz"), 0o744))
 	require.NoError(t, os.WriteFile(debpath, []byte("fake\ndeb"), 0o744))
 	// Set custom BUCKET_ID env variable.
 	t.Setenv("BUCKET_ID", name)
 	ctx := testctx.NewWithCfg(config.Project{
-		Dist:        folder,
+		Dist:        directory,
 		ProjectName: "testupload",
 		Blobs: []config.Blob{
 			{
@@ -211,22 +216,69 @@ func TestMinioUploadCustomBucketID(t *testing.T) {
 	require.NoError(t, Pipe{}.Publish(ctx))
 }
 
-func TestMinioUploadRootFolder(t *testing.T) {
-	name := "rootdir"
-	folder := t.TempDir()
-	tgzpath := filepath.Join(folder, "bin.tar.gz")
-	debpath := filepath.Join(folder, "bin.deb")
+func TestMinioUploadExtraFilesOnly(t *testing.T) {
+	testlib.CheckPath(t, "docker")
+	name := "only-extra-files"
+	directory := t.TempDir()
+	tgzpath := filepath.Join(directory, "bin.tar.gz")
+	debpath := filepath.Join(directory, "bin.deb")
 	require.NoError(t, os.WriteFile(tgzpath, []byte("fake\ntargz"), 0o744))
 	require.NoError(t, os.WriteFile(debpath, []byte("fake\ndeb"), 0o744))
 	ctx := testctx.NewWithCfg(config.Project{
-		Dist:        folder,
+		Dist:        directory,
 		ProjectName: "testupload",
 		Blobs: []config.Blob{
 			{
-				Provider: "s3",
-				Bucket:   name,
-				Folder:   "/",
-				Endpoint: "http://" + listen,
+				Provider:       "s3",
+				Bucket:         name,
+				Endpoint:       "http://" + listen,
+				IncludeMeta:    true,
+				ExtraFilesOnly: true,
+				ExtraFiles: []config.ExtraFile{
+					{
+						Glob: "./testdata/*.golden",
+					},
+				},
+			},
+		},
+	}, testctx.WithCurrentTag("v1.0.0"))
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Type: artifact.UploadableArchive,
+		Name: "bin.tar.gz",
+		Path: tgzpath,
+	})
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Type: artifact.LinuxPackage,
+		Name: "bin.deb",
+		Path: debpath,
+	})
+
+	setupBucket(t, testlib.MustDockerPool(t), name)
+	require.NoError(t, Pipe{}.Default(ctx))
+	require.NoError(t, Pipe{}.Publish(ctx))
+
+	require.ElementsMatch(t, getFiles(t, ctx, ctx.Config.Blobs[0]), []string{
+		"testupload/v1.0.0/file.golden",
+	})
+}
+
+func TestMinioUploadRootDirectory(t *testing.T) {
+	testlib.CheckPath(t, "docker")
+	name := "rootdir"
+	directory := t.TempDir()
+	tgzpath := filepath.Join(directory, "bin.tar.gz")
+	debpath := filepath.Join(directory, "bin.deb")
+	require.NoError(t, os.WriteFile(tgzpath, []byte("fake\ntargz"), 0o744))
+	require.NoError(t, os.WriteFile(debpath, []byte("fake\ndeb"), 0o744))
+	ctx := testctx.NewWithCfg(config.Project{
+		Dist:        directory,
+		ProjectName: "testupload",
+		Blobs: []config.Blob{
+			{
+				Provider:  "s3",
+				Bucket:    name,
+				Directory: "/",
+				Endpoint:  "http://" + listen,
 			},
 		},
 	}, testctx.WithCurrentTag("v1.0.0"))
@@ -247,13 +299,14 @@ func TestMinioUploadRootFolder(t *testing.T) {
 }
 
 func TestMinioUploadInvalidCustomBucketID(t *testing.T) {
-	folder := t.TempDir()
-	tgzpath := filepath.Join(folder, "bin.tar.gz")
-	debpath := filepath.Join(folder, "bin.deb")
+	testlib.CheckPath(t, "docker")
+	directory := t.TempDir()
+	tgzpath := filepath.Join(directory, "bin.tar.gz")
+	debpath := filepath.Join(directory, "bin.deb")
 	require.NoError(t, os.WriteFile(tgzpath, []byte("fake\ntargz"), 0o744))
 	require.NoError(t, os.WriteFile(debpath, []byte("fake\ndeb"), 0o744))
 	ctx := testctx.NewWithCfg(config.Project{
-		Dist:        folder,
+		Dist:        directory,
 		ProjectName: "testupload",
 		Blobs: []config.Blob{
 			{
@@ -279,17 +332,18 @@ func TestMinioUploadInvalidCustomBucketID(t *testing.T) {
 }
 
 func TestMinioUploadSkip(t *testing.T) {
+	testlib.CheckPath(t, "docker")
 	name := "basic"
-	folder := t.TempDir()
-	debpath := filepath.Join(folder, "bin.deb")
-	tgzpath := filepath.Join(folder, "bin.tar.gz")
+	directory := t.TempDir()
+	debpath := filepath.Join(directory, "bin.deb")
+	tgzpath := filepath.Join(directory, "bin.tar.gz")
 	require.NoError(t, os.WriteFile(tgzpath, []byte("fake\ntargz"), 0o744))
 	require.NoError(t, os.WriteFile(debpath, []byte("fake\ndeb"), 0o744))
 
 	buildCtx := func(uploadID string) *context.Context {
 		ctx := testctx.NewWithCfg(
 			config.Project{
-				Dist:        folder,
+				Dist:        directory,
 				ProjectName: "testupload",
 				Blobs: []config.Blob{
 					{

@@ -1,12 +1,12 @@
 package blob
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,7 +28,7 @@ func TestErrors(t *testing.T) {
 		"other":                        "failed to write to bucket: other",
 	} {
 		t.Run(k, func(t *testing.T) {
-			require.EqualError(t, handleError(fmt.Errorf(k), "someurl"), v)
+			require.EqualError(t, handleError(errors.New(k), "someurl"), v)
 		})
 	}
 }
@@ -83,13 +83,6 @@ func TestDefaults(t *testing.T) {
 				Provider:           "gcs",
 				ContentDisposition: "-",
 			},
-			{
-				Bucket:        "deprecated",
-				Provider:      "s3",
-				Folder:        "static",
-				OldDisableSSL: true,
-				OldKMSKey:     "fake",
-			},
 		},
 	})
 	require.NoError(t, Pipe{}.Default(ctx))
@@ -112,17 +105,6 @@ func TestDefaults(t *testing.T) {
 			Provider:           "gcs",
 			Directory:          "{{ .ProjectName }}/{{ .Tag }}",
 			ContentDisposition: "",
-		},
-		{
-			Bucket:             "deprecated",
-			Provider:           "s3",
-			Folder:             "static",
-			Directory:          "static",
-			OldDisableSSL:      true,
-			DisableSSL:         true,
-			OldKMSKey:          "fake",
-			KMSKey:             "fake",
-			ContentDisposition: "attachment;filename={{.Filename}}",
 		},
 	}, ctx.Config.Blobs)
 }
@@ -153,12 +135,12 @@ func TestURL(t *testing.T) {
 			Bucket:     "foo",
 			Provider:   "s3",
 			Region:     "us-west-1",
-			Folder:     "foo",
+			Directory:  "foo",
 			Endpoint:   "s3.foobar.com",
 			DisableSSL: true,
 		})
 		require.NoError(t, err)
-		require.Equal(t, "s3://foo?disableSSL=true&endpoint=s3.foobar.com&region=us-west-1&s3ForcePathStyle=true", url)
+		require.Equal(t, "s3://foo?awssdk=v1&disableSSL=true&endpoint=s3.foobar.com&region=us-west-1&s3ForcePathStyle=true", url)
 	})
 
 	t.Run("s3 with some opts", func(t *testing.T) {
@@ -169,7 +151,7 @@ func TestURL(t *testing.T) {
 			DisableSSL: true,
 		})
 		require.NoError(t, err)
-		require.Equal(t, "s3://foo?disableSSL=true&region=us-west-1", url)
+		require.Equal(t, "s3://foo?awssdk=v1&disableSSL=true&region=us-west-1", url)
 	})
 
 	t.Run("gs with opts", func(t *testing.T) {
@@ -177,7 +159,7 @@ func TestURL(t *testing.T) {
 			Bucket:     "foo",
 			Provider:   "gs",
 			Region:     "us-west-1",
-			Folder:     "foo",
+			Directory:  "foo",
 			Endpoint:   "s3.foobar.com",
 			DisableSSL: true,
 		})
@@ -191,7 +173,7 @@ func TestURL(t *testing.T) {
 			Provider: "s3",
 		})
 		require.NoError(t, err)
-		require.Equal(t, "s3://foo", url)
+		require.Equal(t, "s3://foo?awssdk=v1", url)
 	})
 
 	t.Run("gs no opts", func(t *testing.T) {

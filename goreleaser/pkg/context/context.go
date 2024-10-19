@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 )
 
 // GitInfo includes tags and diffs used in some point.
@@ -102,6 +102,7 @@ type Context struct {
 	Snapshot          bool
 	FailFast          bool
 	Partial           bool
+	SingleTarget      bool
 	SkipTokenCheck    bool
 	Clean             bool
 	PreRelease        bool

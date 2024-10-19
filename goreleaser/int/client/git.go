@@ -12,11 +12,11 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/charmbracelet/x/exp/ordered"
-	"github.com/goreleaser/goreleaser/int/git"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/git"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 	"golang.org/x/crypto/ssh"
 )
 

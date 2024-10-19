@@ -3,8 +3,8 @@ package skips_test
 import (
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 )

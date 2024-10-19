@@ -10,9 +10,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,13 +68,13 @@ func TestAnnounceWebhook(t *testing.T) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Equal(t, "webhook-test", string(body))
+		assert.NoError(t, err)
+		assert.Equal(t, "webhook-test", string(body))
 
 		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(responseServer)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -98,12 +99,12 @@ func TestAnnounceTLSWebhook(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Equal(t, "webhook-test", string(body))
+		assert.NoError(t, err)
+		assert.Equal(t, "webhook-test", string(body))
 		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(responseServer)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer srv.Close()
 	fmt.Println(srv.URL)
@@ -131,7 +132,7 @@ func TestAnnounceTLSCheckCertWebhook(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
 		err := json.NewEncoder(w).Encode(responseServer)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer srv.Close()
 	fmt.Println(srv.URL)
@@ -157,16 +158,16 @@ func TestAnnounceBasicAuthWebhook(t *testing.T) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Equal(t, "webhook-test", string(body))
+		assert.NoError(t, err)
+		assert.Equal(t, "webhook-test", string(body))
 
 		auth := r.Header.Get("Authorization")
-		require.Equal(t, fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass"))), auth)
+		assert.Equal(t, fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte("user:pass"))), auth)
 
 		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(responseServer)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 
 	defer srv.Close()
@@ -194,16 +195,16 @@ func TestAnnounceAdditionalHeadersWebhook(t *testing.T) {
 		defer r.Body.Close()
 
 		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Equal(t, "webhook-test", string(body))
+		assert.NoError(t, err)
+		assert.Equal(t, "webhook-test", string(body))
 
 		customHeader := r.Header.Get("X-Custom-Header")
-		require.Equal(t, "custom-value", customHeader)
+		assert.Equal(t, "custom-value", customHeader)
 
 		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(responseServer)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}))
 	defer srv.Close()
 

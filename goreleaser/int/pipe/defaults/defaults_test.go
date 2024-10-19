@@ -3,9 +3,9 @@ package defaults
 import (
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/int/testlib"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,7 +34,6 @@ func TestFillBasicData(t *testing.T) {
 	require.NotEmpty(t, ctx.Config.Archives[0].NameTemplate)
 	require.NotEmpty(t, ctx.Config.Builds[0].Ldflags)
 	require.NotEmpty(t, ctx.Config.Archives[0].Files)
-	require.NotEmpty(t, ctx.Config.Dist)
 }
 
 func TestFillPartial(t *testing.T) {

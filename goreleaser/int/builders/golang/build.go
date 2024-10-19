@@ -13,14 +13,14 @@ import (
 
 	"dario.cat/mergo"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/builders/buildtarget"
-	"github.com/goreleaser/goreleaser/int/gio"
-	"github.com/goreleaser/goreleaser/int/logext"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	api "github.com/goreleaser/goreleaser/pkg/build"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/builders/buildtarget"
+	"github.com/goreleaser/goreleaser/v2/int/gio"
+	"github.com/goreleaser/goreleaser/v2/int/logext"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	api "github.com/goreleaser/goreleaser/v2/pkg/build"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 // Default builder instance.
@@ -182,7 +182,7 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		a.Type = artifact.CArchive
 		ctx.Artifacts.Add(getHeaderArtifactForLibrary(build, options))
 	}
-	if build.Buildmode == "c-shared" {
+	if build.Buildmode == "c-shared" && !strings.Contains(options.Target, "wasm") {
 		a.Type = artifact.CShared
 		ctx.Artifacts.Add(getHeaderArtifactForLibrary(build, options))
 	}
@@ -218,6 +218,10 @@ func (*Builder) Build(ctx *context.Context, build config.Build, options api.Opti
 		"GOMIPS64="+options.Gomips,
 		"GOAMD64="+options.Goamd64,
 	)
+
+	if v := os.Getenv("GOCACHEPROG"); v != "" {
+		env = append(env, "GOCACHEPROG="+v)
+	}
 
 	if len(testEnvs) > 0 {
 		a.Extra["testEnvs"] = testEnvs
@@ -361,6 +365,11 @@ func processFlags(ctx *context.Context, a *artifact.Artifact, env, flags []strin
 		if err != nil {
 			return nil, err
 		}
+
+		if flag == "" {
+			continue
+		}
+
 		processed = append(processed, flagPrefix+flag)
 	}
 	return processed, nil

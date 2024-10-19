@@ -8,13 +8,13 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/go-semantic-release/semantic-release/v2/pkg/hooks"
-	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
-	"github.com/goreleaser/goreleaser/int/middleware/logging"
-	"github.com/goreleaser/goreleaser/int/middleware/skip"
-	"github.com/goreleaser/goreleaser/int/pipe/git"
-	"github.com/goreleaser/goreleaser/int/pipeline"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/middleware/errhandler"
+	"github.com/goreleaser/goreleaser/v2/int/middleware/logging"
+	"github.com/goreleaser/goreleaser/v2/int/middleware/skip"
+	"github.com/goreleaser/goreleaser/v2/int/pipe/git"
+	"github.com/goreleaser/goreleaser/v2/int/pipeline"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 var HVERSION = "dev"

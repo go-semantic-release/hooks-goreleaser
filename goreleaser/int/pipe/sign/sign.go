@@ -10,17 +10,17 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/gio"
-	"github.com/goreleaser/goreleaser/int/git"
-	"github.com/goreleaser/goreleaser/int/ids"
-	"github.com/goreleaser/goreleaser/int/logext"
-	"github.com/goreleaser/goreleaser/int/pipe"
-	"github.com/goreleaser/goreleaser/int/semerrgroup"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/gio"
+	"github.com/goreleaser/goreleaser/v2/int/git"
+	"github.com/goreleaser/goreleaser/v2/int/ids"
+	"github.com/goreleaser/goreleaser/v2/int/logext"
+	"github.com/goreleaser/goreleaser/v2/int/pipe"
+	"github.com/goreleaser/goreleaser/v2/int/semerrgroup"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 // Pipe that signs common artifacts.
@@ -162,8 +162,8 @@ func relativeToDist(dist, f string) (string, error) {
 	return filepath.Join(dist, f), nil
 }
 
-func tmplPath(ctx *context.Context, env map[string]string, s string) (string, error) {
-	result, err := tmpl.New(ctx).WithEnv(env).Apply(expand(s, env))
+func tmplPath(ctx *context.Context, env map[string]string, a *artifact.Artifact, s string) (string, error) {
+	result, err := tmpl.New(ctx).WithArtifact(a).WithEnv(env).Apply(expand(s, env))
 	if err != nil || result == "" {
 		return "", err
 	}
@@ -186,13 +186,13 @@ func signone(ctx *context.Context, cfg config.Sign, art *artifact.Artifact) ([]*
 		env[k] = v
 	}
 
-	name, err := tmplPath(ctx, env, cfg.Signature)
+	name, err := tmplPath(ctx, env, art, cfg.Signature)
 	if err != nil {
 		return nil, fmt.Errorf("sign failed: %s: %w", art.Name, err)
 	}
 	env["signature"] = name
 
-	cert, err := tmplPath(ctx, env, cfg.Certificate)
+	cert, err := tmplPath(ctx, env, art, cfg.Certificate)
 	if err != nil {
 		return nil, fmt.Errorf("sign failed: %s: %w", art.Name, err)
 	}

@@ -15,4 +15,5 @@ completions/
 manpages
 output.json
 .direnv
+*.pyc
 !/int/pipe/dist

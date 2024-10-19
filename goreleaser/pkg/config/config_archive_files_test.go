@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goreleaser/goreleaser/int/yaml"
+	"github.com/goreleaser/goreleaser/v2/int/yaml"
 	"github.com/stretchr/testify/require"
 )
 

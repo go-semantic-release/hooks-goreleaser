@@ -12,10 +12,10 @@ import (
 
 	"code.gitea.io/sdk/gitea"
 	"github.com/caarlos0/log"
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/tmpl"
-	"github.com/goreleaser/goreleaser/pkg/config"
-	"github.com/goreleaser/goreleaser/pkg/context"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/tmpl"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/context"
 )
 
 type giteaClient struct {
@@ -84,7 +84,7 @@ func (c *giteaClient) Changelog(_ *context.Context, repo Repo, prev, current str
 
 	for _, commit := range result.Commits {
 		log = append(log, ChangelogItem{
-			SHA:            commit.SHA[:7],
+			SHA:            commit.SHA,
 			Message:        strings.Split(commit.RepoCommit.Message, "\n")[0],
 			AuthorName:     commit.Author.FullName,
 			AuthorEmail:    commit.Author.Email,

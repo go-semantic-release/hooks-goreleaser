@@ -3,7 +3,7 @@ package hooks
 import (
 	"os"
 
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 )
 
 var goReleaserConfigPaths = [6]string{

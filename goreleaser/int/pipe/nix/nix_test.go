@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goreleaser/goreleaser/int/artifact"
-	"github.com/goreleaser/goreleaser/int/client"
-	"github.com/goreleaser/goreleaser/int/golden"
-	"github.com/goreleaser/goreleaser/int/skips"
-	"github.com/goreleaser/goreleaser/int/testctx"
-	"github.com/goreleaser/goreleaser/pkg/config"
+	"github.com/goreleaser/goreleaser/v2/int/artifact"
+	"github.com/goreleaser/goreleaser/v2/int/client"
+	"github.com/goreleaser/goreleaser/v2/int/golden"
+	"github.com/goreleaser/goreleaser/v2/int/skips"
+	"github.com/goreleaser/goreleaser/v2/int/testctx"
+	"github.com/goreleaser/goreleaser/v2/int/testlib"
+	"github.com/goreleaser/goreleaser/v2/pkg/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,6 +36,7 @@ func TestSkip(t *testing.T) {
 		}, testctx.Skip(skips.Nix))))
 	})
 	t.Run("nix-all-good", func(t *testing.T) {
+		testlib.CheckPath(t, "nix-prefetch-url")
 		require.False(t, NewPublish().Skip(testctx.NewWithCfg(config.Project{
 			Nix: []config.Nix{{}},
 		})))
@@ -62,6 +64,7 @@ func TestPrefetcher(t *testing.T) {
 				require.ErrorIs(t, err, exec.ErrNotFound)
 			})
 			t.Run("valid", func(t *testing.T) {
+				testlib.CheckPath(t, "nix-prefetch-url")
 				sha, err := publishShaPrefetcher{nixPrefetchURLBin}.Prefetch("https://github.com/goreleaser/goreleaser/releases/download/v1.18.2/goreleaser_Darwin_arm64.tar.gz")
 				require.NoError(t, err)
 				require.Equal(t, "0girjxp07srylyq36xk1ska8p68m2fhp05xgyv4wkcl61d6rzv3y", sha)
@@ -77,6 +80,7 @@ func TestPrefetcher(t *testing.T) {
 				require.False(t, publishShaPrefetcher{fakeNixPrefetchURLBin}.Available())
 			})
 			t.Run("valid", func(t *testing.T) {
+				testlib.CheckPath(t, "nix-prefetch-url")
 				require.True(t, publishShaPrefetcher{nixPrefetchURLBin}.Available())
 			})
 		})
