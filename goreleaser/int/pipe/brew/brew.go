@@ -74,6 +74,10 @@ func (Pipe) Default(ctx *context.Context) error {
 		if brew.Plist != "" {
 			deprecate.Notice(ctx, "brews.plist")
 		}
+		if brew.Folder != "" {
+			deprecate.Notice(ctx, "brews.folder")
+			brew.Directory = brew.Folder
+		}
 		if !reflect.DeepEqual(brew.Tap, config.RepoRef{}) {
 			brew.Repository = brew.Tap
 			deprecate.Notice(ctx, "brews.tap")
@@ -144,7 +148,7 @@ func doPublish(ctx *context.Context, formula *artifact.Artifact, cl client.Clien
 
 	repo := client.RepoFromRef(brew.Repository)
 
-	gpath := buildFormulaPath(brew.Folder, formula.Name)
+	gpath := buildFormulaPath(brew.Directory, formula.Name)
 
 	msg, err := tmpl.New(ctx).Apply(brew.CommitMessageTemplate)
 	if err != nil {
@@ -171,9 +175,27 @@ func doPublish(ctx *context.Context, formula *artifact.Artifact, cl client.Clien
 		return err
 	}
 
+	base := client.Repo{
+		Name:   brew.Repository.PullRequest.Base.Name,
+		Owner:  brew.Repository.PullRequest.Base.Owner,
+		Branch: brew.Repository.PullRequest.Base.Branch,
+	}
+
+	// try to sync branch
+	fscli, ok := cl.(client.ForkSyncer)
+	if ok && brew.Repository.PullRequest.Enabled {
+		if err := fscli.SyncFork(ctx, repo, base); err != nil {
+			log.WithError(err).Warn("could not sync fork")
+		}
+	}
+
+	if err := cl.CreateFile(ctx, author, repo, content, gpath, msg); err != nil {
+		return err
+	}
+
 	if !brew.Repository.PullRequest.Enabled {
 		log.Debug("brews.pull_request disabled")
-		return cl.CreateFile(ctx, author, repo, content, gpath, msg)
+		return nil
 	}
 
 	log.Info("brews.pull_request enabled, creating a PR")
@@ -182,15 +204,7 @@ func doPublish(ctx *context.Context, formula *artifact.Artifact, cl client.Clien
 		return fmt.Errorf("client does not support pull requests")
 	}
 
-	if err := cl.CreateFile(ctx, author, repo, content, gpath, msg); err != nil {
-		return err
-	}
-
-	return pcl.OpenPullRequest(ctx, client.Repo{
-		Name:   brew.Repository.PullRequest.Base.Name,
-		Owner:  brew.Repository.PullRequest.Base.Owner,
-		Branch: brew.Repository.PullRequest.Base.Branch,
-	}, repo, msg, brew.Repository.PullRequest.Draft)
+	return pcl.OpenPullRequest(ctx, base, repo, msg, brew.Repository.PullRequest.Draft)
 }
 
 func doRun(ctx *context.Context, brew config.Homebrew, cl client.ReleaseURLTemplater) error {
@@ -261,7 +275,7 @@ func doRun(ctx *context.Context, brew config.Homebrew, cl client.ReleaseURLTempl
 	}
 
 	filename := brew.Name + ".rb"
-	path := filepath.Join(ctx.Config.Dist, "homebrew", brew.Folder, filename)
+	path := filepath.Join(ctx.Config.Dist, "homebrew", brew.Directory, filename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -309,6 +323,13 @@ func doBuildFormula(ctx *context.Context, data templateData) (string, error) {
 		"indent": func(spaces int, v string) string {
 			pad := strings.Repeat(" ", spaces)
 			return pad + strings.ReplaceAll(v, "\n", "\n"+pad)
+		},
+		"join": func(in []string) string {
+			items := make([]string, 0, len(in))
+			for _, i := range in {
+				items = append(items, fmt.Sprintf(`"%s"`, i))
+			}
+			return strings.Join(items, ",\n")
 		},
 	}).ParseFS(formulaTemplate, "templates/*.rb")
 	if err != nil {
@@ -437,6 +458,7 @@ func dataFor(ctx *context.Context, cfg config.Homebrew, cl client.ReleaseURLTemp
 			OS:               art.Goos,
 			Arch:             art.Goarch,
 			DownloadStrategy: cfg.DownloadStrategy,
+			Headers:          cfg.URLHeaders,
 			Install:          install,
 		}
 
@@ -466,7 +488,7 @@ func dataFor(ctx *context.Context, cfg config.Homebrew, cl client.ReleaseURLTemp
 }
 
 func lessFnFor(list []releasePackage) func(i, j int) bool {
-	return func(i, j int) bool { return list[i].OS > list[j].OS && list[i].Arch > list[j].Arch }
+	return func(i, j int) bool { return list[i].Arch < list[j].Arch }
 }
 
 func split(s string) []string {

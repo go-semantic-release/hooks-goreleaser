@@ -1,5 +1,20 @@
 [
   {
+    "tag_name": "v1.26.1-pro"
+  },
+  {
+    "tag_name": "v1.26.0-pro"
+  },
+  {
+    "tag_name": "v1.25.1-pro"
+  },
+  {
+    "tag_name": "v1.25.0-pro"
+  },
+  {
+    "tag_name": "v1.24.0-pro"
+  },
+  {
     "tag_name": "v1.23.0-pro"
   },
   {
@@ -88,9 +103,6 @@
   },
   {
     "tag_name": "v1.12.0-pro"
-  },
-  {
-    "tag_name": "nightly"
   },
   {
     "tag_name": "v1.11.5-pro"

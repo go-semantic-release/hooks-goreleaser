@@ -196,7 +196,7 @@ func TestRunPipe(t *testing.T) {
 			},
 		},
 	}, testctx.WithVersion("1.0.0"), testctx.WithCurrentTag("v1.0.0"))
-	for _, goos := range []string{"linux", "darwin", "ios"} {
+	for _, goos := range []string{"linux", "darwin", "ios", "android"} {
 		for _, goarch := range []string{"amd64", "386", "arm64", "arm", "mips"} {
 			if goos == "ios" && goarch != "arm64" {
 				continue
@@ -389,7 +389,7 @@ func TestRunPipe(t *testing.T) {
 	}
 	require.NoError(t, Pipe{}.Run(ctx))
 	packages := ctx.Artifacts.Filter(artifact.ByType(artifact.LinuxPackage)).List()
-	require.Len(t, packages, 47)
+	require.Len(t, packages, 44)
 	for _, pkg := range packages {
 		format := pkg.Format()
 		require.NotEmpty(t, format)
@@ -406,7 +406,7 @@ func TestRunPipe(t *testing.T) {
 		}
 
 		ext := "." + format
-		if format != "termux.deb" {
+		if format != termuxFormat {
 			packager, err := nfpm.Get(format)
 			require.NoError(t, err)
 
@@ -415,9 +415,12 @@ func TestRunPipe(t *testing.T) {
 			}
 		}
 
-		if pkg.Goos == "linux" {
+		switch pkg.Goos {
+		case "linux":
 			require.Equal(t, "foo_1.0.0_linux_"+arch+"-10-20"+ext, pkg.Name)
-		} else {
+		case "android":
+			require.Equal(t, "foo_1.0.0_android_"+arch+"-10-20"+ext, pkg.Name)
+		default:
 			require.Equal(t, "foo_1.0.0_ios_arm64-10-20"+ext, pkg.Name)
 		}
 		require.Equal(t, "someid", pkg.ID())
@@ -584,7 +587,7 @@ func doTestRunPipeConventionalNameTemplate(t *testing.T, snapshot bool) {
 	}
 	require.NoError(t, Pipe{}.Run(ctx))
 	packages := ctx.Artifacts.Filter(artifact.ByType(artifact.LinuxPackage)).List()
-	require.Len(t, packages, 40)
+	require.Len(t, packages, 37)
 	prefix := "foo"
 	if snapshot {
 		prefix += "-snapshot"
@@ -961,7 +964,7 @@ func TestDebSpecificConfig(t *testing.T) {
 				},
 			},
 		}, testctx.WithVersion("1.0.0"), testctx.WithCurrentTag("v1.0.0"))
-		for _, goos := range []string{"linux", "darwin"} {
+		for _, goos := range []string{"linux", "darwin", "android"} {
 			for _, goarch := range []string{"amd64", "386"} {
 				ctx.Artifacts.Add(&artifact.Artifact{
 					Name:   "mybin",
@@ -984,6 +987,14 @@ func TestDebSpecificConfig(t *testing.T) {
 			Pipe{}.Run(setupContext(t)).Error(),
 			`key is encrypted but no passphrase was provided`,
 		)
+	})
+
+	t.Run("global passphrase set", func(t *testing.T) {
+		ctx := setupContext(t)
+		ctx.Env = map[string]string{
+			"NFPM_PASSPHRASE": "hunter2",
+		}
+		require.NoError(t, Pipe{}.Run(ctx))
 	})
 
 	t.Run("general passphrase set", func(t *testing.T) {
@@ -1609,6 +1620,15 @@ func TestTemplateExt(t *testing.T) {
 				Formats:    []string{"deb", "rpm", "termux.deb", "apk", "archlinux"},
 				Builds:     []string{"default"},
 			},
+		},
+	})
+	ctx.Artifacts.Add(&artifact.Artifact{
+		Name:   "mybin",
+		Goos:   "android",
+		Goarch: "amd64",
+		Type:   artifact.Binary,
+		Extra: map[string]interface{}{
+			artifact.ExtraID: "default",
 		},
 	})
 	ctx.Artifacts.Add(&artifact.Artifact{

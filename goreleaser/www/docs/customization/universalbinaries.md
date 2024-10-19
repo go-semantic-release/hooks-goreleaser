@@ -16,6 +16,9 @@ universal_binaries:
 
     # IDs to use to filter the built binaries.
     #
+    # Notice that you shouldn't include different apps' IDs here.
+    # This field is usually only required if you are using CGO.
+    #
     # Default: the value of the id field
     # Since: v1.3
     ids:
@@ -39,8 +42,8 @@ universal_binaries:
     # you would do this to ensure a build was reproducible.
     # Pass an empty string to skip modifying the output.
     #
-    # Templates: allowed.
     # Since: v1.20
+    # Templates: allowed
     mod_timestamp: "{{ .CommitTimestamp }}"
 
     # Hooks can be used to customize the final binary,

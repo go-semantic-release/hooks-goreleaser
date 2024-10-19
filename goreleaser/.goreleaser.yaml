@@ -53,6 +53,17 @@ builds:
 universal_binaries:
   - replace: false
 
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+
 # temporarely disables until we add better filters for platforms et al, and test more.
 # upx:
 #   - enabled: true
@@ -66,7 +77,7 @@ changelog:
   filters:
     exclude:
       - "^test:"
-      - "^chore"
+      - "^test\\("
       - "merge conflict"
       - Merge pull request
       - Merge remote-tracking branch
@@ -74,22 +85,22 @@ changelog:
       - go mod tidy
   groups:
     - title: Dependency updates
-      regexp: '^.*?(feat|fix|chore)\(deps\)!?:.+$'
+      regexp: '^.*?(.+)\(deps\)!?:.+$'
       order: 300
     - title: "New Features"
-      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
       order: 100
     - title: "Security updates"
-      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      regexp: '^.*?sec(\(.+\))??!?:.+$'
       order: 150
     - title: "Bug fixes"
-      regexp: '^.*?(fix|refactor)(\([[:word:]]+\))??!?:.+$'
+      regexp: '^.*?(fix|refactor)(\(.+\))??!?:.+$'
       order: 200
     - title: "Documentation updates"
-      regexp: ^.*?docs?(\([[:word:]]+\))??!?:.+$
+      regexp: ^.*?docs?(\(.+\))??!?:.+$
       order: 400
     - title: "Build process updates"
-      regexp: ^.*?(build|ci)(\([[:word:]]+\))??!?:.+$
+      regexp: ^.*?(build|ci)(\(.+\))??!?:.+$
       order: 400
     - title: Other work
       order: 9999
@@ -187,7 +198,7 @@ brews:
   - repository:
       owner: goreleaser
       name: homebrew-tap
-    folder: Formula
+    directory: Formula
     goarm: "7"
     homepage: https://goreleaser.com
     description: Deliver Go binaries as fast and easily as possible
@@ -268,7 +279,7 @@ scoops:
   - repository:
       owner: goreleaser
       name: scoop-bucket
-    folder: bucket
+    directory: bucket
     homepage: https://goreleaser.com
     description: Deliver Go binaries as fast and easily as possible
     license: MIT

@@ -720,7 +720,6 @@ func Test_doRun(t *testing.T) {
 			ctx := tt.args.ctx
 			ctx.Config.Dist = t.TempDir()
 			for _, a := range tt.artifacts {
-				a := a
 				a.Type = artifact.UploadableArchive
 				ctx.Artifacts.Add(&a)
 			}
@@ -782,6 +781,7 @@ func TestRunPipePullRequest(t *testing.T) {
 	require.NoError(t, publishAll(ctx, client))
 	require.True(t, client.CreatedFile)
 	require.True(t, client.OpenedPullRequest)
+	require.True(t, client.SyncedFork)
 	golden.RequireEqualJSON(t, []byte(client.Content))
 }
 

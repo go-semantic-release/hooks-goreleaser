@@ -65,7 +65,7 @@ nix:
     license: "mit"
 
     # Setting this will prevent goreleaser to actually try to commit the updated
-    # package - instead, it will be stored on the dist folder only,
+    # package - instead, it will be stored on the dist directory only,
     # leaving the responsibility of publishing it to the user.
     #
     # If set to auto, the release will not be uploaded to the repository
@@ -117,13 +117,10 @@ nix:
 
     Learn more about the [name template engine](/customization/templates/).
 
-## Things not yet implemented
+## Things not supported
 
 - Generating packages that compile from source (using `buildGoModule`)
 - Generating packages when `archives.format` is `binary`
-
-Both issues are in [the radar][iss4034].
-You're welcome to contribute. 😄
 
 ## Dependencies
 

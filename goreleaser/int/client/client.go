@@ -52,11 +52,22 @@ func (r Repo) String() string {
 // Client interface.
 type Client interface {
 	CloseMilestone(ctx *context.Context, repo Repo, title string) (err error)
+	// Creates a release. It's marked as draft if possible (should call PublishRelease to finish publishing).
 	CreateRelease(ctx *context.Context, body string) (releaseID string, err error)
+	PublishRelease(ctx *context.Context, releaseID string) (err error)
 	Upload(ctx *context.Context, releaseID string, artifact *artifact.Artifact, file *os.File) (err error)
-	Changelog(ctx *context.Context, repo Repo, prev, current string) (string, error)
+	Changelog(ctx *context.Context, repo Repo, prev, current string) ([]ChangelogItem, error)
 	ReleaseURLTemplater
 	FileCreator
+}
+
+// ChangelogItem represents a changelog item, basically, a commit and its author.
+type ChangelogItem struct {
+	SHA            string
+	Message        string
+	AuthorName     string
+	AuthorEmail    string
+	AuthorUsername string
 }
 
 // ReleaseURLTemplater provides the release URL as a template, containing the
@@ -86,6 +97,11 @@ type FilesCreator interface {
 // ReleaseNotesGenerator can generate release notes.
 type ReleaseNotesGenerator interface {
 	GenerateReleaseNotes(ctx *context.Context, repo Repo, prev, current string) (string, error)
+}
+
+// ForkSyncer can sync forks.
+type ForkSyncer interface {
+	SyncFork(ctx *context.Context, head, base Repo) error
 }
 
 // PullRequestOpener can open pull requests.

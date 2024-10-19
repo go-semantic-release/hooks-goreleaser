@@ -24,6 +24,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/metadata"
 	"github.com/goreleaser/goreleaser/int/pipe/nfpm"
 	"github.com/goreleaser/goreleaser/int/pipe/nix"
+	"github.com/goreleaser/goreleaser/int/pipe/notary"
 	"github.com/goreleaser/goreleaser/int/pipe/partial"
 	"github.com/goreleaser/goreleaser/int/pipe/prebuild"
 	"github.com/goreleaser/goreleaser/int/pipe/publish"
@@ -50,7 +51,8 @@ type Piper interface {
 }
 
 // BuildPipeline contains all build-related pipe implementations in order.
-// nolint:gochecknoglobals
+//
+//nolint:gochecknoglobals
 var BuildPipeline = []Piper{
 	// load and validate environment variables
 	env.Pipe{},
@@ -68,6 +70,10 @@ var BuildPipeline = []Piper{
 	before.Pipe{},
 	// ensure ./dist is clean
 	dist.Pipe{},
+	// setup metadata options
+	metadata.Pipe{},
+	// creates a metadta.json files in the dist directory
+	metadata.MetaPipe{},
 	// setup gomod-related stuff
 	gomod.Pipe{},
 	// run prebuild stuff
@@ -82,20 +88,24 @@ var BuildPipeline = []Piper{
 	build.Pipe{},
 	// universal binary handling
 	universalbinary.Pipe{},
+	// notarize macos apps
+	notary.MacOS{},
 	// upx
 	upx.Pipe{},
 }
 
 // BuildCmdPipeline is the pipeline run by goreleaser build.
-// nolint:gochecknoglobals
+//
+//nolint:gochecknoglobals
 var BuildCmdPipeline = append(
 	BuildPipeline,
 	reportsizes.Pipe{},
-	metadata.Pipe{},
+	metadata.ArtifactsPipe{},
 )
 
 // Pipeline contains all pipe implementations in order.
-// nolint: gochecknoglobals
+//
+//nolint:gochecknoglobals
 var Pipeline = append(
 	BuildPipeline,
 	// builds the release changelog
@@ -134,8 +144,8 @@ var Pipeline = append(
 	docker.Pipe{},
 	// publishes artifacts
 	publish.New(),
-	// creates a metadata.json and an artifacts.json files in the dist folder
-	metadata.Pipe{},
+	// creates a artifacts.json files in the dist directory
+	metadata.ArtifactsPipe{},
 	// announce releases
 	announce.Pipe{},
 )

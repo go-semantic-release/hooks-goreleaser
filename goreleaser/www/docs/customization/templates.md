@@ -133,9 +133,9 @@ In the nFPM name template field, you can use those extra fields:
 
 In the `release.body` field, you can use these extra fields:
 
-| Key          | Description                                                                         |
-| ------------ | ----------------------------------------------------------------------------------- |
-| `.Checksums` | the current checksum file contents. Only available in the release body. Since v1.19 |
+| Key          | Description                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.Checksums` | the current checksum file contents, or a map of filename/checksum contents if `checksum.split` is set. Only available in the release body. Since v1.19 |
 
 ## Functions
 
@@ -143,23 +143,24 @@ On all fields, you have these available functions:
 
 | Usage                             | Description                                                                                                                     |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `replace "v1.2" "v" ""`           | replaces all matches. See [ReplaceAll](https://golang.org/pkg/strings/#ReplaceAll).                                             |
-| `split "1.2" "."`                 | split string at separator. See [Split](https://golang.org/pkg/strings/#Split). Since v1.11                                      |
+| `replace "v1.2" "v" ""`           | replaces all matches. See [ReplaceAll](https://pkg.go.dev/strings#ReplaceAll).                                                  |
+| `split "1.2" "."`                 | split string at separator. See [Split](https://pkg.go.dev/strings#Split). Since v1.11                                           |
 | `time "01/02/2006"`               | current UTC time in the specified format (this is not deterministic, a new time for every call).                                |
-| `contains "foobar" "foo"`         | checks whether the first string contains the second. See [ToLower](https://golang.org/pkg/strings/#Contains). Since 1.24        |
-| `tolower "V1.2"`                  | makes input string lowercase. See [ToLower](https://golang.org/pkg/strings/#ToLower).                                           |
-| `toupper "v1.2"`                  | makes input string uppercase. See [ToUpper](https://golang.org/pkg/strings/#ToUpper).                                           |
-| `trim " v1.2  "`                  | removes all leading and trailing white space. See [TrimSpace](https://golang.org/pkg/strings/#TrimSpace).                       |
-| `trimprefix "v1.2" "v"`           | removes provided leading prefix string, if present. See [TrimPrefix](https://golang.org/pkg/strings/#TrimPrefix).               |
+| `contains "foobar" "foo"`         | checks whether the first string contains the second. See [ToLower](https://pkg.go.dev/strings#Contains). Since 1.24             |
+| `tolower "V1.2"`                  | makes input string lowercase. See [ToLower](https://pkg.go.dev/strings#ToLower).                                                |
+| `toupper "v1.2"`                  | makes input string uppercase. See [ToUpper](https://pkg.go.dev/strings#ToUpper).                                                |
+| `trim " v1.2  "`                  | removes all leading and trailing white space. See [TrimSpace](https://pkg.go.dev/strings#TrimSpace).                            |
+| `trimprefix "v1.2" "v"`           | removes provided leading prefix string, if present. See [TrimPrefix](https://pkg.go.dev/strings#TrimPrefix).                    |
 | `trimsuffix "1.2v" "v"`           | removes provided trailing suffix string, if present. See [TrimSuffix](https://pkg.go.dev/strings#TrimSuffix).                   |
-| `dir .Path`                       | returns all but the last element of path, typically the path's directory. See [Dir](https://golang.org/pkg/path/filepath/#Dir). |
-| `base .Path`                      | returns the last element of path. See [Base](https://golang.org/pkg/path/filepath/#Base). Since v1.16                           |
-| `abs .ArtifactPath`               | returns an absolute representation of path. See [Abs](https://golang.org/pkg/path/filepath/#Abs).                               |
+| `dir .Path`                       | returns all but the last element of path, typically the path's directory. See [Dir](https://pkg.go.dev/path/filepath#Dir).      |
+| `base .Path`                      | returns the last element of path. See [Base](https://pkg.go.dev/path/filepath#Base). Since v1.16                                |
+| `abs .ArtifactPath`               | returns an absolute representation of path. See [Abs](https://pkg.go.dev/path/filepath#Abs).                                    |
 | `filter "text" "regex"`           | keeps only the lines matching the given regex, analogous to `grep -E`. Since v1.6                                               |
 | `reverseFilter "text" "regex"`    | keeps only the lines **not** matching the given regex, analogous to `grep -vE`. Since v1.6                                      |
 | `title "foo"`                     | "titlenize" the string using english as language. See [Title](https://pkg.go.dev/golang.org/x/text/cases#Title). Since v1.14    |
 | `mdv2escape "foo"`                | escape characters according to MarkdownV2, especially useful in the Telegram integration. Since v1.19                           |
 | `envOrDefault "NAME" "value"`     | either gets the value of the given environment variable, or the given default. Since v1.19                                      |
+| `isEnvSet "NAME"`                 | returns true if the env is set and not empty, false otherwise. Since v1.26                                                      |
 | `$m := map "KEY" "VALUE"`         | creates a map from a list of key and value pairs. Both keys and values must be of type `string`. Since v1.21                    |
 | `indexOrDefault $m "KEY" "value"` | either gets the value of the given key or the given default value from the given map. Since v1.21                               |
 

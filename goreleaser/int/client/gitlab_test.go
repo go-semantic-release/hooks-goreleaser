@@ -16,6 +16,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/testctx"
 	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/stretchr/testify/require"
+	"github.com/xanzy/go-gitlab"
 )
 
 func TestGitLabReleaseURLTemplate(t *testing.T) {
@@ -483,20 +484,67 @@ func TestGitLabChangelog(t *testing.T) {
 
 	log, err := client.Changelog(ctx, repo, "v1.0.0", "v1.1.0")
 	require.NoError(t, err)
-	require.Equal(t, "6dcb09b5: Fix all the bugs (Joey User <joey@user.edu>)", log)
+	require.Equal(t, []ChangelogItem{
+		{
+			SHA:            "6dcb09b5",
+			Message:        "Fix all the bugs",
+			AuthorName:     "Joey User",
+			AuthorEmail:    "joey@user.edu",
+			AuthorUsername: "",
+		},
+	}, log)
 }
 
 func TestGitLabCreateFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Handle the test where we know the branch
+		// Handle the test where we know the branch and it exists
+		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/branches/somebranch") {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "{}")
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/files/newfile.txt") {
 			_, err := io.Copy(w, strings.NewReader(`{ "file_path": "newfile.txt", "branch": "somebranch" }`))
 			require.NoError(t, err)
 			return
 		}
+
 		// Handle the test where we detect the branch
+		if strings.HasSuffix(r.URL.Path, "projects/someone/something") {
+			_, err := io.Copy(w, strings.NewReader(`{ "default_branch": "main" }`))
+			require.NoError(t, err)
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/files/newfile-in-default.txt") {
 			_, err := io.Copy(w, strings.NewReader(`{ "file_path": "newfile.txt", "branch": "main" }`))
+			require.NoError(t, err)
+			return
+		}
+
+		// Handle the test where the branch doesn't exist already
+		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/branches/non-existing-branch") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "projects/someone/something/repository/files/newfile-on-new-branch.txt") {
+			if r.Method == "POST" {
+				var resBody map[string]string
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&resBody))
+				require.Equal(t, "master", resBody["start_branch"])
+			}
+			_, err := io.Copy(w, strings.NewReader(`{"file_path":"newfile-on-new-branch.txt","branch":"non-existing-branch"}`))
+			require.NoError(t, err)
+			return
+		}
+
+		// Handle the case with a projectID
+		if strings.HasSuffix(r.URL.Path, "projects/123456789/repository/branches/main") {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "{}")
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "projects/123456789/repository/files/newfile-projectID.txt") {
+			_, err := io.Copy(w, strings.NewReader(`{ "file_path": "newfile-projectID.txt", "branch": "main" }`))
 			require.NoError(t, err)
 			return
 		}
@@ -524,7 +572,7 @@ func TestGitLabCreateFile(t *testing.T) {
 	client, err := newGitLab(ctx, "test-token")
 	require.NoError(t, err)
 
-	// Test using an arbitrary branch
+	// Test using an arbitrary existing branch
 	repo := Repo{
 		Owner:  "someone",
 		Name:   "something",
@@ -544,6 +592,25 @@ func TestGitLabCreateFile(t *testing.T) {
 	err = client.CreateFile(ctx, config.CommitAuthor{Name: repo.Owner}, repo, []byte("Hello there"), "newfile-in-default.txt", "test: test commit")
 	require.NoError(t, err)
 
+	// Test creating a new branch
+	repo = Repo{
+		Owner:  "someone",
+		Name:   "something",
+		Branch: "non-existing-branch",
+	}
+
+	err = client.CreateFile(ctx, config.CommitAuthor{Name: repo.Owner}, repo, []byte("Hello there"), "newfile-on-new-branch.txt", "test: test commit")
+	require.NoError(t, err)
+
+	// Test using projectID
+	repo = Repo{
+		Name:   "123456789",
+		Branch: "main",
+	}
+
+	err = client.CreateFile(ctx, config.CommitAuthor{Name: repo.Owner}, repo, []byte("Hello there"), "newfile-projectID.txt", "test: test commit")
+	require.NoError(t, err)
+
 	// Test a doomed file. This is a file that is 'successfully' created, but returns a 404 when trying to fetch
 	repo = Repo{
 		Owner:  "someone",
@@ -555,7 +622,7 @@ func TestGitLabCreateFile(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGitLabCloseMileston(t *testing.T) {
+func TestGitLabCloseMilestone(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "projects/someone/something/milestones") {
 			r, err := os.Open("testdata/gitlab/milestones.json")
@@ -649,4 +716,190 @@ func TestGitLabCheckUseJobToken(t *testing.T) {
 			require.Equal(t, tt.want, got, tt.desc)
 		})
 	}
+}
+
+func TestGitLabOpenPullRequestCrossRepo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		if r.URL.Path == "/api/v4/projects/someone/something" {
+			_, err := io.Copy(w, strings.NewReader(`{ "id": 32156 }`))
+			require.NoError(t, err)
+			return
+		}
+
+		if r.URL.Path == "/api/v4/projects/someoneelse/something/merge_requests" {
+			got, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var pr gitlab.MergeRequest
+			require.NoError(t, json.Unmarshal(got, &pr))
+			require.Equal(t, "main", pr.TargetBranch)
+			require.Equal(t, "foo", pr.SourceBranch)
+			require.Equal(t, "some title", pr.Title)
+			require.Equal(t, 32156, pr.TargetProjectID)
+
+			_, err = io.Copy(w, strings.NewReader(`{"web_url": "https://gitlab.com/someoneelse/something/merge_requests/1"}`))
+			require.NoError(t, err)
+			return
+		}
+
+		t.Error("unhandled request: " + r.URL.Path)
+	}))
+	defer srv.Close()
+
+	ctx := testctx.NewWithCfg(config.Project{
+		GitLabURLs: config.GitLabURLs{
+			API: srv.URL,
+		},
+	})
+
+	client, err := newGitLab(ctx, "test-token")
+	require.NoError(t, err)
+
+	base := Repo{
+		Owner:  "someone",
+		Name:   "something",
+		Branch: "main",
+	}
+	head := Repo{
+		Owner:  "someoneelse",
+		Name:   "something",
+		Branch: "foo",
+	}
+	require.NoError(t, client.OpenPullRequest(ctx, base, head, "some title", false))
+}
+
+func TestGitLabOpenPullRequestBaseEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		if r.URL.Path == "/api/v4/projects/someone/something" {
+			_, err := io.Copy(w, strings.NewReader(`{ "default_branch": "main" }`))
+			require.NoError(t, err)
+			return
+		}
+
+		if r.URL.Path == "/api/v4/projects/someone/something/merge_requests" {
+			got, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var pr gitlab.MergeRequest
+			require.NoError(t, json.Unmarshal(got, &pr))
+			require.Equal(t, "main", pr.TargetBranch)
+			require.Equal(t, "foo", pr.SourceBranch)
+			require.Equal(t, "some title", pr.Title)
+			require.Equal(t, 0, pr.TargetProjectID)
+
+			_, err = io.Copy(w, strings.NewReader(`{"web_url": "https://gitlab.com/someoneelse/something/merge_requests/1"}`))
+			require.NoError(t, err)
+			return
+		}
+
+		t.Error("unhandled request: " + r.URL.Path)
+	}))
+	defer srv.Close()
+
+	ctx := testctx.NewWithCfg(config.Project{
+		GitLabURLs: config.GitLabURLs{
+			API: srv.URL,
+		},
+	})
+
+	client, err := newGitLab(ctx, "test-token")
+	require.NoError(t, err)
+
+	repo := Repo{
+		Owner:  "someone",
+		Name:   "something",
+		Branch: "foo",
+	}
+
+	require.NoError(t, client.OpenPullRequest(ctx, Repo{}, repo, "some title", false))
+}
+
+func TestGitLabOpenPullRequestDraft(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		if r.URL.Path == "/api/v4/projects/someone/something" {
+			_, err := io.Copy(w, strings.NewReader(`{ "default_branch": "main" }`))
+			require.NoError(t, err)
+			return
+		}
+
+		if r.URL.Path == "/api/v4/projects/someone/something/merge_requests" {
+			got, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var pr gitlab.MergeRequest
+			require.NoError(t, json.Unmarshal(got, &pr))
+			require.Equal(t, "main", pr.TargetBranch)
+			require.Equal(t, "main", pr.SourceBranch)
+			require.Equal(t, "Draft: some title", pr.Title)
+			require.Equal(t, 0, pr.TargetProjectID)
+
+			_, err = io.Copy(w, strings.NewReader(`{"web_url": "https://gitlab.com/someoneelse/something/merge_requests/1"}`))
+			require.NoError(t, err)
+			return
+		}
+
+		t.Error("unhandled request: " + r.URL.Path)
+	}))
+	defer srv.Close()
+
+	ctx := testctx.NewWithCfg(config.Project{
+		GitLabURLs: config.GitLabURLs{
+			API: srv.URL,
+		},
+	})
+
+	client, err := newGitLab(ctx, "test-token")
+	require.NoError(t, err)
+
+	repo := Repo{
+		Owner:  "someone",
+		Name:   "something",
+		Branch: "main",
+	}
+
+	require.NoError(t, client.OpenPullRequest(ctx, Repo{}, repo, "some title", true))
+}
+
+func TestGitLabOpenPullBaseBranchGiven(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		if r.URL.Path == "/api/v4/projects/someone/something/merge_requests" {
+			got, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var pr gitlab.MergeRequest
+			require.NoError(t, json.Unmarshal(got, &pr))
+			require.Equal(t, "main", pr.TargetBranch)
+			require.Equal(t, "foo", pr.SourceBranch)
+			require.Equal(t, "some title", pr.Title)
+			require.Equal(t, 0, pr.TargetProjectID)
+
+			_, err = io.Copy(w, strings.NewReader(`{"web_url": "https://gitlab.com/someoneelse/something/merge_requests/1"}`))
+			require.NoError(t, err)
+			return
+		}
+
+		t.Error("unhandled request: " + r.URL.Path)
+	}))
+	defer srv.Close()
+
+	ctx := testctx.NewWithCfg(config.Project{
+		GitLabURLs: config.GitLabURLs{
+			API: srv.URL,
+		},
+	})
+
+	client, err := newGitLab(ctx, "test-token")
+	require.NoError(t, err)
+
+	repo := Repo{
+		Owner:  "someone",
+		Name:   "something",
+		Branch: "foo",
+	}
+
+	require.NoError(t, client.OpenPullRequest(ctx, Repo{Branch: "main"}, repo, "some title", false))
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/caarlos0/log"
+	"github.com/charmbracelet/x/exp/ordered"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -18,18 +19,21 @@ import (
 
 const DefaultGitLabDownloadURL = "https://gitlab.com"
 
+var (
+	_ Client            = &gitlabClient{}
+	_ PullRequestOpener = &gitlabClient{}
+)
+
 type gitlabClient struct {
 	client *gitlab.Client
 }
-
-var _ Client = &gitlabClient{}
 
 // newGitLab returns a gitlab client implementation.
 func newGitLab(ctx *context.Context, token string) (*gitlabClient, error) {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
-			// nolint: gosec
+			//nolint:gosec
 			InsecureSkipVerify: ctx.Config.GitLabURLs.SkipTLSVerify,
 		},
 	}
@@ -60,27 +64,26 @@ func newGitLab(ctx *context.Context, token string) (*gitlabClient, error) {
 	return &gitlabClient{client: client}, nil
 }
 
-func (c *gitlabClient) Changelog(_ *context.Context, repo Repo, prev, current string) (string, error) {
+func (c *gitlabClient) Changelog(_ *context.Context, repo Repo, prev, current string) ([]ChangelogItem, error) {
 	cmpOpts := &gitlab.CompareOptions{
 		From: &prev,
 		To:   &current,
 	}
 	result, _, err := c.client.Repositories.Compare(repo.String(), cmpOpts)
-	var log []string
+	var log []ChangelogItem
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	for _, commit := range result.Commits {
-		log = append(log, fmt.Sprintf(
-			"%s: %s (%s <%s>)",
-			commit.ShortID,
-			strings.Split(commit.Message, "\n")[0],
-			commit.AuthorName,
-			commit.AuthorEmail,
-		))
+		log = append(log, ChangelogItem{
+			SHA:         commit.ShortID,
+			Message:     strings.Split(commit.Message, "\n")[0],
+			AuthorName:  commit.AuthorName,
+			AuthorEmail: commit.AuthorEmail,
+		})
 	}
-	return strings.Join(log, "\n"), nil
+	return log, nil
 }
 
 // getDefaultBranch get the default branch
@@ -96,6 +99,24 @@ func (c *gitlabClient) getDefaultBranch(_ *context.Context, repo Repo) (string, 
 		return "", err
 	}
 	return p.DefaultBranch, nil
+}
+
+// checkBranchExists checks if a branch exists
+func (c *gitlabClient) checkBranchExists(_ *context.Context, repo Repo, branch string) (bool, error) {
+	projectID := repo.Name
+	if repo.Owner != "" {
+		projectID = repo.Owner + "/" + projectID
+	}
+
+	// Verify if branch exists
+	_, res, err := c.client.Branches.GetBranch(projectID, branch)
+	if err != nil && res.StatusCode != 404 {
+		log.WithError(err).
+			Error("error verify branch existence")
+		return false, err
+	}
+
+	return res.StatusCode != 404, nil
 }
 
 // CloseMilestone closes a given milestone.
@@ -135,56 +156,72 @@ func (c *gitlabClient) CreateFile(
 	commitAuthor config.CommitAuthor,
 	repo Repo,
 	content []byte, // the content of the formula.rb
-	path, // the path to the formula.rb
+	fileName, // the path to the formula.rb
 	message string, // the commit msg
 ) error {
-	fileName := path
-	projectID := repo.String()
+	projectID := repo.Name
+	if repo.Owner != "" {
+		projectID = repo.Owner + "/" + projectID
+	}
 
-	// Use the project default branch if we can get it...otherwise, just use
-	// 'master'
-	var branch, ref string
+	log.
+		WithField("projectID", projectID).
+		Debug("project id")
+
+	var branch, defaultBranch string
+	var branchExists bool
 	var err error
 	// Use the branch if given one
 	if repo.Branch != "" {
 		branch = repo.Branch
+		branchExists, err = c.checkBranchExists(ctx, repo, branch)
+		if err != nil {
+			return err
+		}
+
+		// Retrieving default branch because we need it for `start_branch`
+		if !branchExists {
+			defaultBranch, err = c.getDefaultBranch(ctx, repo)
+			if err != nil {
+				return err
+			}
+		}
+
+		log.
+			WithField("projectID", projectID).
+			WithField("branch", branch).
+			WithField("branchExists", branchExists).
+			Debug("using given branch")
 	} else {
 		// Try to get the default branch from the Git provider
 		branch, err = c.getDefaultBranch(ctx, repo)
 		if err != nil {
-			// Fall back to 'master' 😭
-			log.
-				WithField("fileName", fileName).
-				WithField("projectID", repo.String()).
-				WithField("requestedBranch", branch).
-				WithError(err).
-				Warn("error checking for default branch, using master")
-			ref = "master"
-			branch = "master"
+			return err
 		}
+
+		defaultBranch = branch
+		branchExists = true
+
+		log.
+			WithField("projectID", projectID).
+			WithField("branch", branch).
+			Debug("no branch given, using default branch")
 	}
-	ref = branch
-	opts := &gitlab.GetFileOptions{Ref: &ref}
-	castedContent := string(content)
 
-	log.
-		WithField("owner", repo.Owner).
-		WithField("name", repo.Name).
-		WithField("ref", ref).
-		WithField("branch", branch).
-		Debug("projectID at brew")
+	// If the branch doesn't exist, we need to check the default branch
+	// because that's what we use as `start_branch` later if the file needs
+	// to be created.
+	opts := &gitlab.GetFileOptions{Ref: &defaultBranch}
+	if branchExists {
+		opts.Ref = &branch
+	}
 
-	log.
-		WithField("repository", repo.String()).
-		WithField("name", repo.Name).
-		WithField("name", repo.Name).
-		Info("pushing")
-
-	_, res, err := c.client.RepositoryFiles.GetFile(repo.String(), fileName, opts)
+	// Check if the file already exists
+	_, res, err := c.client.RepositoryFiles.GetFile(projectID, fileName, opts)
 	if err != nil && (res == nil || res.StatusCode != 404) {
 		log := log.
 			WithField("fileName", fileName).
-			WithField("ref", ref).
+			WithField("branch", branch).
 			WithField("projectID", projectID)
 		if res != nil {
 			log = log.WithField("statusCode", res.StatusCode)
@@ -195,24 +232,34 @@ func (c *gitlabClient) CreateFile(
 	}
 
 	log.
-		WithField("fileName", fileName).
-		WithField("branch", branch).
 		WithField("projectID", projectID).
-		Debug("found already existing brew formula file")
+		WithField("branch", branch).
+		WithField("fileName", fileName).
+		Info("pushing file")
+
+	stringContents := string(content)
 
 	if res.StatusCode == 404 {
+		// Create a new file because it's not already there
 		log.
-			WithField("fileName", fileName).
-			WithField("ref", ref).
 			WithField("projectID", projectID).
-			Debug("creating brew formula")
+			WithField("branch", branch).
+			WithField("fileName", fileName).
+			Debug("file doesn't exist, creating it")
+
 		createOpts := &gitlab.CreateFileOptions{
 			AuthorName:    &commitAuthor.Name,
 			AuthorEmail:   &commitAuthor.Email,
-			Content:       &castedContent,
+			Content:       &stringContents,
 			Branch:        &branch,
 			CommitMessage: &message,
 		}
+
+		// Branch not found, thus Gitlab requires a "start branch" to create the file
+		if !branchExists {
+			createOpts.StartBranch = &defaultBranch
+		}
+
 		fileInfo, res, err := c.client.RepositoryFiles.CreateFile(projectID, fileName, createOpts)
 		if err != nil {
 			log := log.
@@ -236,17 +283,24 @@ func (c *gitlabClient) CreateFile(
 		return nil
 	}
 
+	// Update the existing file
 	log.
 		WithField("fileName", fileName).
-		WithField("ref", ref).
+		WithField("branch", branch).
 		WithField("projectID", projectID).
-		Debug("updating brew formula")
+		Debug("file exists, updating it")
+
 	updateOpts := &gitlab.UpdateFileOptions{
 		AuthorName:    &commitAuthor.Name,
 		AuthorEmail:   &commitAuthor.Email,
-		Content:       &castedContent,
+		Content:       &stringContents,
 		Branch:        &branch,
 		CommitMessage: &message,
+	}
+
+	// Branch not found, thus Gitlab requires a "start branch" to update the file
+	if !branchExists {
+		updateOpts.StartBranch = &defaultBranch
 	}
 
 	updateFileInfo, res, err := c.client.RepositoryFiles.UpdateFile(projectID, fileName, updateOpts)
@@ -259,7 +313,7 @@ func (c *gitlabClient) CreateFile(
 			log = log.WithField("statusCode", res.StatusCode)
 		}
 		log.WithError(err).
-			Error("error updating brew formula file")
+			Error("error updating file")
 		return err
 	}
 
@@ -271,7 +325,7 @@ func (c *gitlabClient) CreateFile(
 	if res != nil {
 		log = log.WithField("statusCode", res.StatusCode)
 	}
-	log.Debug("updated brew formula file")
+	log.Debug("updated file")
 	return nil
 }
 
@@ -322,7 +376,6 @@ func (c *gitlabClient) CreateRelease(ctx *context.Context, body string) (release
 			Ref:         &ref,
 			TagName:     &tagName,
 		})
-
 		if err != nil {
 			log.WithError(err).Debug("error creating release")
 			return "", err
@@ -347,6 +400,11 @@ func (c *gitlabClient) CreateRelease(ctx *context.Context, body string) (release
 	}
 
 	return tagName, err // gitlab references a tag in a repo by its name
+}
+
+func (c *gitlabClient) PublishRelease(_ *context.Context, _ string /* releaseID */) (err error) {
+	// GitLab doesn't support draft releases. So a created release is already published.
+	return nil
 }
 
 func (c *gitlabClient) ReleaseURLTemplate(ctx *context.Context) (string, error) {
@@ -523,4 +581,64 @@ func checkUseJobToken(ctx context.Context, token string) bool {
 		return token == ciToken
 	}
 	return false
+}
+
+func (c *gitlabClient) OpenPullRequest(
+	ctx *context.Context,
+	base, head Repo,
+	title string,
+	draft bool,
+) error {
+	var targetProjectID int
+	if base.Owner != "" {
+		fullProjectPath := fmt.Sprintf("%s/%s", base.Owner, base.Name)
+
+		p, res, err := c.client.Projects.GetProject(fullProjectPath, nil)
+		if err != nil {
+			log := log.WithField("project", fullProjectPath)
+			if res != nil {
+				log = log.WithField("statusCode", res.StatusCode)
+			}
+			log.WithError(err).Warn("error getting base project id")
+			return err
+		}
+		targetProjectID = p.ID
+	}
+
+	base.Owner = ordered.First(base.Owner, head.Owner)
+	base.Name = ordered.First(base.Name, head.Name)
+
+	if base.Branch == "" {
+		def, err := c.getDefaultBranch(ctx, base)
+		if err != nil {
+			return err
+		}
+		base.Branch = def
+	}
+
+	if draft {
+		title = fmt.Sprintf("Draft: %s", title)
+	}
+
+	log.WithField("base", headString(base, Repo{})).
+		WithField("head", headString(base, head)).
+		WithField("draft", draft).
+		Info("opening pull request")
+
+	mrOptions := &gitlab.CreateMergeRequestOptions{
+		SourceBranch: &head.Branch,
+		TargetBranch: &base.Branch,
+		Title:        &title,
+	}
+
+	if targetProjectID != 0 {
+		mrOptions.TargetProjectID = &targetProjectID
+	}
+
+	pr, _, err := c.client.MergeRequests.CreateMergeRequest(fmt.Sprintf("%s/%s", head.Owner, head.Name), mrOptions)
+	if err != nil {
+		return fmt.Errorf("could not create pull request: %w", err)
+	}
+	log.WithField("url", pr.WebURL).Info("pull request created")
+	return nil
 }

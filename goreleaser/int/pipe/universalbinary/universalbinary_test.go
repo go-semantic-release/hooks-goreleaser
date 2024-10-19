@@ -149,7 +149,7 @@ func TestRun(t *testing.T) {
 		UniversalBinaries: []config.UniversalBinary{
 			{
 				ID:           "notfoo",
-				IDs:          []string{"notfoo"},
+				IDs:          []string{"notfoo", "notbar"},
 				NameTemplate: "notfoo",
 			},
 		},
@@ -294,7 +294,7 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("no darwin builds", func(t *testing.T) {
-		require.EqualError(t, Pipe{}.Run(ctx3), `no darwin binaries found with id "notfoo"`)
+		require.EqualError(t, Pipe{}.Run(ctx3), `no darwin binaries found with ids: notfoo, notbar`)
 	})
 
 	t.Run("fail to open", func(t *testing.T) {
@@ -318,7 +318,7 @@ func TestRun(t *testing.T) {
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "echo post"}}
 		err := Pipe{}.Run(ctx)
 		require.ErrorIs(t, err, exec.ErrNotFound)
-		require.Contains(t, err.Error(), "pre hook failed")
+		require.ErrorContains(t, err, "pre hook failed")
 	})
 
 	t.Run("failing post-hook", func(t *testing.T) {
@@ -327,7 +327,7 @@ func TestRun(t *testing.T) {
 		ctx.Config.UniversalBinaries[0].Hooks.Post = []config.Hook{{Cmd: "exit 1"}}
 		err := Pipe{}.Run(ctx)
 		require.ErrorIs(t, err, exec.ErrNotFound)
-		require.Contains(t, err.Error(), "post hook failed")
+		require.ErrorContains(t, err, "post hook failed")
 	})
 
 	t.Run("skipping post-hook", func(t *testing.T) {

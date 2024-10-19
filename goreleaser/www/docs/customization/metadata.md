@@ -2,8 +2,8 @@
 
 > Since v1.20
 
-GoReleaser creates some metadata files in the `dist` folder before it finishes
-running.
+GoReleaser creates some metadata files in the `dist` directory before it
+finishes running.
 
 These are the options available:
 
@@ -13,6 +13,6 @@ These are the options available:
 metadata:
   # Set the modified timestamp on the metadata files.
   #
-  # Templates: allowed.
+  # Templates: allowed
   mod_timestamp: "{{ .CommitTimestamp }}"
 ```

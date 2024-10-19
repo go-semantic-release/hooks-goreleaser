@@ -49,7 +49,7 @@ blobs:
     #
     # Default: '{{ .ProjectName }}/{{ .Tag }}'
     # Templates: allowed
-    folder: "foo/bar/{{.Version}}"
+    directory: "foo/bar/{{.Version}}"
 
     # Whether to disable this particular upload configuration.
     #
@@ -73,8 +73,8 @@ blobs:
     # Those files will have their contents pass through the template engine,
     # and its results will be uploaded.
     #
-    # Since: v1.17 (pro)
     # This feature is only available in GoReleaser Pro.
+    # Since: v1.17 (pro)
     # Templates: allowed
     templated_extra_files:
       - src: LICENSE.tpl
@@ -113,17 +113,18 @@ blobs:
     # If you need different `content_disposition` options for different files,
     # create multiple `blobs` configurations.
     #
+    # Since: v1.24
     # Default: attachment;filename={{.Filename}}
     # Templates: allowed
-    # Since: v1.24
+    # Disable by setting the value to '-'
     content_disposition: "inline"
 
   - provider: gs
     bucket: goreleaser-bucket
-    folder: "foo/bar/{{.Version}}"
+    directory: "foo/bar/{{.Version}}"
   - provider: s3
     bucket: goreleaser-bucket
-    folder: "foo/bar/{{.Version}}"
+    directory: "foo/bar/{{.Version}}"
 ```
 
 !!! tip
@@ -175,7 +176,7 @@ in the following order:
 There is no common way to set ACLs across all bucket providers, so, [go-cloud][]
 [does not support it yet][issue1108].
 
-You are expected to set the ACLs on the bucket/folder/etc, depending on your
+You are expected to set the ACLs on the bucket/directory/etc, depending on your
 provider.
 
 [go-cloud]: https://gocloud.dev/howto/blob/

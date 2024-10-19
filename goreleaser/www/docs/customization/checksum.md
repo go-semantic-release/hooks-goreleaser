@@ -10,15 +10,34 @@ The `checksum` section allows customizations of the filename:
 checksum:
   # You can change the name of the checksums file.
   #
-  # Default: {{ .ProjectName }}_{{ .Version }}_checksums.txt
+  # Default: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
+  #   or, when split is set: '{{ .ArtifactName }}.{{ .Algorithm }}'
   # Templates: allowed
   name_template: "{{ .ProjectName }}_checksums.txt"
 
   # Algorithm to be used.
-  # Accepted options are sha256, sha512, sha1, crc32, md5, sha224 and sha384.
+  #
+  # Accepted options are:
+  # - sha256
+  # - sha512
+  # - sha1
+  # - crc32
+  # - md5
+  # - sha224
+  # - sha384
+  # - sha3-256
+  # - sha3-512
+  # - sha3-224
+  # - sha3-384
+  # - blake2s
+  # - blake2b
   #
   # Default: sha256.
   algorithm: sha256
+
+  # If true, will create one checksum file for each artifact.
+  # Since: v1.25
+  split: true
 
   # IDs of artifacts to include in the checksums file.
   #
@@ -47,8 +66,8 @@ checksum:
   # Those files will have their contents pass through the template engine,
   # and its results will be added to the checksum.
   #
-  # Since: v1.17 (pro)
   # This feature is only available in GoReleaser Pro.
+  # Since: v1.17 (pro)
   # Templates: allowed
   templated_extra_files:
     - src: LICENSE.tpl

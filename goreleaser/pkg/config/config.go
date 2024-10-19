@@ -5,14 +5,11 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/goreleaser/goreleaser/int/logext"
-	"github.com/goreleaser/goreleaser/int/yaml"
 	"github.com/goreleaser/nfpm/v2/files"
 	"github.com/invopop/jsonschema"
 )
@@ -228,7 +225,7 @@ type Homebrew struct {
 	Repository            RepoRef              `yaml:"repository,omitempty" json:"repository,omitempty"`
 	CommitAuthor          CommitAuthor         `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
 	CommitMessageTemplate string               `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
-	Folder                string               `yaml:"folder,omitempty" json:"folder,omitempty"`
+	Directory             string               `yaml:"directory,omitempty" json:"directory,omitempty"`
 	Caveats               string               `yaml:"caveats,omitempty" json:"caveats,omitempty"`
 	Install               string               `yaml:"install,omitempty" json:"install,omitempty"`
 	ExtraInstall          string               `yaml:"extra_install,omitempty" json:"extra_install,omitempty"`
@@ -242,6 +239,7 @@ type Homebrew struct {
 	SkipUpload            string               `yaml:"skip_upload,omitempty" json:"skip_upload,omitempty" jsonschema:"oneof_type=string;boolean"`
 	DownloadStrategy      string               `yaml:"download_strategy,omitempty" json:"download_strategy,omitempty"`
 	URLTemplate           string               `yaml:"url_template,omitempty" json:"url_template,omitempty"`
+	URLHeaders            []string             `yaml:"url_headers,omitempty" json:"url_headers,omitempty"`
 	CustomRequire         string               `yaml:"custom_require,omitempty" json:"custom_require,omitempty"`
 	CustomBlock           string               `yaml:"custom_block,omitempty" json:"custom_block,omitempty"`
 	IDs                   []string             `yaml:"ids,omitempty" json:"ids,omitempty"`
@@ -254,6 +252,9 @@ type Homebrew struct {
 
 	// Deprecated: use Service instead.
 	Plist string `yaml:"plist,omitempty" json:"plist,omitempty" jsonschema:"deprecated=true,description=use service instead"`
+
+	// Deprecated: use Directory instead.
+	Folder string `yaml:"folder,omitempty" json:"folder,omitempty" jsonschema:"deprecated=true"`
 }
 
 type Nix struct {
@@ -317,7 +318,7 @@ func (a *NixDependency) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 type Winget struct {
-	Name                  string             `yaml:"name" json:"name"`
+	Name                  string             `yaml:"name,omitempty" json:"name,omitempty"`
 	PackageIdentifier     string             `yaml:"package_identifier,omitempty" json:"package_identifier,omitempty"`
 	Publisher             string             `yaml:"publisher" json:"publisher"`
 	PublisherURL          string             `yaml:"publisher_url,omitempty" json:"publisher_url,omitempty"`
@@ -396,7 +397,7 @@ type Scoop struct {
 	Name                  string       `yaml:"name,omitempty" json:"name,omitempty"`
 	IDs                   []string     `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Repository            RepoRef      `yaml:"repository,omitempty" json:"repository,omitempty"`
-	Folder                string       `yaml:"folder,omitempty" json:"folder,omitempty"`
+	Directory             string       `yaml:"directory,omitempty" json:"directory,omitempty"`
 	CommitAuthor          CommitAuthor `yaml:"commit_author,omitempty" json:"commit_author,omitempty"`
 	CommitMessageTemplate string       `yaml:"commit_msg_template,omitempty" json:"commit_msg_template,omitempty"`
 	Homepage              string       `yaml:"homepage,omitempty" json:"homepage,omitempty"`
@@ -413,6 +414,9 @@ type Scoop struct {
 
 	// Deprecated: use Repository instead.
 	Bucket RepoRef `yaml:"bucket,omitempty" json:"bucket,omitempty" jsonschema:"deprecated=true,description=use repository instead"`
+
+	// Deprecated: use Directory instead.
+	Folder string `yaml:"folder,omitempty" json:"folder,omitempty" jsonschema:"deprecated=true"`
 }
 
 // CommitAuthor is the author of a Git commit.
@@ -522,21 +526,21 @@ type Build struct {
 	UnproxiedMain   string          `yaml:"-" json:"-"` // used by gomod.proxy
 	UnproxiedDir    string          `yaml:"-" json:"-"` // used by gomod.proxy
 
-	BuildDetails          `yaml:",inline" json:",inline"` // nolint: tagliatelle
-	BuildDetailsOverrides []BuildDetailsOverride          `yaml:"overrides,omitempty" json:"overrides,omitempty"`
+	BuildDetails          `yaml:",inline" json:",inline"`
+	BuildDetailsOverrides []BuildDetailsOverride `yaml:"overrides,omitempty" json:"overrides,omitempty"`
 }
 
 type BuildDetailsOverride struct {
-	Goos         string                          `yaml:"goos,omitempty" json:"goos,omitempty"`
-	Goarch       string                          `yaml:"goarch,omitempty" json:"goarch,omitempty"`
-	Goarm        string                          `yaml:"goarm,omitempty" json:"goarm,omitempty" jsonschema:"oneof_type=string;integer"`
-	Gomips       string                          `yaml:"gomips,omitempty" json:"gomips,omitempty"`
-	Goamd64      string                          `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
-	BuildDetails `yaml:",inline" json:",inline"` // nolint: tagliatelle
+	Goos         string `yaml:"goos,omitempty" json:"goos,omitempty"`
+	Goarch       string `yaml:"goarch,omitempty" json:"goarch,omitempty"`
+	Goarm        string `yaml:"goarm,omitempty" json:"goarm,omitempty" jsonschema:"oneof_type=string;integer"`
+	Gomips       string `yaml:"gomips,omitempty" json:"gomips,omitempty"`
+	Goamd64      string `yaml:"goamd64,omitempty" json:"goamd64,omitempty"`
+	BuildDetails `yaml:",inline" json:",inline"`
 }
 
 type BuildDetails struct {
-	Buildmode string      `yaml:"buildmode,omitempty" json:"buildmode,omitempty" jsonschema:"enum=c-archive,enum=c-shared,enum=,default="`
+	Buildmode string      `yaml:"buildmode,omitempty" json:"buildmode,omitempty" jsonschema:"enum=c-archive,enum=c-shared,enum=pie,enum=,default="`
 	Ldflags   StringArray `yaml:"ldflags,omitempty" json:"ldflags,omitempty"`
 	Tags      FlagArray   `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Flags     FlagArray   `yaml:"flags,omitempty" json:"flags,omitempty"`
@@ -629,7 +633,7 @@ func (bh Hook) JSONSchema() *jsonschema.Schema {
 // FormatOverride is used to specify a custom format for a specific GOOS.
 type FormatOverride struct {
 	Goos   string `yaml:"goos,omitempty" json:"goos,omitempty"`
-	Format string `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"enum=tar,enum=tgz,enum=tar.gz,enum=zip,enum=gz,enum=tar.xz,enum=txz,enum=binary,default=tar.gz"`
+	Format string `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"enum=tar,enum=tgz,enum=tar.gz,enum=zip,enum=gz,enum=tar.xz,enum=txz,enum=binary,enum=none,default=tar.gz"`
 }
 
 // File is a file inside an archive.
@@ -716,13 +720,16 @@ type Archive struct {
 	Format                    string           `yaml:"format,omitempty" json:"format,omitempty" jsonschema:"enum=tar,enum=tgz,enum=tar.gz,enum=zip,enum=gz,enum=tar.xz,enum=txz,enum=binary,default=tar.gz"`
 	FormatOverrides           []FormatOverride `yaml:"format_overrides,omitempty" json:"format_overrides,omitempty"`
 	WrapInDirectory           string           `yaml:"wrap_in_directory,omitempty" json:"wrap_in_directory,omitempty" jsonschema:"oneof_type=string;boolean"`
-	StripParentBinaryFolder   bool             `yaml:"strip_parent_binary_folder,omitempty" json:"strip_parent_binary_folder,omitempty"`
+	StripBinaryDirectory      bool             `yaml:"strip_binary_directory,omitempty" json:"strip_binary_directory,omitempty"`
 	Files                     []File           `yaml:"files,omitempty" json:"files,omitempty"`
 	Meta                      bool             `yaml:"meta,omitempty" json:"meta,omitempty"`
 	AllowDifferentBinaryCount bool             `yaml:"allow_different_binary_count,omitempty" json:"allow_different_binary_count,omitempty"`
 
 	// Deprecated: don't need to set this anymore.
 	RLCP string `yaml:"rlcp,omitempty" json:"rlcp,omitempty"  jsonschema:"oneof_type=string;boolean,deprecated=true,description=you can now remove this"`
+
+	// Deprecated: use StripBinaryDirectory instead.
+	StripParentBinaryFolder bool `yaml:"strip_parent_binary_folder,omitempty" json:"strip_parent_binary_folder,omitempty" jsonschema:"deprecated=true"`
 }
 
 type ReleaseNotesMode string
@@ -753,7 +760,9 @@ type Release struct {
 	Header                 string      `yaml:"header,omitempty" json:"header,omitempty"`
 	Footer                 string      `yaml:"footer,omitempty" json:"footer,omitempty"`
 
-	ReleaseNotesMode ReleaseNotesMode `yaml:"mode,omitempty" json:"mode,omitempty" jsonschema:"enum=keep-existing,enum=append,enum=prepend,enum=replace,default=keep-existing"`
+	ReleaseNotesMode         ReleaseNotesMode `yaml:"mode,omitempty" json:"mode,omitempty" jsonschema:"enum=keep-existing,enum=append,enum=prepend,enum=replace,default=keep-existing"`
+	ReplaceExistingArtifacts bool             `yaml:"replace_existing_artifacts,omitempty" json:"replace_existing_artifacts,omitempty"`
+	IncludeMeta              bool             `yaml:"include_meta,omitempty" json:"include_meta,omitempty"`
 }
 
 // Milestone config used for VCS milestone.
@@ -772,12 +781,12 @@ type ExtraFile struct {
 
 // NFPM config.
 type NFPM struct {
-	NFPMOverridables `yaml:",inline" json:",inline"` // nolint: tagliatelle
-	Overrides        map[string]NFPMOverridables     `yaml:"overrides,omitempty" json:"overrides,omitempty"`
+	NFPMOverridables `yaml:",inline" json:",inline"`
+	Overrides        map[string]NFPMOverridables `yaml:"overrides,omitempty" json:"overrides,omitempty"`
 
 	ID          string   `yaml:"id,omitempty" json:"id,omitempty"`
 	Builds      []string `yaml:"builds,omitempty" json:"builds,omitempty"`
-	Formats     []string `yaml:"formats,omitempty" json:"formats,omitempty"`
+	Formats     []string `yaml:"formats,omitempty" json:"formats,omitempty" jsonschema:"enum=apk,enum=deb,enum=rpm,enum=termux.deb,enum=archlinux"`
 	Section     string   `yaml:"section,omitempty" json:"section,omitempty"`
 	Priority    string   `yaml:"priority,omitempty" json:"priority,omitempty"`
 	Vendor      string   `yaml:"vendor,omitempty" json:"vendor,omitempty"`
@@ -857,11 +866,14 @@ type NFPMDebSignature struct {
 
 // NFPMDeb is custom configs that are only available on deb packages.
 type NFPMDeb struct {
-	Scripts   NFPMDebScripts   `yaml:"scripts,omitempty" json:"scripts,omitempty"`
-	Triggers  NFPMDebTriggers  `yaml:"triggers,omitempty" json:"triggers,omitempty"`
-	Breaks    []string         `yaml:"breaks,omitempty" json:"breaks,omitempty"`
-	Signature NFPMDebSignature `yaml:"signature,omitempty" json:"signature,omitempty"`
-	Lintian   []string         `yaml:"lintian_overrides,omitempty" json:"lintian_overrides,omitempty"`
+	Scripts     NFPMDebScripts    `yaml:"scripts,omitempty" json:"scripts,omitempty"`
+	Triggers    NFPMDebTriggers   `yaml:"triggers,omitempty" json:"triggers,omitempty"`
+	Breaks      []string          `yaml:"breaks,omitempty" json:"breaks,omitempty"`
+	Signature   NFPMDebSignature  `yaml:"signature,omitempty" json:"signature,omitempty"`
+	Lintian     []string          `yaml:"lintian_overrides,omitempty" json:"lintian_overrides,omitempty"`
+	Compression string            `yaml:"compression,omitempty" json:"compression,omitempty" jsonschema:"enum=gzip,enum=xz,enum=none,default=gzip"`
+	Fields      map[string]string `yaml:"fields,omitempty" json:"fields,omitempty"`
+	Predepends  []string          `yaml:"predepends,omitempty" json:"predepends,omitempty"`
 }
 
 type NFPMAPKScripts struct {
@@ -942,6 +954,30 @@ type Sign struct {
 	Env         []string `yaml:"env,omitempty" json:"env,omitempty"`
 	Certificate string   `yaml:"certificate,omitempty" json:"certificate,omitempty"`
 	Output      bool     `yaml:"output,omitempty" json:"output,omitempty"`
+}
+
+type Notarize struct {
+	MacOS []MacOSSignNotarize `yaml:"macos" json:"macos"`
+}
+
+type MacOSSignNotarize struct {
+	IDs      []string      `yaml:"ids,omitempty" json:"ids,omitempty"`
+	Enabled  string        `yaml:"enabled,omitempty" json:"enabled,omitempty" jsonschema:"oneof_type=string;boolean"`
+	Sign     MacOSSign     `yaml:"sign" json:"sign"`
+	Notarize MacOSNotarize `yaml:"notarize" json:"notarize"`
+}
+
+type MacOSNotarize struct {
+	IssuerID string        `yaml:"issuer_id" json:"issuer_id"`
+	Key      string        `yaml:"key" json:"key"`
+	KeyID    string        `yaml:"key_id" json:"key_id"`
+	Timeout  time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Wait     bool          `yaml:"wait,omitempty" json:"wait,omitempty"`
+}
+
+type MacOSSign struct {
+	Certificate string `yaml:"certificate" json:"certificate"`
+	Password    string `yaml:"password" json:"password"`
 }
 
 // SnapcraftAppMetadata for the binaries that will be in the snap package.
@@ -1029,6 +1065,7 @@ type Snapshot struct {
 type Checksum struct {
 	NameTemplate string      `yaml:"name_template,omitempty" json:"name_template,omitempty"`
 	Algorithm    string      `yaml:"algorithm,omitempty" json:"algorithm,omitempty"`
+	Split        bool        `yaml:"split,omitempty" json:"split,omitempty"`
 	IDs          []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Disable      bool        `yaml:"disable,omitempty" json:"disable,omitempty"`
 	ExtraFiles   []ExtraFile `yaml:"extra_files,omitempty" json:"extra_files,omitempty"`
@@ -1074,6 +1111,7 @@ type Changelog struct {
 	Sort    string           `yaml:"sort,omitempty" json:"sort,omitempty" jsonschema:"enum=asc,enum=desc,enum=,default="`
 	Disable string           `yaml:"disable,omitempty" json:"disable,omitempty" jsonschema:"oneof_type=string;boolean"`
 	Use     string           `yaml:"use,omitempty" json:"use,omitempty" jsonschema:"enum=git,enum=github,enum=github-native,enum=gitlab,default=git"`
+	Format  string           `yaml:"format,omitempty" json:"format,omitempty"`
 	Groups  []ChangelogGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
 	Abbrev  int              `yaml:"abbrev,omitempty" json:"abbrev,omitempty"`
 
@@ -1107,7 +1145,7 @@ type Blob struct {
 	Provider           string      `yaml:"provider,omitempty" json:"provider,omitempty"`
 	Region             string      `yaml:"region,omitempty" json:"region,omitempty"`
 	DisableSSL         bool        `yaml:"disable_ssl,omitempty" json:"disable_ssl,omitempty"`
-	Folder             string      `yaml:"folder,omitempty" json:"folder,omitempty"`
+	Directory          string      `yaml:"directory,omitempty" json:"directory,omitempty"`
 	KMSKey             string      `yaml:"kms_key,omitempty" json:"kms_key,omitempty"`
 	IDs                []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Endpoint           string      `yaml:"endpoint,omitempty" json:"endpoint,omitempty"` // used for minio for example
@@ -1117,11 +1155,16 @@ type Blob struct {
 	ACL                string      `yaml:"acl,omitempty" json:"acl,omitempty"`
 	CacheControl       []string    `yaml:"cache_control,omitempty" json:"cache_control,omitempty"`
 	ContentDisposition string      `yaml:"content_disposition,omitempty" json:"content_disposition,omitempty"`
+	IncludeMeta        bool        `yaml:"include_meta,omitempty" json:"include_meta,omitempty"`
 
 	// Deprecated: use disable_ssl instead
-	OldDisableSSL bool `yaml:"disableSSL,omitempty" json:"disableSSL,omitempty" jsonschema:"deprecated=true,description=use disable_ssl instead"` // nolint:tagliatelle
+	OldDisableSSL bool `yaml:"disableSSL,omitempty" json:"disableSSL,omitempty" jsonschema:"deprecated=true,description=use disable_ssl instead"` //nolint:tagliatelle
+
 	// Deprecated: use kms_key instead
 	OldKMSKey string `yaml:"kmskey,omitempty" json:"kmskey,omitempty" jsonschema:"deprecated=true,description=use kms_key instead"`
+
+	// Deprecated: use Directory instead.
+	Folder string `yaml:"folder,omitempty" json:"folder,omitempty" jsonschema:"deprecated=true"`
 }
 
 // Upload configuration.
@@ -1139,6 +1182,7 @@ type Upload struct {
 	TrustedCerts       string            `yaml:"trusted_certificates,omitempty" json:"trusted_certificates,omitempty"`
 	Checksum           bool              `yaml:"checksum,omitempty" json:"checksum,omitempty"`
 	Signature          bool              `yaml:"signature,omitempty" json:"signature,omitempty"`
+	Meta               bool              `yaml:"meta,omitempty" json:"meta,omitempty"`
 	CustomArtifactName bool              `yaml:"custom_artifact_name,omitempty" json:"custom_artifact_name,omitempty"`
 	CustomHeaders      map[string]string `yaml:"custom_headers,omitempty" json:"custom_headers,omitempty"`
 }
@@ -1149,6 +1193,7 @@ type Publisher struct {
 	IDs        []string    `yaml:"ids,omitempty" json:"ids,omitempty"`
 	Checksum   bool        `yaml:"checksum,omitempty" json:"checksum,omitempty"`
 	Signature  bool        `yaml:"signature,omitempty" json:"signature,omitempty"`
+	Meta       bool        `yaml:"meta,omitempty" json:"meta,omitempty"`
 	Dir        string      `yaml:"dir,omitempty" json:"dir,omitempty"`
 	Cmd        string      `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 	Env        []string    `yaml:"env,omitempty" json:"env,omitempty"`
@@ -1197,6 +1242,7 @@ type Project struct {
 	Changelog       Changelog        `yaml:"changelog,omitempty" json:"changelog,omitempty"`
 	Dist            string           `yaml:"dist,omitempty" json:"dist,omitempty"`
 	Signs           []Sign           `yaml:"signs,omitempty" json:"signs,omitempty"`
+	Notarize        Notarize         `yaml:"notarize,omitempty" json:"notarize,omitempty"`
 	DockerSigns     []Sign           `yaml:"docker_signs,omitempty" json:"docker_signs,omitempty"`
 	EnvFiles        EnvFiles         `yaml:"env_files,omitempty" json:"env_files,omitempty"`
 	Before          Before           `yaml:"before,omitempty" json:"before,omitempty"`
@@ -1240,6 +1286,7 @@ type GoMod struct {
 	Env      []string `yaml:"env,omitempty" json:"env,omitempty"`
 	GoBinary string   `yaml:"gobinary,omitempty" json:"gobinary,omitempty"`
 	Mod      string   `yaml:"mod,omitempty" json:"mod,omitempty"`
+	Dir      string   `yaml:"dir,omitempty" json:"dir,omitempty"`
 }
 
 type Announce struct {
@@ -1256,6 +1303,7 @@ type Announce struct {
 	Telegram       Telegram       `yaml:"telegram,omitempty" json:"telegram,omitempty"`
 	Webhook        Webhook        `yaml:"webhook,omitempty" json:"webhook,omitempty"`
 	OpenCollective OpenCollective `yaml:"opencollective,omitempty" json:"opencolletive,omitempty"`
+	Bluesky        Bluesky        `yaml:"bluesky,omitempty" json:"bluesky,omitempty"`
 }
 
 type Webhook struct {
@@ -1356,43 +1404,11 @@ type OpenCollective struct {
 	MessageTemplate string `yaml:"message_template,omitempty" json:"message_template,omitempty"`
 }
 
-// Load config file.
-func Load(file string) (config Project, err error) {
-	f, err := os.Open(file) // #nosec
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	return LoadReader(f)
-}
-
-type VersionError struct {
-	current int
-}
-
-func (e VersionError) Error() string {
-	return fmt.Sprintf(
-		"only configurations files on %s are supported, yours is %s, please update your configuration",
-		logext.Keyword("version: 1"),
-		logext.Keyword(fmt.Sprintf("version: %d", e.current)),
-	)
-}
-
-// LoadReader config via io.Reader.
-func LoadReader(fd io.Reader) (config Project, err error) {
-	data, err := io.ReadAll(fd)
-	if err != nil {
-		return config, err
-	}
-
-	var versioned Versioned
-	_ = yaml.Unmarshal(data, &versioned)
-	if versioned.Version != 0 && versioned.Version != 1 {
-		return config, VersionError{versioned.Version}
-	}
-
-	err = yaml.UnmarshalStrict(data, &config)
-	return config, err
+// Bluesky represents the data required to announce to the Bluesky social network
+type Bluesky struct {
+	Enabled         bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Username        string `yaml:"username,omitempty" json:"username,omitempty"`
+	MessageTemplate string `yaml:"message_template,omitempty" json:"message_template,omitempty"`
 }
 
 // SlackBlock represents the untyped structure of a rich slack message layout.

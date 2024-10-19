@@ -106,7 +106,9 @@ func (Pipe) Publish(ctx *context.Context) error {
 	if err := doPublish(ctx, c); err != nil {
 		return err
 	}
-	log.WithField("url", ctx.ReleaseURL).Info("published")
+	log.WithField("url", ctx.ReleaseURL).
+		WithField("published", !ctx.Config.Release.Draft).
+		Info("release created/updated")
 	return nil
 }
 
@@ -114,6 +116,9 @@ func doPublish(ctx *context.Context, client client.Client) error {
 	log.WithField("tag", ctx.Git.CurrentTag).
 		WithField("repo", ctx.Config.Release.GitHub.String()).
 		Info("creating or updating release")
+	if err := ctx.Artifacts.Refresh(); err != nil {
+		return err
+	}
 	body, err := describeBody(ctx)
 	if err != nil {
 		return err
@@ -128,6 +133,9 @@ func doPublish(ctx *context.Context, client client.Client) error {
 		return err
 	}
 	if skipUpload {
+		if err := client.PublishRelease(ctx, releaseID); err != nil {
+			return err
+		}
 		return pipe.Skip("release.skip_upload is set")
 	}
 
@@ -147,31 +155,37 @@ func doPublish(ctx *context.Context, client client.Client) error {
 		})
 	}
 
-	filters := artifact.Or(
+	typeFilters := []artifact.Filter{
 		artifact.ByType(artifact.UploadableArchive),
 		artifact.ByType(artifact.UploadableBinary),
 		artifact.ByType(artifact.UploadableSourceArchive),
+		artifact.ByType(artifact.UploadableFile),
 		artifact.ByType(artifact.Checksum),
 		artifact.ByType(artifact.Signature),
 		artifact.ByType(artifact.Certificate),
 		artifact.ByType(artifact.LinuxPackage),
 		artifact.ByType(artifact.SBOM),
-	)
+	}
+	if ctx.Config.Release.IncludeMeta {
+		typeFilters = append(typeFilters, artifact.ByType(artifact.Metadata))
+	}
+	filters := artifact.Or(typeFilters...)
 
 	if len(ctx.Config.Release.IDs) > 0 {
 		filters = artifact.And(filters, artifact.ByIDs(ctx.Config.Release.IDs...))
 	}
 
-	filters = artifact.Or(filters, artifact.ByType(artifact.UploadableFile))
-
 	g := semerrgroup.New(ctx.Parallelism)
 	for _, artifact := range ctx.Artifacts.Filter(filters).List() {
-		artifact := artifact
 		g.Go(func() error {
 			return upload(ctx, client, releaseID, artifact)
 		})
 	}
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return client.PublishRelease(ctx, releaseID)
 }
 
 func upload(ctx *context.Context, cli client.Client, releaseID string, artifact *artifact.Artifact) error {
@@ -188,7 +202,7 @@ func upload(ctx *context.Context, cli client.Client, releaseID string, artifact 
 			log.WithField("try", try).
 				WithField("artifact", artifact.Name).
 				WithError(err).
-				Warnf("failed to upload artifact, will retry")
+				Warn("failed to upload artifact, will retry")
 			return err
 		}
 		return nil

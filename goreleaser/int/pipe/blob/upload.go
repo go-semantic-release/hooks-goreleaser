@@ -85,18 +85,18 @@ func urlFor(ctx *context.Context, conf config.Blob) (string, error) {
 // upload to destination (eg: gs://gorelease-bucket) using the given uploader
 // implementation.
 func doUpload(ctx *context.Context, conf config.Blob) error {
-	folder, err := tmpl.New(ctx).Apply(conf.Folder)
+	dir, err := tmpl.New(ctx).Apply(conf.Directory)
 	if err != nil {
 		return err
 	}
-	folder = strings.TrimPrefix(folder, "/")
+	dir = strings.TrimPrefix(dir, "/")
 
 	bucketURL, err := urlFor(ctx, conf)
 	if err != nil {
 		return err
 	}
 
-	filter := artifact.Or(
+	byTypes := []artifact.Filter{
 		artifact.ByType(artifact.UploadableArchive),
 		artifact.ByType(artifact.UploadableBinary),
 		artifact.ByType(artifact.UploadableSourceArchive),
@@ -105,7 +105,12 @@ func doUpload(ctx *context.Context, conf config.Blob) error {
 		artifact.ByType(artifact.Certificate),
 		artifact.ByType(artifact.LinuxPackage),
 		artifact.ByType(artifact.SBOM),
-	)
+	}
+	if conf.IncludeMeta {
+		byTypes = append(byTypes, artifact.ByType(artifact.Metadata))
+	}
+
+	filter := artifact.Or(byTypes...)
 	if len(conf.IDs) > 0 {
 		filter = artifact.And(filter, artifact.ByIDs(conf.IDs...))
 	}
@@ -132,11 +137,10 @@ func doUpload(ctx *context.Context, conf config.Blob) error {
 
 	g := semerrgroup.New(ctx.Parallelism)
 	for _, artifact := range ctx.Artifacts.Filter(filter).List() {
-		artifact := artifact
 		g.Go(func() error {
 			// TODO: replace this with ?prefix=folder on the bucket url
 			dataFile := artifact.Path
-			uploadFile := path.Join(folder, artifact.Name)
+			uploadFile := path.Join(dir, artifact.Name)
 
 			return uploadData(ctx, conf, up, dataFile, uploadFile, bucketURL)
 		})
@@ -147,10 +151,8 @@ func doUpload(ctx *context.Context, conf config.Blob) error {
 		return err
 	}
 	for name, fullpath := range files {
-		name := name
-		fullpath := fullpath
 		g.Go(func() error {
-			uploadFile := path.Join(folder, name)
+			uploadFile := path.Join(dir, name)
 			return uploadData(ctx, conf, up, fullpath, uploadFile, bucketURL)
 		})
 	}

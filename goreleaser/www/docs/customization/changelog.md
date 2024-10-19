@@ -19,15 +19,26 @@ changelog:
   #
   # Valid options are:
   # - `git`: uses `git log`;
-  # - `github`: uses the compare GitHub API, appending the author login to the changelog.
+  # - `github`: uses the compare GitHub API, appending the author username to the changelog.
   # - `gitlab`: uses the compare GitLab API, appending the author name and email to the changelog.
+  # - `gitea`: uses the compare Gitea API, appending the author username to the changelog.
   # - `github-native`: uses the GitHub release notes generation API, disables the groups feature.
   #
   # Default: 'git'
   use: github
 
+  # Format to use for commit formatting.
+  # Only available when use is one of `github`, `gitea`, or `gitlab`.
+  #
+  # Default: '{{ .SHA }}: {{ .Message }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }} <{{ .AuthorEmail }}>{{ end }})'
+  # Extra template fields: `SHA`, `Message`, `AuthorName`, `AuthorEmail`, and
+  # `AuthorUsername`.
+  # Since: v1.26
+  format: "{{.SHA}}: {{.Message}} (@{{.AuthorUsername}})"
+
   # Sorts the changelog by the commit's messages.
   # Could either be asc, desc or empty
+  # Empty means 'no sorting', it'll use the output of `git log` as is.
   sort: asc
 
   # Max commit hash length to use in the changelog.
@@ -43,8 +54,8 @@ changelog:
   # Only works when `use: git`, otherwise ignored.
   #
   # Default: monorepo.dir value, or empty if no monorepo
-  # Since: v1.12 (pro)
   # This feature is only available in GoReleaser Pro.
+  # Since: v1.12 (pro)
   paths:
     - foo/
     - bar/
@@ -79,8 +90,8 @@ changelog:
       # There can only be one level of subgroups, i.e.: a subgroup can't have
       # subgroups within it.
       #
-      # Since: v1.15 (pro)
       # This feature is only available in GoReleaser Pro.
+      # Since: v1.15 (pro)
       groups:
         - title: "Docs"
           regex: ".*docs.*"
@@ -91,8 +102,8 @@ changelog:
 
   # Divider to use between groups.
   #
-  # Since: v1.16 (pro)
   # This feature is only available in GoReleaser Pro.
+  # Since: v1.16 (pro)
   divider: "---"
 
   filters:

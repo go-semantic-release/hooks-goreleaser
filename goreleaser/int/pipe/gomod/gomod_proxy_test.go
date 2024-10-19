@@ -122,8 +122,6 @@ func TestGoModProxy(t *testing.T) {
 		require.Equal(t, ".", ctx.Config.Builds[0].UnproxiedMain)
 		require.Equal(t, filepath.Join(dist, "proxy", "foo"), ctx.Config.Builds[0].Dir)
 		require.Equal(t, ".", ctx.Config.Builds[0].UnproxiedDir)
-
-		require.Equal(t, ctx.ModulePath, ctx.ModulePath)
 	})
 
 	t.Run("nfpm", func(t *testing.T) {
@@ -149,7 +147,6 @@ func TestGoModProxy(t *testing.T) {
 		requireGoMod(t)
 		require.Equal(t, ctx.ModulePath+"/cmd/nfpm", ctx.Config.Builds[0].Main)
 		require.Equal(t, filepath.Join(dist, "proxy", "foo"), ctx.Config.Builds[0].Dir)
-		require.Equal(t, ctx.ModulePath, ctx.ModulePath)
 	})
 
 	// this repo does not have a go.sum file, which is ok, a project might not have any dependencies
@@ -175,7 +172,6 @@ func TestGoModProxy(t *testing.T) {
 		requireGoMod(t)
 		require.Equal(t, ctx.ModulePath, ctx.Config.Builds[0].Main)
 		require.Equal(t, filepath.Join(dist, "proxy", "foo"), ctx.Config.Builds[0].Dir)
-		require.Equal(t, ctx.ModulePath, ctx.ModulePath)
 	})
 
 	t.Run("no perms", func(t *testing.T) {
@@ -236,7 +232,6 @@ func TestGoModProxy(t *testing.T) {
 		requireGoMod(t)
 		require.Equal(t, ctx.ModulePath, ctx.Config.Builds[0].Main)
 		require.Equal(t, filepath.Join(dist, "proxy", "foo"), ctx.Config.Builds[0].Dir)
-		require.Equal(t, ctx.ModulePath, ctx.ModulePath)
 	})
 }
 
@@ -289,7 +284,7 @@ func requireGoMod(tb testing.TB) {
 	require.NoError(tb, err)
 	require.Contains(tb, string(mod), `module foo
 
-go 1.21`)
+go 1.22`)
 }
 
 func fakeGoModAndSum(tb testing.TB, module string) {

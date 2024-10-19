@@ -52,7 +52,7 @@ type buildOpts struct {
 
 func newBuildCmd() *buildCmd {
 	root := &buildCmd{}
-	// nolint: dupl
+	//nolint:dupl
 	cmd := &cobra.Command{
 		Use:     "build",
 		Aliases: []string{"b"},
@@ -69,7 +69,7 @@ When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and ` + "`GOARCH`" 
 		SilenceErrors:     true,
 		Args:              cobra.NoArgs,
 		ValidArgsFunction: cobra.NoFileCompletions,
-		RunE: timedRunE("build", func(cmd *cobra.Command, args []string) error {
+		RunE: timedRunE("build", func(_ *cobra.Command, _ []string) error {
 			ctx, err := buildProject(root.opts)
 			if err != nil {
 				return err
@@ -85,9 +85,9 @@ When using ` + "`--single-target`" + `, the ` + "`GOOS`" + ` and ` + "`GOARCH`" 
 	cmd.Flags().BoolVar(&root.opts.skipValidate, "skip-validate", false, "Skips several sanity checks")
 	cmd.Flags().BoolVar(&root.opts.skipBefore, "skip-before", false, "Skips global before hooks")
 	cmd.Flags().BoolVar(&root.opts.skipPostHooks, "skip-post-hooks", false, "Skips all post-build hooks")
-	cmd.Flags().BoolVar(&root.opts.clean, "clean", false, "Remove the dist folder before building")
-	cmd.Flags().BoolVar(&root.opts.rmDist, "rm-dist", false, "Remove the dist folder before building")
-	cmd.Flags().IntVarP(&root.opts.parallelism, "parallelism", "p", 0, "Amount tasks to run concurrently (default: number of CPUs)")
+	cmd.Flags().BoolVar(&root.opts.clean, "clean", false, "Removes the 'dist' directory before building")
+	cmd.Flags().BoolVar(&root.opts.rmDist, "rm-dist", false, "Removes the 'dist' directory before building")
+	cmd.Flags().IntVarP(&root.opts.parallelism, "parallelism", "p", 0, "Number of tasks to run concurrently (default: number of CPUs)")
 	_ = cmd.RegisterFlagCompletionFunc("parallelism", cobra.NoFileCompletions)
 	cmd.Flags().DurationVar(&root.opts.timeout, "timeout", 30*time.Minute, "Timeout to the entire build process")
 	_ = cmd.RegisterFlagCompletionFunc("timeout", cobra.NoFileCompletions)

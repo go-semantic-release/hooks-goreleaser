@@ -14,7 +14,7 @@ builds:
   - #
     # ID of the build.
     #
-    # Default: Binary name
+    # Default: Project directory name
     id: "my-build"
 
     # Path to main.go file or main package.
@@ -63,6 +63,7 @@ builds:
     # Valid options:
     # - `c-shared`
     # - `c-archive`
+    # - `pie`
     #
     # Since: v1.13
     buildmode: c-shared
@@ -92,7 +93,7 @@ builds:
         {{- end }}
 
     # GOOS list to build for.
-    # For more info refer to: https://golang.org/doc/install/source#environment
+    # For more info refer to: https://go.dev/doc/install/source#environment
     #
     # Default: [ 'darwin', 'linux', 'windows' ]
     goos:
@@ -100,7 +101,7 @@ builds:
       - windows
 
     # GOARCH to build for.
-    # For more info refer to: https://golang.org/doc/install/source#environment
+    # For more info refer to: https://go.dev/doc/install/source#environment
     #
     # Default: [ '386', 'amd64', 'arm64' ]
     goarch:
@@ -109,7 +110,7 @@ builds:
       - arm64
 
     # GOARM to build for when GOARCH is arm.
-    # For more info refer to: https://golang.org/doc/install/source#environment
+    # For more info refer to: https://go.dev/doc/install/source#environment
     #
     # Default: [ 6 ]
     goarm:
@@ -117,7 +118,7 @@ builds:
       - 7
 
     # GOAMD64 to build when GOARCH is amd64.
-    # For more info refer to: https://golang.org/doc/install/source#environment
+    # For more info refer to: https://go.dev/doc/install/source#environment
     #
     # Default: [ 'v1' ]
     goamd64:
@@ -125,7 +126,7 @@ builds:
       - v3
 
     # GOMIPS and GOMIPS64 to build when GOARCH is mips, mips64, mipsle or mips64le.
-    # For more info refer to: https://golang.org/doc/install/source#environment
+    # For more info refer to: https://go.dev/doc/install/source#environment
     #
     # Default: [ 'hardfloat' ]
     gomips:
@@ -185,7 +186,7 @@ builds:
     # you would do this to ensure a build was reproducible.
     # Pass an empty string to skip modifying the output.
     #
-    # Templates: allowed.
+    # Templates: allowed
     mod_timestamp: "{{ .CommitTimestamp }}"
 
     # Hooks can be used to customize the final binary,
@@ -203,7 +204,7 @@ builds:
     # By default, GoReleaser will create your binaries inside
     # `dist/${BuildID}_${BuildTarget}`, which is a unique directory per build
     # target in the matrix.
-    # You can set subdirs within that folder using the `binary` property.
+    # You can set subdirs within that directory using the `binary` property.
     #
     # However, if for some reason you don't want that unique directory to be
     # created, you can set this property.
@@ -479,7 +480,7 @@ builds:
     # prebuilt specific options
     prebuilt:
       # Path must be the template path to the binaries.
-      # GoReleaser removes the `dist` folder before running, so you will likely
+      # GoReleaser removes the `dist` directory before running, so you will likely
       # want to put the binaries elsewhere.
       # This field is required when using the `prebuilt` builder.
       path: output/mybin_{{ .Os }}_{{ .Arch }}{{ with .Amd64 }}_{{ . }}{{ end }}/mybin
@@ -530,7 +531,7 @@ There is no difference in how the binaries are handled.
 
 If you'd like to see this in action, check [this example on GitHub](https://github.com/caarlos0/goreleaser-pro-prebuilt-example).
 
-## A note about folder names inside `dist`
+## A note about directory names inside `dist`
 
 By default, GoReleaser will create your binaries inside
 `dist/${BuildID}_${BuildTarget}`, which is a unique directory per build target

@@ -7,6 +7,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/middleware/errhandler"
 	"github.com/goreleaser/goreleaser/int/middleware/logging"
 	"github.com/goreleaser/goreleaser/int/middleware/skip"
+	"github.com/goreleaser/goreleaser/int/pipe/bluesky"
 	"github.com/goreleaser/goreleaser/int/pipe/discord"
 	"github.com/goreleaser/goreleaser/int/pipe/linkedin"
 	"github.com/goreleaser/goreleaser/int/pipe/mastodon"
@@ -30,9 +31,10 @@ type Announcer interface {
 	Announce(ctx *context.Context) error
 }
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var announcers = []Announcer{
 	// XXX: keep asc sorting
+	bluesky.Pipe{},
 	discord.Pipe{},
 	linkedin.Pipe{},
 	mastodon.Pipe{},

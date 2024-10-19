@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -604,7 +605,30 @@ func TestGiteaChangelog(t *testing.T) {
 		defer r.Body.Close()
 		if strings.HasSuffix(r.URL.Path, "api/v1/version") {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "{\"version\":\"1.12.0\"}")
+			fmt.Fprint(w, "{\"version\":\"1.22.0\"}")
+		}
+		if r.URL.Path == "/api/v1/repos/someone/something/compare/v1.0.0...v1.1.0" {
+			bts, err := json.Marshal(gitea.Compare{
+				TotalCommits: 1,
+				Commits: []*gitea.Commit{
+					{
+						CommitMeta: &gitea.CommitMeta{
+							SHA: "c8488dc825debca26ade35aefca234b142a515c9",
+						},
+						Author: &gitea.User{
+							UserName: "johndoe",
+							FullName: "John Doe",
+							Email:    "nope@nope.nope",
+						},
+						RepoCommit: &gitea.RepoCommit{
+							Message: "feat: impl something\n\nnsome other lines",
+						},
+					},
+				},
+			})
+			require.NoError(t, err)
+			_, err = w.Write(bts)
+			require.NoError(t, err)
 		}
 	}))
 	defer srv.Close()
@@ -622,8 +646,17 @@ func TestGiteaChangelog(t *testing.T) {
 		Branch: "somebranch",
 	}
 
-	_, err = client.Changelog(ctx, repo, "v1.0.0", "v1.1.0")
-	require.EqualError(t, err, ErrNotImplemented.Error())
+	result, err := client.Changelog(ctx, repo, "v1.0.0", "v1.1.0")
+	require.NoError(t, err)
+	require.Equal(t, []ChangelogItem{
+		{
+			SHA:            "c8488dc",
+			Message:        "feat: impl something",
+			AuthorUsername: "johndoe",
+			AuthorName:     "John Doe",
+			AuthorEmail:    "nope@nope.nope",
+		},
+	}, result)
 }
 
 func TestGiteatGetInstanceURL(t *testing.T) {

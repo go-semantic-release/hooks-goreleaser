@@ -39,8 +39,7 @@ func TestRunPipe(t *testing.T) {
 	shouldErr := func(msg string) errChecker {
 		return func(t *testing.T, err error) {
 			t.Helper()
-			require.Error(t, err)
-			require.Contains(t, err.Error(), msg)
+			require.ErrorContains(t, err, msg)
 		}
 	}
 	shouldNotErr := func(t *testing.T, err error) {
@@ -53,7 +52,7 @@ func TestRunPipe(t *testing.T) {
 	}
 	type imageLabelFinder func(*testing.T, string)
 	shouldFindImagesWithLabels := func(image string, filters ...string) func(*testing.T, string) {
-		return func(t *testing.T, use string) {
+		return func(t *testing.T, _ string) {
 			t.Helper()
 			for _, filter := range filters {
 				cmd := exec.Command("docker", "images", "-q", "--filter", "reference=*/"+image, "--filter", filter)
@@ -1399,7 +1398,6 @@ func TestWithDigest(t *testing.T) {
 	})
 
 	for _, use := range []string{useDocker, useBuildx} {
-		use := use
 		t.Run(use, func(t *testing.T) {
 			t.Run("good", func(t *testing.T) {
 				require.Equal(t, "localhost:5050/owner/img:t1@sha256:d1", withDigest(use, "localhost:5050/owner/img:t1", artifacts.List()))

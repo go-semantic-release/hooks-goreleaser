@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/caarlos0/go-shellwords"
 	"github.com/caarlos0/log"
@@ -52,7 +53,6 @@ func (Pipe) Default(ctx *context.Context) error {
 func (Pipe) Run(ctx *context.Context) error {
 	g := semerrgroup.NewSkipAware(semerrgroup.New(ctx.Parallelism))
 	for _, unibin := range ctx.Config.UniversalBinaries {
-		unibin := unibin
 		g.Go(func() error {
 			opts := build.Options{
 				Target: "darwin_all",
@@ -157,7 +157,7 @@ func makeUniversalBinary(ctx *context.Context, opts *build.Options, unibin confi
 
 	binaries := ctx.Artifacts.Filter(filterFor(unibin)).List()
 	if len(binaries) == 0 {
-		return pipe.Skipf("no darwin binaries found with id %q", unibin.ID)
+		return pipe.Skipf("no darwin binaries found with ids: %s", strings.Join(unibin.IDs, ", "))
 	}
 
 	log.WithField("id", unibin.ID).

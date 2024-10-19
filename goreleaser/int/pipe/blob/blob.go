@@ -26,12 +26,20 @@ func (Pipe) Default(ctx *context.Context) error {
 		if blob.Bucket == "" || blob.Provider == "" {
 			return fmt.Errorf("bucket or provider cannot be empty")
 		}
-		if blob.Folder == "" {
-			blob.Folder = "{{ .ProjectName }}/{{ .Tag }}"
+		if blob.Folder != "" {
+			deprecate.Notice(ctx, "blobs.folder")
+			blob.Directory = blob.Folder
 		}
+		if blob.Directory == "" {
+			blob.Directory = "{{ .ProjectName }}/{{ .Tag }}"
+		}
+
 		if blob.ContentDisposition == "" {
 			blob.ContentDisposition = "attachment;filename={{.Filename}}"
+		} else if blob.ContentDisposition == "-" {
+			blob.ContentDisposition = ""
 		}
+
 		if blob.OldDisableSSL {
 			deprecate.Notice(ctx, "blobs.disableSSL")
 			blob.DisableSSL = true
@@ -49,7 +57,6 @@ func (Pipe) Publish(ctx *context.Context) error {
 	g := semerrgroup.New(ctx.Parallelism)
 	skips := pipe.SkipMemento{}
 	for _, conf := range ctx.Config.Blobs {
-		conf := conf
 		g.Go(func() error {
 			b, err := tmpl.New(ctx).Bool(conf.Disable)
 			if err != nil {

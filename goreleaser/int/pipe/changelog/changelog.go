@@ -32,6 +32,7 @@ func (u useChangelog) formatable() bool {
 const (
 	useGit          = "git"
 	useGitHub       = "github"
+	useGitea        = "gitea"
 	useGitLab       = "gitlab"
 	useGitHubNative = "github-native"
 )
@@ -40,6 +41,7 @@ const (
 type Pipe struct{}
 
 func (Pipe) String() string { return "generating changelog" }
+
 func (Pipe) Skip(ctx *context.Context) (bool, error) {
 	if ctx.Snapshot {
 		return true, nil
@@ -50,6 +52,13 @@ func (Pipe) Skip(ctx *context.Context) (bool, error) {
 	}
 
 	return tmpl.New(ctx).Bool(ctx.Config.Changelog.Disable)
+}
+
+func (Pipe) Default(ctx *context.Context) error {
+	if ctx.Config.Changelog.Format == "" {
+		ctx.Config.Changelog.Format = "{{ .SHA }}: {{ .Message }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }} <{{ .AuthorEmail }}>{{ end }})"
+	}
+	return nil
 }
 
 // Run the pipe.
@@ -339,13 +348,9 @@ func extractCommitInfo(line string) string {
 
 func getChangeloger(ctx *context.Context) (changeloger, error) {
 	switch ctx.Config.Changelog.Use {
-	case useGit:
-		fallthrough
-	case "":
+	case useGit, "":
 		return gitChangeloger{}, nil
-	case useGitHub:
-		fallthrough
-	case useGitLab:
+	case useGitLab, useGitea, useGitHub:
 		return newSCMChangeloger(ctx)
 	case useGitHubNative:
 		return newGithubChangeloger(ctx)
@@ -448,7 +453,25 @@ type scmChangeloger struct {
 
 func (c *scmChangeloger) Log(ctx *context.Context) (string, error) {
 	prev, current := comparePair(ctx)
-	return c.client.Changelog(ctx, c.repo, prev, current)
+	items, err := c.client.Changelog(ctx, c.repo, prev, current)
+	if err != nil {
+		return "", err
+	}
+	var lines []string
+	for _, item := range items {
+		line, err := tmpl.New(ctx).WithExtraFields(tmpl.Fields{
+			"SHA":            item.SHA,
+			"Message":        item.Message,
+			"AuthorUsername": item.AuthorUsername,
+			"AuthorName":     item.AuthorName,
+			"AuthorEmail":    item.AuthorEmail,
+		}).Apply(ctx.Config.Changelog.Format)
+		if err != nil {
+			return "", err
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 type githubNativeChangeloger struct {

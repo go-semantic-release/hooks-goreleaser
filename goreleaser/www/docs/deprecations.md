@@ -21,7 +21,7 @@ Template for new deprecations:
 
 ### property
 
-> since yyyy-mm-dd
+> since yyyy-mm-dd (v1.xx)
 
 Description.
 
@@ -39,9 +39,117 @@ Description.
 
 -->
 
+### archives.strip_parent_binary_folder
+
+> since 2024-03-29 (v1.25)
+
+Property was renamed to be consistent across all configurations.
+
+=== "Before"
+
+    ```yaml
+    archives:
+      -
+        strip_parent_binary_folder: true
+    ```
+
+=== "After"
+
+    ```yaml
+    archives:
+      -
+        strip_binary_directory: true
+    ```
+
+### blobs.folder
+
+> since 2024-03-29 (v1.25)
+
+Property was renamed to be consistent across all configurations.
+
+=== "Before"
+
+    ```yaml
+    blobs:
+      -
+        folder: foo
+    ```
+
+=== "After"
+
+    ```yaml
+    blobs:
+      -
+        directory: foo
+    ```
+
+### brews.folder
+
+> since 2024-03-29 (v1.25)
+
+Property was renamed to be consistent across all configurations.
+
+=== "Before"
+
+    ```yaml
+    brews:
+      -
+        folder: foo
+    ```
+
+=== "After"
+
+    ```yaml
+    brews:
+      -
+        directory: foo
+    ```
+
+### scoops.folder
+
+> since 2024-03-29 (v1.25)
+
+Property was renamed to be consistent across all configurations.
+
+=== "Before"
+
+    ```yaml
+    scoops:
+      -
+        folder: foo
+    ```
+
+=== "After"
+
+    ```yaml
+    scoops:
+      -
+        directory: foo
+    ```
+
+### furies.skip
+
+> since 2024-03-03 (v1.25)
+
+Changed to `disable` to conform with all other pipes.
+
+=== "Before"
+
+    ```yaml
+    furies:
+      - skip: true
+    ```
+
+=== "After"
+
+    ```yaml
+    furies:
+      - disable: true
+    ```
+
 ### changelog.skip
 
-> since 2024-01-14
+> since 2024-01-14 (v1.24)
 
 Changed to `disable` to conform with all other pipes.
 
@@ -61,7 +169,7 @@ Changed to `disable` to conform with all other pipes.
 
 ### blobs.kmskey
 
-> since 2024-01-07
+> since 2024-01-07 (v1.24)
 
 Changed to `kms_key` to conform with all other options.
 
@@ -81,7 +189,7 @@ Changed to `kms_key` to conform with all other options.
 
 ### blobs.disableSSL
 
-> since 2024-01-07
+> since 2024-01-07 (v1.24)
 
 Changed to `disable_ssl` to conform with all other options.
 
@@ -101,7 +209,7 @@ Changed to `disable_ssl` to conform with all other options.
 
 ### `--skip`
 
-> since 2023-09-14
+> since 2023-09-14 (v1.21)
 
 The following `goreleaser release` flags were deprecated:
 
@@ -658,7 +766,7 @@ This also includes `install.goreleaser.com`.
 
 Most common tools installed via that website were probably
 [GoReleaser](/install/) itself and
-[golangci-lint](https://golangci-lint.run/usage/install/).
+[golangci-lint](https://golangci-lint.run/welcome/install/).
 
 Please follow to the check their documentation for alternative install methods.
 

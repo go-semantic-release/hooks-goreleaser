@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/spf13/cobra"
-	cobracompletefig "github.com/withfig/autocomplete-tools/integrations/cobra"
 )
 
 var (
@@ -27,6 +26,10 @@ func (cmd *rootCmd) Execute(args []string) {
 
 	if shouldPrependRelease(cmd.cmd, args) {
 		cmd.cmd.SetArgs(append([]string{"release"}, args...))
+	}
+
+	if shouldDisableLogs(args) {
+		log.SetLevel(log.FatalLevel)
 	}
 
 	if err := cmd.cmd.Execute(); err != nil {
@@ -74,13 +77,13 @@ Check out our website for more information, examples and documentation: https://
 		SilenceErrors:     true,
 		Args:              cobra.NoArgs,
 		ValidArgsFunction: cobra.NoFileCompletions,
-		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		PersistentPreRun: func(*cobra.Command, []string) {
 			if root.verbose || root.debug {
 				log.SetLevel(log.DebugLevel)
 				log.Debug("verbose output enabled")
 			}
 		},
-		PersistentPostRun: func(_ *cobra.Command, _ []string) {
+		PersistentPostRun: func(*cobra.Command, []string) {
 			log.Info("thanks for using goreleaser!")
 		},
 	}
@@ -99,10 +102,19 @@ Check out our website for more information, examples and documentation: https://
 		newDocsCmd().cmd,
 		newManCmd().cmd,
 		newSchemaCmd().cmd,
-		cobracompletefig.CreateCompletionSpecCommand(),
 	)
 	root.cmd = cmd
 	return root
+}
+
+func shouldDisableLogs(args []string) bool {
+	return len(args) > 0 && (args[0] == "help" ||
+		args[0] == "completion" ||
+		args[0] == "man" ||
+		args[0] == "docs" ||
+		args[0] == "jsonschema" ||
+		args[0] == cobra.ShellCompRequestCmd ||
+		args[0] == cobra.ShellCompNoDescRequestCmd)
 }
 
 func shouldPrependRelease(cmd *cobra.Command, args []string) bool {

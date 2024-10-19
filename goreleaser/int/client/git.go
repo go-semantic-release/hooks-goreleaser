@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/caarlos0/log"
 	"github.com/charmbracelet/x/exp/ordered"
@@ -19,13 +20,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var gil sync.Mutex
+
 // DefaulGitSSHCommand used for git over SSH.
 const DefaulGitSSHCommand = `ssh -i "{{ .KeyPath }}" -o StrictHostKeyChecking=accept-new -F /dev/null`
-
-var cloneLock = cloneGlobalLock{
-	l:     sync.Mutex{},
-	repos: map[string]bool{},
-}
 
 type gitClient struct {
 	branch string
@@ -46,6 +44,9 @@ func (g *gitClient) CreateFiles(
 	message string,
 	files []RepoFile,
 ) (err error) {
+	gil.Lock()
+	defer gil.Unlock()
+
 	url, err := tmpl.New(ctx).Apply(repo.GitURL)
 	if err != nil {
 		return fmt.Errorf("git: failed to template git url: %w", err)
@@ -79,15 +80,14 @@ func (g *gitClient) CreateFiles(
 	cwd := filepath.Join(parent, name)
 	env := []string{fmt.Sprintf("GIT_SSH_COMMAND=%s", sshcmd)}
 
-	if err := cloneLock.clone(url, func() error {
+	if _, err := os.Stat(cwd); errors.Is(err, os.ErrNotExist) {
+		log.Infof("cloning %s %s", name, cwd)
 		if err := os.MkdirAll(parent, 0o755); err != nil {
 			return fmt.Errorf("git: failed to create parent: %w", err)
 		}
 
-		if err := runGitCmds(ctx, parent, env, [][]string{
-			{"clone", url, name},
-		}); err != nil {
-			return fmt.Errorf("git: failed to clone local repository: %w", err)
+		if err := cloneRepoWithRetries(ctx, parent, url, name, env); err != nil {
+			return err
 		}
 
 		if err := runGitCmds(ctx, cwd, env, [][]string{
@@ -98,21 +98,17 @@ func (g *gitClient) CreateFiles(
 		}); err != nil {
 			return fmt.Errorf("git: failed to setup local repository: %w", err)
 		}
-		if g.branch == "" {
-			return nil
-		}
-		if err := runGitCmds(ctx, cwd, env, [][]string{
-			{"checkout", g.branch},
-		}); err != nil {
+		if g.branch != "" {
 			if err := runGitCmds(ctx, cwd, env, [][]string{
-				{"checkout", "-b", g.branch},
+				{"checkout", g.branch},
 			}); err != nil {
-				return fmt.Errorf("git: could not checkout branch %s: %w", g.branch, err)
+				if err := runGitCmds(ctx, cwd, env, [][]string{
+					{"checkout", "-b", g.branch},
+				}); err != nil {
+					return fmt.Errorf("git: could not checkout branch %s: %w", g.branch, err)
+				}
 			}
 		}
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	for _, file := range files {
@@ -203,6 +199,31 @@ func isPasswordError(err error) bool {
 	return errors.As(err, &kerr)
 }
 
+func cloneRepoWithRetries(ctx *context.Context, parent, url, name string, env []string) error {
+	var try int
+	for try < 10 {
+		try++
+		err := runGitCmds(ctx, parent, env, [][]string{{"clone", url, name}})
+		if err == nil {
+			return nil
+		}
+		if isRetriableCloneError(err) {
+			log.WithField("try", try).
+				WithField("image", name).
+				WithError(err).
+				Warnf("failed to push image, will retry")
+			time.Sleep(time.Duration(try*10) * time.Second)
+			continue
+		}
+		return fmt.Errorf("failed to clone local repository: %w", err)
+	}
+	return fmt.Errorf("failed to push %s after %d tries", name, try)
+}
+
+func isRetriableCloneError(err error) bool {
+	return strings.Contains(err.Error(), "Connection reset")
+}
+
 func runGitCmds(ctx *context.Context, cwd string, env []string, cmds [][]string) error {
 	for _, cmd := range cmds {
 		args := append([]string{"-C", cwd}, cmd...)
@@ -215,21 +236,4 @@ func runGitCmds(ctx *context.Context, cwd string, env []string, cmds [][]string)
 
 func nameFromURL(url string) string {
 	return strings.TrimSuffix(url[strings.LastIndex(url, "/")+1:], ".git")
-}
-
-type cloneGlobalLock struct {
-	l     sync.Mutex
-	repos map[string]bool
-}
-
-func (c *cloneGlobalLock) clone(url string, fn func() error) error {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if c.repos[url] {
-		return nil
-	}
-
-	c.repos[url] = true
-	return fn()
 }

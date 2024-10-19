@@ -75,8 +75,13 @@ func TestDefaults(t *testing.T) {
 				ContentDisposition: "inline",
 			},
 			{
-				Bucket:   "foobar",
+				Bucket:   "foobar2",
 				Provider: "gcs",
+			},
+			{
+				Bucket:             "foobar",
+				Provider:           "gcs",
+				ContentDisposition: "-",
 			},
 			{
 				Bucket:        "deprecated",
@@ -92,20 +97,27 @@ func TestDefaults(t *testing.T) {
 		{
 			Bucket:             "foo",
 			Provider:           "azblob",
-			Folder:             "{{ .ProjectName }}/{{ .Tag }}",
+			Directory:          "{{ .ProjectName }}/{{ .Tag }}",
 			IDs:                []string{"foo", "bar"},
 			ContentDisposition: "inline",
 		},
 		{
+			Bucket:             "foobar2",
+			Provider:           "gcs",
+			Directory:          "{{ .ProjectName }}/{{ .Tag }}",
+			ContentDisposition: "attachment;filename={{.Filename}}",
+		},
+		{
 			Bucket:             "foobar",
 			Provider:           "gcs",
-			Folder:             "{{ .ProjectName }}/{{ .Tag }}",
-			ContentDisposition: "attachment;filename={{.Filename}}",
+			Directory:          "{{ .ProjectName }}/{{ .Tag }}",
+			ContentDisposition: "",
 		},
 		{
 			Bucket:             "deprecated",
 			Provider:           "s3",
 			Folder:             "static",
+			Directory:          "static",
 			OldDisableSSL:      true,
 			DisableSSL:         true,
 			OldKMSKey:          "fake",

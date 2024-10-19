@@ -17,6 +17,11 @@ tasks:
     cmds:
       - go mod tidy
 
+  docker:setup:
+    desc: Setup Docker for multi-arch image builds
+    cmds:
+      - docker run --privileged --rm tonistiigi/binfmt --install all
+
   build:
     desc: Build the binary
     sources:
@@ -63,6 +68,30 @@ tasks:
     desc: Runs the default tasks
     cmds:
       - task: ci
+
+  nix:flake:build:
+    desc: build goreleaser using the nix flake
+    cmds:
+      - task: nix:flake:update-vendor
+      - nix build .
+
+  nix:flake:update:
+    desc: update flake.lock
+    cmds:
+      - nix flake update
+    generates:
+      - flake.lock
+
+  nix:flake:update-vendor:
+    desc: update default flake package vendor hash
+    cmds:
+      - bash ./scripts/nix-udpate-flake.sh
+    generates:
+      - flake.nix
+    sources:
+      - flake.lock
+      - go.mod
+      - go.sum
 
   nix:licenses:generate:
     desc: Generate nix/licenses.go

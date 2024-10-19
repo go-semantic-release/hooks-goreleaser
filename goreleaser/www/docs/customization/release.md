@@ -26,16 +26,31 @@ release:
     - bar
 
   # If set to true, will not auto-publish the release.
+  # Note: all GitHub releases start as drafts while artifacts are uploaded.
   # Available only for GitHub and Gitea.
   draft: true
 
   # Whether to remove existing draft releases with the same name before creating
   # a new one.
+  #
   # Only effective if `draft` is set to true.
   # Available only for GitHub.
   #
   # Since: v1.11
   replace_existing_draft: true
+
+  # Whether to remove an artifact that already exists.
+  #
+  # Available only for GitHub.
+  # This might be a bit expensive (rate-limiting speaking), so it is only done
+  # when the upload of an artifact fails with a 422 (which means it already
+  # exists in the release).
+  # We then grab the list of artifacts from the release, and delete the file
+  # that matches the one we're trying to upload.
+  # GoReleaser will then retry its upload.
+  #
+  # Since: v1.25
+  replace_existing_artifacts: true
 
   # Useful if you want to delay the creation of the tag in the remote.
   # You can create the tag locally, but not push it, and run GoReleaser.
@@ -43,8 +58,8 @@ release:
   # value of this field.
   # Only works on GitHub.
   #
-  # Default: ''
   # Since: v1.11
+  # Default: ''
   # Templates: allowed
   target_commitish: "{{ .Commit }}"
 
@@ -53,8 +68,8 @@ release:
   # publish a binary from a monorepo into a public repository somewhere, without
   # the tag prefix.
   #
-  # Default: '{{ .PrefixedCurrentTag }}'
   # Since: v1.19 (pro)
+  # Default: '{{ .PrefixedCurrentTag }}'
   # Templates: allowed
   tag: "{{ .CurrentTag }}"
 
@@ -182,12 +197,18 @@ release:
   # Those files will have their contents pass through the template engine,
   # and its results will be added to the release.
   #
-  # Since: v1.17 (pro)
   # This feature is only available in GoReleaser Pro.
+  # Since: v1.17 (pro)
   # Templates: allowed
   templated_extra_files:
     - src: LICENSE.tpl
       dst: LICENSE.txt
+
+  # Upload metadata.json and artifacts.json to the release as well.
+  #
+  # Since: v1.25
+  include_meta: true
+
 ```
 
 !!! tip

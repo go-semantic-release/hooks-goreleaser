@@ -181,7 +181,7 @@ artifactories:
     # URL of your Artifactory instance + path to deploy to
     target: http://artifacts.company.com:8081/artifactory/example-repo-local/{{ .ProjectName }}/{{ .Version }}/
 
-    # Tells goreleaer not to append the artifact name to the target URL. You must do this manually
+    # Tells goreleaser not to append the artifact name to the target URL. You must do this manually
     custom_artifact_name: true
 
     # User that will be used for the deployment
@@ -195,6 +195,11 @@ artifactories:
 
     # Upload checksums.
     checksum: true
+
+    # Upload metadata.json and artifacts.json.
+    #
+    # Since: v1.25
+    meta: true
 
     # Upload signatures.
     signature: true

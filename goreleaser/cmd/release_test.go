@@ -6,6 +6,7 @@ import (
 
 	"github.com/goreleaser/goreleaser/int/skips"
 	"github.com/goreleaser/goreleaser/int/testctx"
+	"github.com/goreleaser/goreleaser/pkg/config"
 	"github.com/goreleaser/goreleaser/pkg/context"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func TestReleaseAutoSnapshot(t *testing.T) {
 		cmd := newReleaseCmd()
 		cmd.cmd.SetArgs([]string{"--auto-snapshot", "--skip-publish"})
 		require.NoError(t, cmd.cmd.Execute())
-		require.FileExists(t, "dist/fake_0.0.2_checksums.txt", "should not have run with --snapshot")
+		require.FileExists(t, "dist/fake_0.0.2_checksums.txt", "should have created checksums when run with --snapshot")
 	})
 
 	t.Run("dirty", func(t *testing.T) {
@@ -61,6 +62,30 @@ func TestReleaseFlags(t *testing.T) {
 		require.NoError(t, setupReleaseContext(ctx, opts))
 		return ctx
 	}
+
+	t.Run("draft", func(t *testing.T) {
+		t.Run("not set", func(t *testing.T) {
+			ctx := setup(t, releaseOpts{})
+			require.False(t, ctx.Config.Release.Draft)
+		})
+
+		t.Run("set via flag", func(t *testing.T) {
+			ctx := setup(t, releaseOpts{
+				draft: true,
+			})
+			require.True(t, ctx.Config.Release.Draft)
+		})
+
+		t.Run("set in config", func(t *testing.T) {
+			ctx := testctx.NewWithCfg(config.Project{
+				Release: config.Release{
+					Draft: true,
+				},
+			})
+			require.NoError(t, setupReleaseContext(ctx, releaseOpts{}))
+			require.True(t, ctx.Config.Release.Draft)
+		})
+	})
 
 	t.Run("action", func(t *testing.T) {
 		ctx := setup(t, releaseOpts{})

@@ -67,6 +67,10 @@ plugins:
         as_creation: date
 
 extra:
+  extra:
+  analytics:
+    provider: google
+    property: "G-3MZGQS8EPS"
   social:
     - icon: fontawesome/brands/github-alt
       link: https://github.com/goreleaser
@@ -117,15 +121,17 @@ nav:
       - customization/sbom.md
       - customization/reportsizes.md
       - customization/metadata.md
-      - Signing:
+      - Signing & Notarizing:
           - Checksums and artifacts: customization/sign.md
           - Docker Images and Manifests: customization/docker_sign.md
+          - customization/notarize.md
       - Publish:
           - customization/release.md
           - customization/snapshots.md
           - customization/nightlies.md
           - customization/blob.md
           - customization/fury.md
+          - customization/dockerhub.md
           - customization/homebrew.md
           - customization/nix.md
           - customization/winget.md
@@ -144,6 +150,7 @@ nav:
               - scm/gitea.md
       - Announce:
           - customization/announce/index.md
+          - customization/announce/bluesky.md
           - customization/announce/discord.md
           - customization/announce/linkedin.md
           - customization/announce/mastodon.md

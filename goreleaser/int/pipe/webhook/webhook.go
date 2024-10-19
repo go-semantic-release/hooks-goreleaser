@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/caarlos0/env/v9"
+	"github.com/caarlos0/env/v11"
 	"github.com/caarlos0/log"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/context"
@@ -19,7 +19,7 @@ const (
 	defaultMessageTemplate = `{ "message": "{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}"}`
 	ContentTypeHeaderKey   = "Content-Type"
 	UserAgentHeaderKey     = "User-Agent"
-	UserAgentHeaderValue   = "gorleaser"
+	UserAgentHeaderValue   = "goreleaser"
 	AuthorizationHeaderKey = "Authorization"
 	DefaultContentType     = "application/json; charset=utf-8"
 )
@@ -45,8 +45,8 @@ func (p Pipe) Default(ctx *context.Context) error {
 }
 
 func (p Pipe) Announce(ctx *context.Context) error {
-	var cfg Config
-	if err := env.Parse(&cfg); err != nil {
+	cfg, err := env.ParseAs[Config]()
+	if err != nil {
 		return fmt.Errorf("webhook: %w", err)
 	}
 

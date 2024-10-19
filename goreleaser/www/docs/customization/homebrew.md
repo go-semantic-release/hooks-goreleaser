@@ -66,6 +66,15 @@ brews:
     # Templates: allowed
     url_template: "https://github.mycompany.com/foo/bar/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
+    # Headers to include in the `url` stanza.
+    # This can be a more modern alternative to `download_strategy` in some
+    # cases.
+    #
+    # Since: v1.25
+    url_headers:
+      - "Accept: application/octet-stream"
+      - 'Authorization: bearer #{ENV["HOMEBREW_GITHUB_API_TOKEN"]}'
+
     # Allows you to set a custom download strategy. Note that you'll need
     # to implement the strategy and add it to your tap repository.
     # Example: https://docs.brew.sh/Formula-Cookbook#specifying-the-download-strategy-explicitly
@@ -85,8 +94,8 @@ brews:
     # Templates: allowed
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
 
-    # Folder inside the repository to put the formula.
-    folder: Formula
+    # Directory inside the repository to put the formula.
+    directory: Formula
 
     # Caveats for the user of your binary.
     caveats: "How to use this binary"
@@ -103,8 +112,8 @@ brews:
     license: "MIT"
 
     # Setting this will prevent goreleaser to actually try to commit the updated
-    # formula - instead, the formula file will be stored on the dist folder only,
-    # leaving the responsibility of publishing it to the user.
+    # formula - instead, the formula file will be stored on the dist directory
+    # only, leaving the responsibility of publishing it to the user.
     # If set to auto, the release will not be uploaded to the homebrew tap
     # in case there is an indicator for prerelease in the tag e.g. v1.0.0-rc1
     #
@@ -194,7 +203,8 @@ brews:
 By defining the `brew` section, GoReleaser will take care of publishing the
 Homebrew tap.
 Assuming that the current tag is `v1.2.3`, the above configuration will generate a
-`program.rb` formula in the `Formula` folder of `user/homebrew-tap` repository:
+`program.rb` formula in the `Formula` directory of `user/homebrew-tap`
+repository:
 
 ```rb
 class Program < Formula
@@ -208,17 +218,21 @@ class Program < Formula
   end
 
   on_linux
-    if Hardware::CPU.intel?
+    on_intel do
       url "https://github.com/user/repo/releases/download/v1.2.3/program_v1.2.3_Linux_64bit.zip"
       sha256 "b41bebd25fd7bb1a67dc2cd5ee12c9f67073094567fdf7b3871f05fd74a45fdd"
     end
-    if Hardware::CPU.arm? && !Hardware::CPU.is_64_bit?
-      url "https://github.com/user/repo/releases/download/v1.2.3/program_v1.2.3_Linux_armv7.zip"
-      sha256 "78f31239430eaaec01df783e2a3443753a8126c325292ed8ddb1658ddd2b401d"
+    on_arm do
+      if !Hardware::CPU.is_64_bit?
+        url "https://github.com/user/repo/releases/download/v1.2.3/program_v1.2.3_Linux_armv7.zip"
+        sha256 "78f31239430eaaec01df783e2a3443753a8126c325292ed8ddb1658ddd2b401d"
+      end
     end
-    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/user/repo/releases/download/v1.2.3/program_v1.2.3_Linux_arm64.zip"
-      sha256 "97cadca3c3c3f36388a4a601acf878dd356d6275a976bee516798b72bfdbeecf"
+    on_arm do
+      if Hardware::CPU.is_64_bit?
+        url "https://github.com/user/repo/releases/download/v1.2.3/program_v1.2.3_Linux_arm64.zip"
+        sha256 "97cadca3c3c3f36388a4a601acf878dd356d6275a976bee516798b72bfdbeecf"
+      end
     end
   end
 

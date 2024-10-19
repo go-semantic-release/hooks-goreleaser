@@ -19,9 +19,21 @@ archives:
     builds:
       - default
 
-    # Archive format. Valid options are `tar.gz`, `tgz`, `tar.xz`, `txz`, tar`, `gz`, `zip` and `binary`.
+    # Archive format.
+    #
     # If format is `binary`, no archives are created and the binaries are instead
     # uploaded directly.
+    #
+    # Valid options are:
+    # - `tar.gz`
+    # - `tgz`
+    # - `tar.xz`
+    # - `txz`
+    # - `tar.zst` (Since v1.26)
+    # - `tar`
+    # - `gz`
+    # - `zip`
+    # - `binary`
     #
     # Default: 'tar.gz'
     format: zip
@@ -56,17 +68,18 @@ archives:
 
     # Set this to true if you want all files in the archive to be in a single directory.
     # If set to true and you extract the archive 'goreleaser_Linux_arm64.tar.gz',
-    # you'll get a folder 'goreleaser_Linux_arm64'.
+    # you'll get a directory 'goreleaser_Linux_arm64'.
     # If set to false, all files are extracted separately.
-    # You can also set it to a custom folder name (templating is supported).
+    # You can also set it to a custom directory name (templating is supported).
     wrap_in_directory: true
 
     # If set to true, will strip the parent directories away from binary files.
     #
-    # This might be useful if you have your binary be built with a subdir for some reason, but do no want that subdir inside the archive.
+    # This might be useful if you have your binary be built with a sub-directory
+    # for some reason, but do no want that sub-directory inside the archive.
     #
     # Since: v1.11
-    strip_parent_binary_folder: true
+    strip_binary_directory: true
 
     # This will make the destination paths be relative to the longest common
     # path prefix between all the files matched and the source glob.
@@ -79,7 +92,12 @@ archives:
     # Can be used to change the archive formats for specific GOOSs.
     # Most common use case is to archive as zip on Windows.
     format_overrides:
-      - goos: windows
+      - # Which GOOS to override the format for.
+        goos: windows
+
+        # The format to use for the given GOOS.
+        #
+        # Valid options are `tar.gz`, `tgz`, `tar.xz`, `txz`, tar`, `gz`, `zip`, `binary`, and `none`.
         format: zip
 
     # Additional files/globs you want to add to the archive.
@@ -97,7 +115,7 @@ archives:
       - src: "*.md"
         dst: docs
 
-        # Strip parent folders when adding files to the archive.
+        # Strip parent directories when adding files to the archive.
         strip_parent: true
 
         # File info.
@@ -123,8 +141,8 @@ archives:
     # Those files will have their contents pass through the template engine,
     # and its results will be added to the archive.
     #
-    # Since: v1.17 (pro)
     # This feature is only available in GoReleaser Pro.
+    # Since: v1.17 (pro)
     # Templates: allowed
     templated_files:
       # a more complete example, check the globbing deep dive below
@@ -185,8 +203,8 @@ archives:
 
 !!! tip
 
-    You can add entire folders, its subfolders and files by using the glob notation,
-    for example: `myfolder/**/*`.
+    You can add entire directories, its sub-directories and files by using the
+    glob notation, for example: `mydirectory/**/*`.
 
 !!! warning
 
@@ -194,8 +212,10 @@ archives:
 
 !!! warning
 
-    The `name_template` option will not reflect the filenames under the `dist` folder if `format` is `binary`.
-    The template will be applied only where the binaries are uploaded (e.g. GitHub releases).
+    The `name_template` option will not reflect the filenames under the `dist`
+    directory if `format` is `binary`.
+    The template will be applied only where the binaries are uploaded (e.g.
+    GitHub releases).
 
 ## Deep diving into the globbing options
 
@@ -213,16 +233,18 @@ files:
   # Adds all `md` files to the root of the archive:
   - src: "*.md"
 
-  # Adds all `md` files in the current folder to a `docs` folder in the archive:
+  # Adds all `md` files in the current directory to a `docs` directory in the
+  # archive:
   - src: "*.md"
     dst: docs
 
-  # Recursively adds all `go` files to a `source` folder in the archive.
+  # Recursively adds all `go` files to a `source` directory in the archive.
   # in this case, `cmd/myapp/main.go` will be added as `source/cmd/myapp/main.go`
   - src: "**/*.go"
     dst: source
 
-  # Recursively adds all `go` files to a `source` folder in the archive, stripping their parent folder.
+  # Recursively adds all `go` files to a `source` directory in the archive,
+  # stripping their parent directory.
   # In this case, `cmd/myapp/main.go` will be added as `source/main.go`:
   - src: "**/*.go"
     dst: source

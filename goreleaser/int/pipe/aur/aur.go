@@ -3,6 +3,7 @@ package aur
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -110,7 +111,6 @@ func doRun(ctx *context.Context, aur config.AUR, cl client.ReleaseURLTemplater) 
 				artifact.ByGoarch("arm"),
 				artifact.Or(
 					artifact.ByGoarm("7"),
-					artifact.ByGoarm("6"),
 				),
 			),
 		),
@@ -386,7 +386,7 @@ func doPublish(ctx *context.Context, pkgs []*artifact.Artifact) error {
 			URL:        cfg.GitURL,
 			SSHCommand: cfg.GitSSHCommand,
 		},
-		Name: cfg.Name,
+		Name: fmt.Sprintf("%x", sha256.Sum256([]byte(cfg.GitURL))),
 	})
 
 	files := make([]client.RepoFile, 0, len(pkgs))

@@ -14,7 +14,7 @@ import (
 
 	"github.com/caarlos0/log"
 	"github.com/charmbracelet/x/exp/ordered"
-	"github.com/google/go-github/v57/github"
+	"github.com/google/go-github/v62/github"
 	"github.com/goreleaser/goreleaser/int/artifact"
 	"github.com/goreleaser/goreleaser/int/tmpl"
 	"github.com/goreleaser/goreleaser/pkg/config"
@@ -28,6 +28,7 @@ var (
 	_ Client                = &githubClient{}
 	_ ReleaseNotesGenerator = &githubClient{}
 	_ PullRequestOpener     = &githubClient{}
+	_ ForkSyncer            = &githubClient{}
 )
 
 type githubClient struct {
@@ -51,7 +52,7 @@ func newGitHub(ctx *context.Context, token string) (*githubClient, error) {
 	if base == nil || reflect.ValueOf(base).IsNil() {
 		base = http.DefaultTransport
 	}
-	// nolint: gosec
+	//nolint:gosec
 	base.(*http.Transport).TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: ctx.Config.GitHubURLs.SkipTLSVerify,
 	}
@@ -68,7 +69,7 @@ func newGitHub(ctx *context.Context, token string) (*githubClient, error) {
 }
 
 func (c *githubClient) checkRateLimit(ctx *context.Context) {
-	limits, _, err := c.client.RateLimits(ctx)
+	limits, _, err := c.client.RateLimit.Get(ctx)
 	if err != nil {
 		log.Warn("could not check rate limits, hoping for the best...")
 		return
@@ -100,23 +101,24 @@ func (c *githubClient) GenerateReleaseNotes(ctx *context.Context, repo Repo, pre
 	return notes.Body, err
 }
 
-func (c *githubClient) Changelog(ctx *context.Context, repo Repo, prev, current string) (string, error) {
+func (c *githubClient) Changelog(ctx *context.Context, repo Repo, prev, current string) ([]ChangelogItem, error) {
 	c.checkRateLimit(ctx)
-	var log []string
+	var log []ChangelogItem
 	opts := &github.ListOptions{PerPage: 100}
 
 	for {
 		result, resp, err := c.client.Repositories.CompareCommits(ctx, repo.Owner, repo.Name, prev, current, opts)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		for _, commit := range result.Commits {
-			log = append(log, fmt.Sprintf(
-				"%s: %s (@%s)",
-				commit.GetSHA(),
-				strings.Split(commit.Commit.GetMessage(), "\n")[0],
-				commit.GetAuthor().GetLogin(),
-			))
+			log = append(log, ChangelogItem{
+				SHA:            commit.GetSHA(),
+				Message:        strings.Split(commit.Commit.GetMessage(), "\n")[0],
+				AuthorName:     commit.GetAuthor().GetName(),
+				AuthorEmail:    commit.GetAuthor().GetEmail(),
+				AuthorUsername: commit.GetAuthor().GetLogin(),
+			})
 		}
 		if resp.NextPage == 0 {
 			break
@@ -124,7 +126,7 @@ func (c *githubClient) Changelog(ctx *context.Context, repo Repo, prev, current 
 		opts.Page = resp.NextPage
 	}
 
-	return strings.Join(log, "\n"), nil
+	return log, nil
 }
 
 // getDefaultBranch returns the default branch of a github repo
@@ -192,8 +194,6 @@ func (c *githubClient) getPRTemplate(ctx *context.Context, repo Repo) (string, e
 	return content.GetContent()
 }
 
-const prFooter = "###### Automated with [GoReleaser](https://goreleaser.com)"
-
 func (c *githubClient) OpenPullRequest(
 	ctx *context.Context,
 	base, head Repo,
@@ -217,6 +217,7 @@ func (c *githubClient) OpenPullRequest(
 	if len(tpl) > 0 {
 		log.Info("got a pr template")
 	}
+
 	log := log.
 		WithField("base", headString(base, Repo{})).
 		WithField("head", headString(base, head)).
@@ -243,6 +244,31 @@ func (c *githubClient) OpenPullRequest(
 	}
 	log.WithField("url", pr.GetHTMLURL()).Info("pull request created")
 	return nil
+}
+
+func (c *githubClient) SyncFork(ctx *context.Context, head, base Repo) error {
+	branch := base.Branch
+	if branch == "" {
+		def, err := c.getDefaultBranch(ctx, base)
+		if err != nil {
+			return err
+		}
+		branch = def
+	}
+	res, _, err := c.client.Repositories.MergeUpstream(
+		ctx,
+		head.Owner,
+		head.Name,
+		&github.RepoMergeUpstreamRequest{
+			Branch: github.String(branch),
+		},
+	)
+	if res != nil {
+		log.WithField("merge_type", res.GetMergeType()).
+			WithField("base_branch", res.GetBaseBranch()).
+			Info(res.GetMessage())
+	}
+	return err
 }
 
 func (c *githubClient) CreateFile(
@@ -354,10 +380,12 @@ func (c *githubClient) CreateRelease(ctx *context.Context, body string) (string,
 	body = truncateReleaseBody(body)
 
 	data := &github.RepositoryRelease{
-		Name:       github.String(title),
-		TagName:    github.String(ctx.Git.CurrentTag),
-		Body:       github.String(body),
-		Draft:      github.Bool(ctx.Config.Release.Draft),
+		Name:    github.String(title),
+		TagName: github.String(ctx.Git.CurrentTag),
+		Body:    github.String(body),
+		// Always start with a draft release while uploading artifacts.
+		// PublishRelease will undraft it.
+		Draft:      github.Bool(true),
 		Prerelease: github.Bool(ctx.PreRelease),
 		MakeLatest: github.String("true"),
 	}
@@ -388,6 +416,23 @@ func (c *githubClient) CreateRelease(ctx *context.Context, body string) (string,
 	return strconv.FormatInt(release.GetID(), 10), nil
 }
 
+func (c *githubClient) PublishRelease(ctx *context.Context, releaseID string) error {
+	draft := ctx.Config.Release.Draft
+	if draft {
+		return nil
+	}
+	releaseIDInt, err := strconv.ParseInt(releaseID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("non-numeric release ID %q: %w", releaseID, err)
+	}
+	if _, err := c.updateRelease(ctx, releaseIDInt, &github.RepositoryRelease{
+		Draft: github.Bool(draft),
+	}); err != nil {
+		return fmt.Errorf("could not update existing release: %w", err)
+	}
+	return nil
+}
+
 func (c *githubClient) createOrUpdateRelease(ctx *context.Context, data *github.RepositoryRelease, body string) (*github.RepositoryRelease, error) {
 	c.checkRateLimit(ctx)
 	release, _, err := c.client.Repositories.GetReleaseByTag(
@@ -412,6 +457,7 @@ func (c *githubClient) createOrUpdateRelease(ctx *context.Context, data *github.
 		return release, err
 	}
 
+	data.Draft = release.Draft
 	data.Body = github.String(getReleaseNotes(release.GetBody(), body, ctx.Config.Release.ReleaseNotesMode))
 	return c.updateRelease(ctx, release.GetID(), data)
 }
@@ -448,6 +494,50 @@ func (c *githubClient) ReleaseURLTemplate(ctx *context.Context) (string, error) 
 	), nil
 }
 
+func (c *githubClient) deleteReleaseArtifact(ctx *context.Context, releaseID int64, name string, page int) error {
+	c.checkRateLimit(ctx)
+	log.WithField("name", name).Info("delete pre-existing asset from the release")
+	assets, resp, err := c.client.Repositories.ListReleaseAssets(
+		ctx,
+		ctx.Config.Release.GitHub.Owner,
+		ctx.Config.Release.GitHub.Name,
+		releaseID,
+		&github.ListOptions{
+			PerPage: 100,
+			Page:    page,
+		},
+	)
+	if err != nil {
+		githubErrLogger(resp, err).
+			WithField("release-id", releaseID).
+			Warn("could not list release assets")
+		return err
+	}
+	for _, asset := range assets {
+		if asset.GetName() != name {
+			continue
+		}
+		resp, err := c.client.Repositories.DeleteReleaseAsset(
+			ctx,
+			ctx.Config.Release.GitHub.Owner,
+			ctx.Config.Release.GitHub.Name,
+			asset.GetID(),
+		)
+		if err != nil {
+			githubErrLogger(resp, err).
+				WithField("release-id", releaseID).
+				WithField("id", asset.GetID()).
+				WithField("name", name).
+				Warn("could not delete asset")
+		}
+		return err
+	}
+	if next := resp.NextPage; next > 0 {
+		return c.deleteReleaseArtifact(ctx, releaseID, name, next)
+	}
+	return nil
+}
+
 func (c *githubClient) Upload(
 	ctx *context.Context,
 	releaseID string,
@@ -470,20 +560,25 @@ func (c *githubClient) Upload(
 		file,
 	)
 	if err != nil {
-		requestID := ""
-		if resp != nil {
-			requestID = resp.Header.Get("X-GitHub-Request-Id")
-		}
-		log.WithField("name", artifact.Name).
+		githubErrLogger(resp, err).
+			WithField("name", artifact.Name).
 			WithField("release-id", releaseID).
-			WithField("request-id", requestID).
 			Warn("upload failed")
 	}
 	if err == nil {
 		return nil
 	}
+	// this status means the asset already exists
 	if resp != nil && resp.StatusCode == http.StatusUnprocessableEntity {
-		return err
+		if !ctx.Config.Release.ReplaceExistingArtifacts {
+			return err
+		}
+		// if the user allowed to delete assets, we delete it, and return a
+		// retriable error.
+		if err := c.deleteReleaseArtifact(ctx, githubReleaseID, artifact.Name, 1); err != nil {
+			return err
+		}
+		return RetriableError{err}
 	}
 	return RetriableError{err}
 }
@@ -590,4 +685,12 @@ func (c *githubClient) deleteExistingDraftRelease(ctx *context.Context, name str
 		}
 		opt.Page = resp.NextPage
 	}
+}
+
+func githubErrLogger(resp *github.Response, err error) *log.Entry {
+	requestID := ""
+	if resp != nil {
+		requestID = resp.Header.Get("X-GitHub-Request-Id")
+	}
+	return log.WithField("request-id", requestID).WithError(err)
 }

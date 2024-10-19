@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"code.gitea.io/sdk/gitea"
 	"github.com/caarlos0/log"
@@ -50,7 +51,7 @@ func newGitea(ctx *context.Context, token string) (*giteaClient, error) {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
-			// nolint: gosec
+			//nolint:gosec
 			InsecureSkipVerify: ctx.Config.GiteaURLs.SkipTLSVerify,
 		},
 	}
@@ -73,8 +74,24 @@ func newGitea(ctx *context.Context, token string) (*giteaClient, error) {
 	return &giteaClient{client: client}, nil
 }
 
-func (c *giteaClient) Changelog(_ *context.Context, _ Repo, _, _ string) (string, error) {
-	return "", ErrNotImplemented
+// Changelog fetches the changelog between two revisions.
+func (c *giteaClient) Changelog(_ *context.Context, repo Repo, prev, current string) ([]ChangelogItem, error) {
+	result, _, err := c.client.CompareCommits(repo.Owner, repo.Name, prev, current)
+	if err != nil {
+		return nil, err
+	}
+	var log []ChangelogItem
+
+	for _, commit := range result.Commits {
+		log = append(log, ChangelogItem{
+			SHA:            commit.SHA[:7],
+			Message:        strings.Split(commit.RepoCommit.Message, "\n")[0],
+			AuthorName:     commit.Author.FullName,
+			AuthorEmail:    commit.Author.Email,
+			AuthorUsername: commit.Author.UserName,
+		})
+	}
+	return log, nil
 }
 
 // CloseMilestone closes a given milestone.
@@ -274,6 +291,11 @@ func (c *giteaClient) CreateRelease(ctx *context.Context, body string) (string, 
 	}
 
 	return strconv.FormatInt(release.ID, 10), nil
+}
+
+func (c *giteaClient) PublishRelease(_ *context.Context, _ string /* releaseID */) (err error) {
+	// TODO: Create release as draft while uploading artifacts and only publish it here.
+	return nil
 }
 
 func (c *giteaClient) ReleaseURLTemplate(ctx *context.Context) (string, error) {

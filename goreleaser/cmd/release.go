@@ -34,6 +34,7 @@ type releaseOpts struct {
 	releaseFooterTmpl string
 	autoSnapshot      bool
 	snapshot          bool
+	draft             bool
 	failFast          bool
 	clean             bool
 	deprecated        bool
@@ -63,7 +64,7 @@ type releaseOpts struct {
 
 func newReleaseCmd() *releaseCmd {
 	root := &releaseCmd{}
-	// nolint: dupl
+	//nolint:dupl
 	cmd := &cobra.Command{
 		Use:               "release",
 		Aliases:           []string{"r"},
@@ -98,6 +99,7 @@ func newReleaseCmd() *releaseCmd {
 	_ = cmd.MarkFlagFilename("release-footer-tmpl", "md", "mkd", "markdown")
 	cmd.Flags().BoolVar(&root.opts.autoSnapshot, "auto-snapshot", false, "Automatically sets --snapshot if the repository is dirty")
 	cmd.Flags().BoolVar(&root.opts.snapshot, "snapshot", false, "Generate an unversioned snapshot release, skipping all validations and without publishing any artifacts (implies --skip=announce,publish,validate)")
+	cmd.Flags().BoolVar(&root.opts.draft, "draft", false, "Whether to set the release to draft. Overrides release.draft in the configuration file")
 	cmd.Flags().BoolVar(&root.opts.failFast, "fail-fast", false, "Whether to abort the release publishing on the first error")
 	cmd.Flags().BoolVar(&root.opts.skipPublish, "skip-publish", false, "Skips publishing artifacts (implies --skip=announce)")
 	cmd.Flags().BoolVar(&root.opts.skipAnnounce, "skip-announce", false, "Skips announcing releases (implies --skip=validate)")
@@ -107,8 +109,8 @@ func newReleaseCmd() *releaseCmd {
 	cmd.Flags().BoolVar(&root.opts.skipKo, "skip-ko", false, "Skips Ko builds")
 	cmd.Flags().BoolVar(&root.opts.skipBefore, "skip-before", false, "Skips global before hooks")
 	cmd.Flags().BoolVar(&root.opts.skipValidate, "skip-validate", false, "Skips git checks")
-	cmd.Flags().BoolVar(&root.opts.clean, "clean", false, "Removes the dist folder")
-	cmd.Flags().BoolVar(&root.opts.rmDist, "rm-dist", false, "Removes the dist folder")
+	cmd.Flags().BoolVar(&root.opts.clean, "clean", false, "Removes the 'dist' directory")
+	cmd.Flags().BoolVar(&root.opts.rmDist, "rm-dist", false, "Removes the 'dist' directory")
 	cmd.Flags().IntVarP(&root.opts.parallelism, "parallelism", "p", 0, "Amount tasks to run concurrently (default: number of CPUs)")
 	_ = cmd.RegisterFlagCompletionFunc("parallelism", cobra.NoFileCompletions)
 	cmd.Flags().DurationVar(&root.opts.timeout, "timeout", 30*time.Minute, "Timeout to the entire release process")
@@ -190,6 +192,10 @@ func setupReleaseContext(ctx *context.Context, options releaseOpts) error {
 	if options.autoSnapshot && git.CheckDirty(ctx) != nil {
 		log.Info("git repository is dirty and --auto-snapshot is set, implying --snapshot")
 		ctx.Snapshot = true
+	}
+
+	if options.draft {
+		ctx.Config.Release.Draft = true
 	}
 
 	if err := skips.SetRelease(ctx, options.skips...); err != nil {

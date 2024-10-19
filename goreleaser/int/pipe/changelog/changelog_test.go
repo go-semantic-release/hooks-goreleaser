@@ -1,6 +1,9 @@
 package changelog
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -512,10 +515,19 @@ func TestGetChangelogGitHub(t *testing.T) {
 			Use: useGitHub,
 		},
 	}, testctx.WithCurrentTag("v0.180.2"), testctx.WithPreviousTag("v0.180.1"))
+	require.NoError(t, Pipe{}.Default(ctx))
 
 	expected := "c90f1085f255d0af0b055160bfff5ee40f47af79: fix: do not skip any defaults (#2521) (@caarlos0)"
 	mock := client.NewMock()
-	mock.Changes = expected
+	mock.Changes = []client.ChangelogItem{
+		{
+			SHA:            "c90f1085f255d0af0b055160bfff5ee40f47af79",
+			Message:        "fix: do not skip any defaults (#2521)",
+			AuthorName:     "Carlos",
+			AuthorEmail:    "nope@nope.com",
+			AuthorUsername: "caarlos0",
+		},
+	}
 	l := scmChangeloger{
 		client: mock,
 		repo: client.Repo{
@@ -643,7 +655,7 @@ func TestGetChangeloger(t *testing.T) {
 			Changelog: config.Changelog{
 				Use: useGitLab,
 			},
-		}, testctx.GitHubTokenType)
+		}, testctx.GitLabTokenType)
 		c, err := getChangeloger(ctx)
 		require.NoError(t, err)
 		require.IsType(t, &scmChangeloger{}, c)
@@ -661,6 +673,28 @@ func TestGetChangeloger(t *testing.T) {
 		c, err := getChangeloger(ctx)
 		require.EqualError(t, err, "unsupported repository URL: https://gist.github.com/")
 		require.Nil(t, c)
+	})
+
+	t.Run(useGitea, func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer r.Body.Close()
+			if strings.HasSuffix(r.URL.Path, "api/v1/version") {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "{\"version\":\"1.22.0\"}")
+			}
+		}))
+		defer srv.Close()
+		ctx := testctx.NewWithCfg(config.Project{
+			Changelog: config.Changelog{
+				Use: useGitea,
+			},
+			GiteaURLs: config.GiteaURLs{
+				API: srv.URL,
+			},
+		}, testctx.GiteaTokenType)
+		c, err := getChangeloger(ctx)
+		require.NoError(t, err)
+		require.IsType(t, &scmChangeloger{}, c)
 	})
 
 	t.Run("invalid", func(t *testing.T) {
@@ -815,7 +849,7 @@ func TestChangelogFormat(t *testing.T) {
 			return config.Project{Changelog: config.Changelog{Use: u}}
 		}
 
-		for _, use := range []string{useGit, useGitHub, useGitLab} {
+		for _, use := range []string{useGit, useGitHub, useGitLab, useGitea} {
 			t.Run(use, func(t *testing.T) {
 				out, err := formatChangelog(
 					testctx.NewWithCfg(makeConf(use)),
@@ -873,7 +907,7 @@ func TestChangelogFormat(t *testing.T) {
 * aea123 foo
 * aef653 bar`, out)
 		})
-		for _, use := range []string{useGit, useGitHub, useGitLab} {
+		for _, use := range []string{useGit, useGitHub, useGitLab, useGitea} {
 			t.Run(use, func(t *testing.T) {
 				out, err := formatChangelog(
 					testctx.NewWithCfg(makeConf(use)),

@@ -1,14 +1,14 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    staging.url = "github:caarlos0/nixpkgs/wip";
+    carlos.url = "github:caarlos0/nur";
     flake-utils.url = "github:numtide/flake-utils";
   };
-  outputs = { nixpkgs, staging, flake-utils, ... }:
+  outputs = { nixpkgs, carlos, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        staging-pkgs = staging.legacyPackages.${system};
+        cpkgs = carlos.packages.${system};
       in
       {
         packages.default = pkgs.buildGoModule {
@@ -17,31 +17,33 @@
           src = ./.;
           ldflags = [ "-s" "-w" "-X main.version=dev" "-X main.builtBy=flake" ];
           doCheck = false;
-          vendorHash = "sha256-wY3kIhNIqTaK9MT1VeePERNhqvbtf6bsyRTjG8nrqxU=";
+          vendorHash = "";
         };
 
         devShells.default = pkgs.mkShellNoCC {
           packages = with pkgs; [
-            go
+            go_1_22
             go-task
             gofumpt
             syft
             upx
             cosign
             gnupg
+            nix-prefetch
+            snapcraft
           ];
           shellHook = "go mod tidy";
         };
 
         devShells.docs = pkgs.mkShellNoCC {
-          packages = with pkgs; with staging-pkgs.python311Packages; [
+          packages = with pkgs; with pkgs.python311Packages; [
             go-task
             htmltest
             mkdocs-material
             mkdocs-redirects
             mkdocs-minify
-            mkdocs-rss-plugin
-            mkdocs-include-markdown-plugin
+            cpkgs.mkdocs-rss-plugin # https://github.com/NixOS/nixpkgs/pull/277350
+            cpkgs.mkdocs-include-markdown-plugin # https://github.com/NixOS/nixpkgs/pull/277351
           ] ++ mkdocs-material.passthru.optional-dependencies.git;
         };
       }

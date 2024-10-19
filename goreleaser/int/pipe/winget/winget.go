@@ -3,6 +3,7 @@ package winget
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -20,7 +21,7 @@ import (
 )
 
 var (
-	errNoRepoName               = pipe.Skip("winget.repository.name name is required")
+	errNoRepoName               = pipe.Skip("winget.repository.name is required")
 	errNoPublisher              = pipe.Skip("winget.publisher is required")
 	errNoLicense                = pipe.Skip("winget.license is required")
 	errNoShortDescription       = pipe.Skip("winget.short_description is required")
@@ -161,7 +162,7 @@ func (p Pipe) doRun(ctx *context.Context, winget config.Winget, cl client.Releas
 	}
 
 	if winget.Path == "" {
-		winget.Path = filepath.Join("manifests", strings.ToLower(string(winget.Publisher[0])), winget.Publisher, winget.Name, ctx.Version)
+		winget.Path = path.Join("manifests", strings.ToLower(string(winget.Publisher[0])), winget.Publisher, winget.Name, ctx.Version)
 	}
 
 	filters := []artifact.Filter{
@@ -300,7 +301,7 @@ func doPublish(ctx *context.Context, cl client.Client, wingets []*artifact.Artif
 		}
 		files = append(files, client.RepoFile{
 			Content:    content,
-			Path:       filepath.Join(winget.Path, pkg.Name),
+			Path:       path.Join(winget.Path, pkg.Name),
 			Identifier: repoFileID(pkg.Type),
 		})
 	}
@@ -313,6 +314,20 @@ func doPublish(ctx *context.Context, cl client.Client, wingets []*artifact.Artif
 	cl, err = client.NewIfToken(ctx, cl, winget.Repository.Token)
 	if err != nil {
 		return err
+	}
+
+	base := client.Repo{
+		Name:   winget.Repository.PullRequest.Base.Name,
+		Owner:  winget.Repository.PullRequest.Base.Owner,
+		Branch: winget.Repository.PullRequest.Base.Branch,
+	}
+
+	// try to sync branch
+	fscli, ok := cl.(client.ForkSyncer)
+	if ok && winget.Repository.PullRequest.Enabled {
+		if err := fscli.SyncFork(ctx, repo, base); err != nil {
+			log.WithError(err).Warn("could not sync fork")
+		}
 	}
 
 	for _, file := range files {
@@ -339,11 +354,7 @@ func doPublish(ctx *context.Context, cl client.Client, wingets []*artifact.Artif
 		return fmt.Errorf("client does not support pull requests")
 	}
 
-	return pcl.OpenPullRequest(ctx, client.Repo{
-		Name:   winget.Repository.PullRequest.Base.Name,
-		Owner:  winget.Repository.PullRequest.Base.Owner,
-		Branch: winget.Repository.PullRequest.Base.Branch,
-	}, repo, msg, winget.Repository.PullRequest.Draft)
+	return pcl.OpenPullRequest(ctx, base, repo, msg, winget.Repository.PullRequest.Draft)
 }
 
 func langserverLineFor(tp artifact.Type) string {

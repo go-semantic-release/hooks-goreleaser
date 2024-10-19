@@ -177,7 +177,7 @@ func TestWithDefaults(t *testing.T) {
 			},
 			goBinary: "go",
 		},
-		"empty with custom dir that doest exist": {
+		"empty with custom dir that doesn't exist": {
 			build: config.Build{
 				ID:     "foo2",
 				Binary: "foo",
@@ -342,7 +342,7 @@ func TestBuild(t *testing.T) {
 	folder := testlib.Mktmp(t)
 	writeGoodMain(t, folder)
 	ctx := testctx.NewWithCfg(config.Project{
-		Env: []string{"GO_FLAGS=-v"},
+		Env: []string{"GO_FLAGS=-v", "GOBIN=go"},
 		Builds: []config.Build{
 			{
 				ID:     "foo",
@@ -356,7 +356,7 @@ func TestBuild(t *testing.T) {
 					"linux_mips_softfloat",
 					"linux_mips64le_softfloat",
 				},
-				GoBinary: "go",
+				GoBinary: "{{ .Env.GOBIN }}",
 				Command:  "build",
 				BuildDetails: config.BuildDetails{
 					Env: []string{
@@ -522,7 +522,7 @@ func TestBuild(t *testing.T) {
 		fi, err := os.Stat(bin.Path)
 		require.NoError(t, err)
 
-		// make this a suitable map key, per docs: https://golang.org/pkg/time/#Time
+		// make this a suitable map key, per docs: https://pkg.go.dev/time#Time
 		modTime := fi.ModTime().UTC().Round(0).Unix()
 
 		if modTimes[modTime] {
@@ -642,7 +642,7 @@ func TestBuildFailed(t *testing.T) {
 	err := Default.Build(ctx, ctx.Config.Builds[0], api.Options{
 		Target: "darwin_amd64",
 	})
-	assertContainsError(t, err, `flag provided but not defined: -flag-that-dont-exists-to-force-failure`)
+	require.ErrorContains(t, err, `flag provided but not defined: -flag-that-dont-exists-to-force-failure`)
 	require.Empty(t, ctx.Artifacts.List())
 }
 
@@ -1071,6 +1071,7 @@ func TestBuildGoBuildLine(t *testing.T) {
 			},
 			testctx.WithVersion("1.2.3"),
 			testctx.WithGitInfo(context.GitInfo{Commit: "aaa"}),
+			testctx.WithEnv(map[string]string{"GOBIN": "go"}),
 		)
 		options := api.Options{
 			Path:   ctx.Config.Builds[0].Binary,
@@ -1104,7 +1105,7 @@ func TestBuildGoBuildLine(t *testing.T) {
 				Ldflags:  []string{"ldflag1", "ldflag2"},
 			},
 			Binary:   "foo",
-			GoBinary: "go",
+			GoBinary: "{{ .Env.GOBIN }}",
 			Command:  "build",
 		}, []string{
 			"go", "build",
@@ -1410,6 +1411,47 @@ func TestWarnIfTargetsAndOtherOptionsTogether(t *testing.T) {
 	}
 }
 
+func TestInvalidGoBinaryTpl(t *testing.T) {
+	folder := testlib.Mktmp(t)
+	require.NoError(t, os.Mkdir(filepath.Join(folder, ".go"), 0o755))
+	writeGoodMain(t, folder)
+	ctx := testctx.NewWithCfg(config.Project{
+		Builds: []config.Build{
+			{
+				Targets:  []string{runtimeTarget},
+				GoBinary: "{{.Foo}}",
+				Command:  "build",
+			},
+		},
+	})
+	build := ctx.Config.Builds[0]
+	testlib.RequireTemplateError(t, Default.Build(ctx, build, api.Options{
+		Target: runtimeTarget,
+		Name:   build.Binary,
+		Path:   filepath.Join("dist", runtimeTarget, build.Binary),
+		Ext:    "",
+	}))
+}
+
+func TestBuildOutput(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		require.Empty(t, buildOutput([]byte{}))
+	})
+	t.Run("downloading only", func(t *testing.T) {
+		require.Empty(t, buildOutput([]byte(`
+go: downloading github.com/atotto/clipboard v0.1.4
+go: downloading github.com/caarlos0/duration v0.0.0-20240108180406-5d492514f3c7
+		`)))
+	})
+	t.Run("mixed", func(t *testing.T) {
+		require.NotEmpty(t, buildOutput([]byte(`
+go: downloading github.com/atotto/clipboard v0.1.4
+go: downloading github.com/caarlos0/duration v0.0.0-20240108180406-5d492514f3c7
+something something
+		`)))
+	})
+}
+
 //
 // Helpers
 //
@@ -1444,10 +1486,4 @@ func writeTest(t *testing.T, folder string) {
 		[]byte("module foo\n"),
 		0o666,
 	))
-}
-
-func assertContainsError(t *testing.T, err error, s string) {
-	t.Helper()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), s)
 }

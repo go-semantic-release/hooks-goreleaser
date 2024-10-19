@@ -9,8 +9,10 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/artifactory"
 	"github.com/goreleaser/goreleaser/int/pipe/aur"
 	"github.com/goreleaser/goreleaser/int/pipe/blob"
+	"github.com/goreleaser/goreleaser/int/pipe/bluesky"
 	"github.com/goreleaser/goreleaser/int/pipe/brew"
 	"github.com/goreleaser/goreleaser/int/pipe/build"
+	"github.com/goreleaser/goreleaser/int/pipe/changelog"
 	"github.com/goreleaser/goreleaser/int/pipe/checksums"
 	"github.com/goreleaser/goreleaser/int/pipe/chocolatey"
 	"github.com/goreleaser/goreleaser/int/pipe/discord"
@@ -24,6 +26,7 @@ import (
 	"github.com/goreleaser/goreleaser/int/pipe/milestone"
 	"github.com/goreleaser/goreleaser/int/pipe/nfpm"
 	"github.com/goreleaser/goreleaser/int/pipe/nix"
+	"github.com/goreleaser/goreleaser/int/pipe/notary"
 	"github.com/goreleaser/goreleaser/int/pipe/opencollective"
 	"github.com/goreleaser/goreleaser/int/pipe/project"
 	"github.com/goreleaser/goreleaser/int/pipe/reddit"
@@ -57,14 +60,17 @@ type Defaulter interface {
 }
 
 // Defaulters is the list of defaulters.
-// nolint: gochecknoglobals
+//
+//nolint:gochecknoglobals
 var Defaulters = []Defaulter{
 	snapshot.Pipe{},
 	release.Pipe{},
 	project.Pipe{},
+	changelog.Pipe{},
 	gomod.Pipe{},
 	build.Pipe{},
 	universalbinary.Pipe{},
+	notary.MacOS{},
 	upx.Pipe{},
 	sourcearchive.Pipe{},
 	archive.Pipe{},
@@ -100,4 +106,5 @@ var Defaulters = []Defaulter{
 	webhook.Pipe{},
 	chocolatey.Pipe{},
 	opencollective.Pipe{},
+	bluesky.Pipe{},
 }

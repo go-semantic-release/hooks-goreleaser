@@ -37,7 +37,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: stable
       # More assembly might be required: Docker logins, GPG, etc.
@@ -47,7 +47,8 @@ jobs:
         with:
           # either 'goreleaser' (default) or 'goreleaser-pro'
           distribution: goreleaser
-          version: latest
+          # 'latest', 'nightly', or a semver
+          version: "~> v1"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,7 +101,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
-          version: latest
+          version: "~> v1"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,7 +136,7 @@ Following inputs can be used as `step.with` keys
 | Name           | Type   | Default      | Description                                                      |
 | -------------- | ------ | ------------ | ---------------------------------------------------------------- |
 | `distribution` | String | `goreleaser` | GoReleaser distribution, either `goreleaser` or `goreleaser-pro` |
-| `version`[^1]  | String | `latest`     | GoReleaser version                                               |
+| `version`[^1]  | String | `~> v1`      | GoReleaser version                                               |
 | `args`         | String |              | Arguments to pass to GoReleaser                                  |
 | `workdir`      | String | `.`          | Working directory (below repository root)                        |
 | `install-only` | Bool   | `false`      | Just install GoReleaser                                          |
@@ -197,7 +198,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
-          version: latest
+          version: "~> v1"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}

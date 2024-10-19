@@ -20,19 +20,19 @@ winget:
     # Publisher name.
     #
     # Templates: allowed
-    # Required.
+    # Required
     publisher: Foo Inc
 
     # Your app's description.
     #
     # Templates: allowed
-    # Required.
+    # Required
     short_description: "Software to create fast and easy drum rolls."
 
     # License name.
     #
     # Templates: allowed
-    # Required.
+    # Required
     license: "mit"
 
     # Publisher URL.
@@ -100,8 +100,8 @@ winget:
 
     # Path for the file inside the repository.
     #
-    # Default: manifests/<lowercased first char of publisher>/<publisher>/<version>
-    path: manifests/g/goreleaser/1.19
+    # Default: manifests/<lowercased first char of publisher>/<publisher>/<name>/<version>
+    path: manifests/g/goreleaser/myproject/1.19
 
     # Your app's homepage.
     homepage: "https://example.com/"
@@ -127,7 +127,7 @@ winget:
     copyright_url: "https://goreleaser.com/copyright"
 
     # Setting this will prevent goreleaser to actually try to commit the updated
-    # package - instead, it will be stored on the dist folder only,
+    # package - instead, it will be stored on the dist directory only,
     # leaving the responsibility of publishing it to the user.
     #
     # If set to auto, the release will not be uploaded to the repository

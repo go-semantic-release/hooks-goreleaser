@@ -16,6 +16,7 @@ var (
 	_ Client                = &Mock{}
 	_ ReleaseNotesGenerator = &Mock{}
 	_ PullRequestOpener     = &Mock{}
+	_ ForkSyncer            = &Mock{}
 )
 
 func NewMock() *Mock {
@@ -31,16 +32,23 @@ type Mock struct {
 	FailToUpload         bool
 	CreatedRelease       bool
 	UploadedFile         bool
+	ReleasePublished     bool
 	UploadedFileNames    []string
 	UploadedFilePaths    map[string]string
 	FailFirstUpload      bool
 	Lock                 sync.Mutex
 	ClosedMilestone      string
 	FailToCloseMilestone bool
-	Changes              string
+	Changes              []ChangelogItem
 	ReleaseNotes         string
 	ReleaseNotesParams   []string
 	OpenedPullRequest    bool
+	SyncedFork           bool
+}
+
+func (c *Mock) SyncFork(_ *context.Context, _ Repo, _ Repo) error {
+	c.SyncedFork = true
+	return nil
 }
 
 func (c *Mock) OpenPullRequest(_ *context.Context, _, _ Repo, _ string, _ bool) error {
@@ -48,11 +56,11 @@ func (c *Mock) OpenPullRequest(_ *context.Context, _, _ Repo, _ string, _ bool) 
 	return nil
 }
 
-func (c *Mock) Changelog(_ *context.Context, _ Repo, _, _ string) (string, error) {
-	if c.Changes != "" {
+func (c *Mock) Changelog(_ *context.Context, _ Repo, _, _ string) ([]ChangelogItem, error) {
+	if len(c.Changes) > 0 {
 		return c.Changes, nil
 	}
-	return "", ErrNotImplemented
+	return nil, ErrNotImplemented
 }
 
 func (c *Mock) GenerateReleaseNotes(_ *context.Context, _ Repo, prev, current string) (string, error) {
@@ -79,6 +87,11 @@ func (c *Mock) CreateRelease(_ *context.Context, _ string) (string, error) {
 	}
 	c.CreatedRelease = true
 	return "", nil
+}
+
+func (c *Mock) PublishRelease(_ *context.Context, _ string /* releaseID */) (err error) {
+	c.ReleasePublished = true
+	return nil
 }
 
 func (c *Mock) ReleaseURLTemplate(_ *context.Context) (string, error) {

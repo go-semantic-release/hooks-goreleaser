@@ -124,11 +124,7 @@ func (Pipe) Run(ctx *context.Context) error {
 		return err
 	}
 
-	return ctx.Artifacts.
-		Filter(artifact.ByType(artifact.Checksum)).
-		Visit(func(a *artifact.Artifact) error {
-			return a.Refresh()
-		})
+	return ctx.Artifacts.Refresh()
 }
 
 func sign(ctx *context.Context, cfg config.Sign, artifacts []*artifact.Artifact) error {
@@ -202,7 +198,7 @@ func signone(ctx *context.Context, cfg config.Sign, art *artifact.Artifact) ([]*
 	}
 	env["certificate"] = cert
 
-	// nolint:prealloc
+	//nolint:prealloc
 	var args []string
 	for _, a := range cfg.Args {
 		arg, err := tmpl.New(ctx).WithEnv(env).Apply(expand(a, env))

@@ -214,7 +214,7 @@ func TestUpload(t *testing.T) {
 		w.WriteHeader(h.StatusCreated)
 		w.Header().Set("Location", r.URL.RequestURI())
 	}))
-	assetOpen = func(k string, a *artifact.Artifact) (*asset, error) {
+	assetOpen = func(_ string, _ *artifact.Artifact) (*asset, error) {
 		return &asset{
 			ReadCloser: io.NopCloser(bytes.NewReader(content)),
 			Size:       int64(len(content)),
@@ -246,6 +246,7 @@ func TestUpload(t *testing.T) {
 		{"tar.gz", artifact.UploadableSourceArchive},
 		{"ubi", artifact.UploadableBinary},
 		{"sum", artifact.Checksum},
+		{"meta", artifact.Metadata},
 		{"sig", artifact.Signature},
 		{"pem", artifact.Certificate},
 	} {
@@ -445,6 +446,25 @@ func TestUpload(t *testing.T) {
 				check{"/blah/2.1.0/a.sum", "u3", "x", content, map[string]string{}},
 				check{"/blah/2.1.0/a.sig", "u3", "x", content, map[string]string{}},
 				check{"/blah/2.1.0/a.pem", "u3", "x", content, map[string]string{}},
+			),
+		},
+		{
+			"metadata", true, true, false, false,
+			func(s *httptest.Server) (*context.Context, config.Upload) {
+				return ctx, config.Upload{
+					Mode:         ModeArchive,
+					Name:         "a",
+					Target:       s.URL + "/{{.ProjectName}}/{{.Version}}/",
+					Username:     "u3",
+					Meta:         true,
+					TrustedCerts: cert(s),
+				}
+			},
+			checks(
+				check{"/blah/2.1.0/a.deb", "u3", "x", content, map[string]string{}},
+				check{"/blah/2.1.0/a.tar", "u3", "x", content, map[string]string{}},
+				check{"/blah/2.1.0/a.tar.gz", "u3", "x", content, map[string]string{}},
+				check{"/blah/2.1.0/a.meta", "u3", "x", content, map[string]string{}},
 			),
 		},
 		{

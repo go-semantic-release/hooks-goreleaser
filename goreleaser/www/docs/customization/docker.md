@@ -23,7 +23,7 @@ dockers:
 
     The `image_templates` attribute supports templating. Learn more about the [name template engine](/customization/templates/).
 
-You also need to create a `Dockerfile` in your project's root folder:
+You also need to create a `Dockerfile` in your project's root directory:
 
 ```dockerfile
 FROM scratch
@@ -68,6 +68,12 @@ dockers:
     goamd64: "v2"
 
     # IDs to filter the binaries/packages.
+    #
+    # Make sure to only include the IDs of binaries you want to `COPY` in your
+    # Dockerfile.
+    #
+    # If you include IDs that don't exist or are not available for the current
+    # architecture being built, the build of the image will be skipped.
     ids:
       - mybuild
       - mynfpm
@@ -86,9 +92,9 @@ dockers:
     # Could be useful if you want to skip building the windows docker image on
     # linux, for example.
     #
-    # Templates: allowed
-    # Since: v1.14 (pro)
     # This option is only available on GoReleaser Pro.
+    # Since: v1.14 (pro)
+    # Templates: allowed
     skip_build: false
 
     # Skips the docker push.
@@ -103,7 +109,7 @@ dockers:
     # Path to the Dockerfile (from the project root).
     #
     # Default: 'Dockerfile'
-    # Templates: allowed.
+    # Templates: allowed
     dockerfile: "{{ .Env.DOCKERFILE }}"
 
     # Use this instead of `dockerfile` if the contents of your Dockerfile are
@@ -111,8 +117,8 @@ dockers:
     #
     # `dockerfile` is ignored when this is set.
     #
-    # Since: v1.20 (pro)
     # This feature is only available in GoReleaser Pro.
+    # Since: v1.20 (pro)
     # Templates: allowed
     templated_dockerfile: "{{.Env.DOCKERFILE }}"
 
@@ -144,11 +150,11 @@ dockers:
     # If your Dockerfile copies files other than binaries and packages,
     # you should list them here as well.
     # Note that GoReleaser will create the same structure inside a temporary
-    # folder, so if you add `foo/bar.json` here, on your Dockerfile you can
+    # directory, so if you add `foo/bar.json` here, on your Dockerfile you can
     # `COPY foo/bar.json /whatever.json`.
-    # Also note that the paths here are relative to the folder in which
-    # GoReleaser is being run (usually the repository root folder).
-    # This field does not support wildcards, you can add an entire folder here
+    # Also note that the paths here are relative to the directory in which
+    # GoReleaser is being run (usually the repository root directory).
+    # This field does not support wildcards, you can add an entire directory here
     # and use wildcards when you `COPY`/`ADD` in your Dockerfile.
     extra_files:
       - config.yml
@@ -158,8 +164,8 @@ dockers:
     # and its results will be added to the build context the same way as the
     # extra_files field above.
     #
-    # Since: v1.17 (pro)
     # This feature is only available in GoReleaser Pro.
+    # Since: v1.17 (pro)
     # Templates: allowed
     templated_extra_files:
       - src: LICENSE.tpl

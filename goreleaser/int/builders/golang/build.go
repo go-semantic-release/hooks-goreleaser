@@ -24,10 +24,11 @@ import (
 )
 
 // Default builder instance.
-// nolint: gochecknoglobals
+//
+//nolint:gochecknoglobals
 var Default = &Builder{}
 
-// nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	api.Register("go", Default)
 }
@@ -273,8 +274,19 @@ func withOverrides(ctx *context.Context, build config.Build, options api.Options
 	return build.BuildDetails, nil
 }
 
-func buildGoBuildLine(ctx *context.Context, build config.Build, details config.BuildDetails, options api.Options, artifact *artifact.Artifact, env []string) ([]string, error) {
-	cmd := []string{build.GoBinary, build.Command}
+func buildGoBuildLine(
+	ctx *context.Context,
+	build config.Build,
+	details config.BuildDetails,
+	options api.Options,
+	artifact *artifact.Artifact,
+	env []string,
+) ([]string, error) {
+	gobin, err := tmpl.New(ctx).WithBuildOptions(options).Apply(build.GoBinary)
+	if err != nil {
+		return nil, err
+	}
+	cmd := []string{gobin, build.Command}
 
 	// tags, ldflags, and buildmode, should only appear once, warning only to avoid a breaking change
 	validateUniqueFlags(details)
@@ -361,7 +373,6 @@ func processFlag(ctx *context.Context, a *artifact.Artifact, env []string, rawFl
 func run(ctx *context.Context, command, env []string, dir string) error {
 	/* #nosec */
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	log := log.WithField("env", env).WithField("cmd", command)
 	cmd.Env = env
 	cmd.Dir = dir
 	log.Debug("running")
@@ -369,8 +380,21 @@ func run(ctx *context.Context, command, env []string, dir string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, string(out))
 	}
-	log.Debug(string(out))
+	if s := buildOutput(out); s != "" {
+		log.WithField("cmd", command).Info(s)
+	}
 	return nil
+}
+
+func buildOutput(out []byte) string {
+	var lines []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.HasPrefix(line, "go: downloading") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func checkMain(build config.Build) error {

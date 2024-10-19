@@ -96,6 +96,7 @@ func TestWithArtifact(t *testing.T) {
 		"state dirty":                      `state {{.GitTreeState}}`,
 		"env bar: barrrrr":                 `env bar: {{ envOrDefault "BAR" "barrrrr" }}`,
 		"env foo: bar":                     `env foo: {{ envOrDefault "FOO" "barrrrr" }}`,
+		"env foo is set: true":             `env foo is set: {{ isEnvSet "FOO" }}`,
 
 		"remove this": "{{ filter .Env.MULTILINE \".*remove.*\" }}",
 		"something with\nmultiple lines\nto test things": "{{ reverseFilter .Env.MULTILINE \".*remove.*\" }}",
@@ -103,8 +104,6 @@ func TestWithArtifact(t *testing.T) {
 		// maps
 		"123": `{{ $m := map "a" "1" "b" "2" }}{{ index $m "a" }}{{ indexOrDefault $m "b" "10" }}{{ indexOrDefault $m "c" "3" }}{{ index $m "z" }}`,
 	} {
-		tmpl := tmpl
-		expect := expect
 		t.Run(expect, func(t *testing.T) {
 			t.Parallel()
 			result, err := New(ctx).WithArtifact(

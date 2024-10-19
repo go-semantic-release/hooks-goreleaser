@@ -1,9 +1,13 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 set -e
 
-if [[ "$VERSION" == *-pro ]]; then
+is_pro="false"
+case "$VERSION" in
+*-pro)
 	DISTRIBUTION="pro"
-fi
+	is_pro="true"
+	;;
+esac
 
 if test "$DISTRIBUTION" = "pro"; then
 	echo "Using Pro distribution..."
@@ -24,7 +28,7 @@ test -z "$VERSION" && {
 	exit 1
 }
 
-if test "$DISTRIBUTION" = "pro" && [[ "$VERSION" != *-pro ]]; then
+if test "$DISTRIBUTION" = "pro" && ! test "$is_pro"; then
 	VERSION="$VERSION-pro"
 fi
 

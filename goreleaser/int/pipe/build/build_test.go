@@ -214,7 +214,7 @@ func TestRunPipeFailingHooks(t *testing.T) {
 
 		err := Pipe{}.Run(ctx)
 		require.ErrorIs(t, err, exec.ErrNotFound)
-		require.Contains(t, err.Error(), "pre hook failed")
+		require.ErrorContains(t, err, "pre hook failed")
 	})
 	t.Run("post-hook", func(t *testing.T) {
 		ctx := testctx.NewWithCfg(cfg, testctx.WithCurrentTag("2.4.5"))
@@ -222,7 +222,7 @@ func TestRunPipeFailingHooks(t *testing.T) {
 		ctx.Config.Builds[0].Hooks.Post = []config.Hook{{Cmd: "exit 1"}}
 		err := Pipe{}.Run(ctx)
 		require.ErrorIs(t, err, exec.ErrNotFound)
-		require.Contains(t, err.Error(), "post hook failed")
+		require.ErrorContains(t, err, "post hook failed")
 	})
 
 	t.Run("post-hook-skip", func(t *testing.T) {
@@ -570,24 +570,6 @@ func TestPipeOnBuild_hooksRunPerTarget(t *testing.T) {
 	require.FileExists(t, filepath.Join(tmpDir, "post-hook-windows_amd64"))
 }
 
-func TestPipeOnBuild_invalidGoBinary(t *testing.T) {
-	build := config.Build{
-		Builder:  "fake",
-		GoBinary: "testing.v{{.XYZ}}",
-		Targets: []string{
-			"linux_amd64",
-		},
-	}
-	ctx := testctx.NewWithCfg(config.Project{
-		Builds: []config.Build{
-			build,
-		},
-	})
-	g := semerrgroup.New(ctx.Parallelism)
-	runPipeOnBuild(ctx, g, build)
-	testlib.RequireTemplateError(t, g.Wait())
-}
-
 func TestPipeOnBuild_invalidBinaryTpl(t *testing.T) {
 	build := config.Build{
 		Builder: "fake",
@@ -766,6 +748,6 @@ func TestRunHookFailWithLogs(t *testing.T) {
 	}
 	ctx := testctx.NewWithCfg(config, testctx.WithCurrentTag("2.4.5"))
 	err := Pipe{}.Run(ctx)
-	require.Contains(t, err.Error(), "pre hook failed")
+	require.ErrorContains(t, err, "pre hook failed")
 	require.Empty(t, ctx.Artifacts.List())
 }

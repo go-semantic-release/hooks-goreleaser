@@ -23,9 +23,9 @@ func (t target) String() string {
 
 // List compiles the list of targets for the given builds.
 func List(build config.Build) ([]string, error) {
-	// nolint:prealloc
+	//nolint:prealloc
 	var targets []target
-	// nolint:prealloc
+	//nolint:prealloc
 	var result []string
 	for _, target := range allBuildTargets(build) {
 		if !contains(target.os, validGoos) {
@@ -138,8 +138,9 @@ func contains(s string, ss []string) bool {
 	return false
 }
 
-// lists from https://golang.org/doc/install/source#environment
-// nolint: gochecknoglobals
+// lists from https://go.dev/doc/install/source#environment
+//
+//nolint:gochecknoglobals
 var (
 	validTargets = []string{
 		"aixppc64",
@@ -174,6 +175,7 @@ var (
 		"netbsd386",
 		"netbsdamd64",
 		"netbsdarm",
+		"netbsdarm64", // not on the official list for some reason, yet its supported on go 1.13+
 		"openbsd386",
 		"openbsdamd64",
 		"openbsdarm",

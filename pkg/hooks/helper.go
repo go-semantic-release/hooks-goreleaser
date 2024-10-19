@@ -6,7 +6,14 @@ import (
 	"github.com/goreleaser/goreleaser/pkg/config"
 )
 
-var goReleaserConfigPaths = []string{".goreleaser.yml", ".goreleaser.yaml", "goreleaser.yml", "goreleaser.yaml"}
+var goReleaserConfigPaths = [6]string{
+	".config/goreleaser.yml",
+	".config/goreleaser.yaml",
+	".goreleaser.yml",
+	".goreleaser.yaml",
+	"goreleaser.yml",
+	"goreleaser.yaml",
+}
 
 func readGoReleaserConfig() (config.Project, error) {
 	for _, file := range goReleaserConfigPaths {
